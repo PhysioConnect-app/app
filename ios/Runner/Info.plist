@@ -35,6 +35,10 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>PhysioConnect accesses your photo library so you can set your profile photo.</string>
 
+	<!-- ── Camera (for photographing documents and patient progress) ──────── -->
+	<key>NSCameraUsageDescription</key>
+	<string>PhysioConnect uses your camera to photograph patient progress and clinical documents.</string>
+
 	<!-- ── Notifications ─────────────────────────────────────────────────── -->
 	<key>UIBackgroundModes</key>
 	<array>

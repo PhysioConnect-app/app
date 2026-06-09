@@ -46,7 +46,8 @@ msix_config:
   msix_version: 1.0.1.0
   logo_path: assets\icon\icon_256.png
   certificate_path: certs\physioconnect_store.pfx
-  certificate_password: "PhysioConnect2026!"
+  # certificate_password is not stored here — pass at build time:
+  #   flutter pub run msix:create --certificate-password $MSIX_CERTIFICATE_PASSWORD
   install_certificate: false
   architecture: x64
   capabilities: internetClient,privateNetworkClientServer,location

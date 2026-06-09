@@ -18,9 +18,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailFocus         = FocusNode();
   final _passwordFocus      = FocusNode();
   final _authService        = AuthService();
-  bool _isLoading  = false;
-  bool _obscure    = true;
-  bool _rememberMe = false;
+  bool _isLoading = false;
+  bool _obscure   = true;
 
   @override
   void dispose() {
@@ -93,14 +92,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     passwordController: _passwordController,
                     emailFocus:         _emailFocus,
                     passwordFocus:      _passwordFocus,
-                    isLoading:  _isLoading,
-                    obscure:    _obscure,
-                    rememberMe: _rememberMe,
+                    isLoading:       _isLoading,
+                    obscure:         _obscure,
                     onObscureToggle: () => setState(() => _obscure = !_obscure),
-                    onRememberToggle: (v) =>
-                        setState(() => _rememberMe = v ?? false),
-                    onLogin:   _handleLogin,
-                    langProvider: langProvider,
+                    onLogin:         _handleLogin,
+                    langProvider:    langProvider,
                     s: s,
                   ),
                 ),
@@ -122,9 +118,7 @@ class _LoginCard extends StatelessWidget {
   final FocusNode passwordFocus;
   final bool isLoading;
   final bool obscure;
-  final bool rememberMe;
   final VoidCallback onObscureToggle;
-  final ValueChanged<bool?> onRememberToggle;
   final VoidCallback onLogin;
   final LanguageProvider langProvider;
   final AppStrings s;
@@ -136,9 +130,7 @@ class _LoginCard extends StatelessWidget {
     required this.passwordFocus,
     required this.isLoading,
     required this.obscure,
-    required this.rememberMe,
     required this.onObscureToggle,
-    required this.onRememberToggle,
     required this.onLogin,
     required this.langProvider,
     required this.s,
@@ -254,45 +246,20 @@ class _LoginCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // ── Remember Me + Forgot Password ────────────────────────────────────
-          Row(
-            children: [
-              SizedBox(
-                width: 18,
-                height: 18,
-                child: Checkbox(
-                  value: rememberMe,
-                  onChanged: onRememberToggle,
-                  fillColor: WidgetStateProperty.resolveWith(
-                    (states) => states.contains(WidgetState.selected)
-                        ? const Color(0xFF2E7D32)
-                        : Colors.transparent,
-                  ),
-                  side: const BorderSide(color: Color(0xFFB0BEC5), width: 1.5),
-                  checkColor: Colors.white,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4)),
+          // ── Forgot Password ──────────────────────────────────────────────────
+          Align(
+            alignment: Alignment.centerRight,
+            child: GestureDetector(
+              onTap: () {},
+              child: const Text(
+                'Forgot Password?',
+                style: TextStyle(
+                  color: Color(0xFF1565C0),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(width: 8),
-              const Text(
-                'Remember Me',
-                style: TextStyle(color: Color(0xFF607D8B), fontSize: 13),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: () {},
-                child: const Text(
-                  'Forgot Password?',
-                  style: TextStyle(
-                    color: Color(0xFF1565C0),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
           const SizedBox(height: 28),
 
