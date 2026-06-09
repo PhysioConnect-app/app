@@ -40,9 +40,9 @@ dev_dependencies:
 
 msix_config:
   display_name: PhysioConnect
-  publisher_display_name: COPY_FROM_PARTNER_CENTER   # Partner Center → Account settings → Publisher display name
-  identity_name: COPY_FROM_PARTNER_CENTER            # Partner Center → App management → App identity → Package/Identity/Name
-  publisher: COPY_FROM_PARTNER_CENTER                # Partner Center → Account settings → Publisher (CN=...)
+  publisher_display_name: PhysioConnect
+  identity_name: PhysioConnect.PhysioConnect
+  publisher: CN=83E191CA-6DED-4CE1-AA84-C15B5CBAD17F
   msix_version: 1.0.1.0
   logo_path: assets\icon\icon_256.png
   # Sideloading: flutter pub run msix:create --certificate-path certs\physioconnect_store.pfx --certificate-password $MSIX_CERTIFICATE_PASSWORD
