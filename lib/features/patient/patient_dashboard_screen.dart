@@ -108,11 +108,11 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
     return Supabase.instance.client.auth.currentUser?.email?.split('@').first ?? 'there';
   }
 
-  String _greeting() {
+  String _greeting(AppStrings s) {
     final h = DateTime.now().hour;
-    if (h < 12) return 'Good Morning';
-    if (h < 17) return 'Good Afternoon';
-    return 'Good Evening';
+    if (h < 12) return s.goodMorning;
+    if (h < 17) return s.goodAfternoon;
+    return s.goodEvening;
   }
 
   @override
@@ -171,7 +171,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Welcome, ${_displayName()}!',
+                      '${s.welcome}, ${_displayName()}!',
                       style: const TextStyle(
                         color: Color(0xFF0D1B4B),
                         fontSize: 26,
@@ -180,7 +180,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _greeting(),
+                      _greeting(s),
                       style: const TextStyle(
                         color: Color(0xFF3A5BA0),
                         fontSize: 15,
@@ -263,16 +263,16 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
               color: Color(0xFF1565C0), size: 28),
         ),
         const SizedBox(width: 14),
-        const Expanded(
+        Expanded(
           child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-            Text('No Upcoming Appointments',
+            Text(s.noUpcomingAppointments,
                 style:
-                    TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-            SizedBox(height: 4),
-            Text('Book a session with your doctor today.',
-                style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            const SizedBox(height: 4),
+            Text(s.bookSessionToday,
+                style: const TextStyle(color: Colors.grey, fontSize: 12)),
           ]),
         ),
       ]),
@@ -300,9 +300,9 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Upcoming Appointment',
-            style: TextStyle(
+          Text(
+            AppStrings(context.read<LanguageProvider>().isArabic).upcomingAppointment,
+            style: const TextStyle(
               color: Color(0xFF1565C0),
               fontWeight: FontWeight.bold,
               fontSize: 16,
@@ -388,8 +388,8 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
               ),
-              child: const Text('View Details',
-                  style: TextStyle(
+              child: Text(AppStrings(context.read<LanguageProvider>().isArabic).viewDetails,
+                  style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 15)),
             ),
           ),
@@ -406,6 +406,12 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
   ];
 
   Widget _buildGrid(AppStrings s) {
+    final gridLabels = [
+      s.myAppointments,
+      s.myDoctors,
+      s.findDoctorOrTherapist,
+      s.notifications,
+    ];
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
@@ -417,6 +423,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
         final badge = item.index == 3 ? _unreadCount : 0;
         return _GridTile(
           item: item,
+          label: gridLabels[item.index],
           badge: badge,
           onTap: () => _onTap(item.index, s),
         );
@@ -493,10 +500,11 @@ class _GridDef {
 
 class _GridTile extends StatelessWidget {
   final _GridDef item;
+  final String label;
   final int badge;
   final VoidCallback onTap;
   const _GridTile(
-      {required this.item, required this.badge, required this.onTap});
+      {required this.item, required this.label, required this.badge, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -550,7 +558,7 @@ class _GridTile extends StatelessWidget {
           ]),
           const SizedBox(height: 10),
           Text(
-            item.label,
+            label,
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -617,8 +625,11 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
     return Scaffold(
       backgroundColor: const Color(0xFFF0F4F8),
       appBar: AppBar(
-        title: const Text('My Appointments',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Builder(builder: (ctx) {
+          final s = AppStrings(ctx.read<LanguageProvider>().isArabic);
+          return Text(s.myAppointments,
+              style: const TextStyle(fontWeight: FontWeight.bold));
+        }),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
@@ -638,11 +649,11 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
           unselectedLabelColor: AppColors.textSecondary,
           labelStyle:
               const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-          tabs: const [
-            Tab(text: 'Upcoming'),
-            Tab(text: 'Requested'),
-            Tab(text: 'Previous'),
-            Tab(text: 'Summary'),
+          tabs: [
+            Builder(builder: (ctx) { final s = AppStrings(ctx.read<LanguageProvider>().isArabic); return Tab(text: s.upcomingTab); }),
+            Builder(builder: (ctx) { final s = AppStrings(ctx.read<LanguageProvider>().isArabic); return Tab(text: s.requestedTab); }),
+            Builder(builder: (ctx) { final s = AppStrings(ctx.read<LanguageProvider>().isArabic); return Tab(text: s.previousTab); }),
+            Builder(builder: (ctx) { final s = AppStrings(ctx.read<LanguageProvider>().isArabic); return Tab(text: s.summaryTab); }),
           ],
         ),
       ),
@@ -706,9 +717,9 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
   // ── Upcoming ───────────────────────────────────────────────────────────────
 
   Widget _buildUpcomingTab(List<Map<String, dynamic>> appts) {
+    final s = AppStrings(context.read<LanguageProvider>().isArabic);
     if (appts.isEmpty) {
-      return _emptyState(
-          Icons.event_available_rounded, 'No upcoming appointments.');
+      return _emptyState(Icons.event_available_rounded, s.noUpcomingApptsMsg);
     }
     return ListView.separated(
       padding: const EdgeInsets.all(16),
@@ -721,9 +732,9 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
   // ── Requested ──────────────────────────────────────────────────────────────
 
   Widget _buildRequestedTab(List<Map<String, dynamic>> reqs) {
+    final s = AppStrings(context.read<LanguageProvider>().isArabic);
     if (reqs.isEmpty) {
-      return _emptyState(
-          Icons.pending_actions_rounded, 'No appointment requests yet.');
+      return _emptyState(Icons.pending_actions_rounded, s.noRequestsMsg);
     }
     return ListView.separated(
       padding: const EdgeInsets.all(16),
@@ -830,8 +841,9 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
   // ── Previous ───────────────────────────────────────────────────────────────
 
   Widget _buildPreviousTab(List<Map<String, dynamic>> appts) {
+    final s = AppStrings(context.read<LanguageProvider>().isArabic);
     if (appts.isEmpty) {
-      return _emptyState(Icons.history_rounded, 'No past appointments yet.');
+      return _emptyState(Icons.history_rounded, s.noPastApptsMsg);
     }
     return ListView.separated(
       padding: const EdgeInsets.all(16),
@@ -858,9 +870,9 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
       byDoc.putIfAbsent(doctorId, () => []).add(d);
     }
 
+    final s = AppStrings(context.read<LanguageProvider>().isArabic);
     if (byDoc.isEmpty) {
-      return _emptyState(
-          Icons.bar_chart_rounded, 'No sessions attended yet.');
+      return _emptyState(Icons.bar_chart_rounded, s.noSessionsMsg);
     }
 
     // Sort by session count descending
@@ -891,15 +903,15 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
                       color: Colors.white,
                       fontSize: 26,
                       fontWeight: FontWeight.bold)),
-              const Text('Total Sessions Attended',
+              Text(s.totalSessionsAttended,
                   style:
-                      TextStyle(color: Colors.white70, fontSize: 11)),
+                      const TextStyle(color: Colors.white70, fontSize: 11)),
             ]),
           ]),
         ),
         const SizedBox(height: 16),
-        const Text('Sessions by Doctor',
-            style: TextStyle(
+        Text(s.sessionsByDoctor,
+            style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 15,
                 color: AppColors.textPrimary)),
@@ -959,7 +971,7 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
                         fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   Text(
-                    'Last session: ${DateFormat('MMM d, yyyy').format(lastSession)}',
+                    s.lastSessionDate(DateFormat('MMM d, yyyy').format(lastSession)),
                     style: const TextStyle(
                         color: AppColors.textSecondary, fontSize: 11),
                   ),
@@ -990,6 +1002,7 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
   // ── Shared appointment card ────────────────────────────────────────────────
 
   Widget _apptCard(Map<String, dynamic> doc, {required bool isUpcoming}) {
+    final s = AppStrings(context.read<LanguageProvider>().isArabic);
     final data = doc;
     final dt = DateTime.parse(data['appointment_time'] as String);
     final notes = data['notes'] as String? ?? '';
@@ -1096,13 +1109,11 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content:
-                            Text('Contact your doctor to reschedule.')),
+                    SnackBar(content: Text(s.contactYourDoctor)),
                   ),
                   icon: const Icon(Icons.edit_calendar_rounded, size: 16),
-                  label: const Text('Reschedule',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  label: Text(s.reschedule,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF00897B),
                     side: const BorderSide(color: Color(0xFF00897B)),
@@ -1134,8 +1145,8 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
               const Icon(Icons.check_circle_rounded,
                   size: 18, color: Color(0xFF2E7D32)),
               const SizedBox(width: 6),
-              const Text('Completed',
-                  style: TextStyle(
+              Text(s.completed,
+                  style: const TextStyle(
                       color: Color(0xFF2E7D32),
                       fontWeight: FontWeight.w600,
                       fontSize: 13)),
@@ -1146,16 +1157,16 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
   }
 
   void _confirmCancel(String appointmentId) {
+    final s = AppStrings(context.read<LanguageProvider>().isArabic);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Cancel Appointment'),
-        content: const Text(
-            'Are you sure you want to cancel this appointment?'),
+        title: Text(s.cancelAppointment),
+        content: Text(s.cancelAppointmentConfirm),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Keep It')),
+              child: Text(s.keepIt)),
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
@@ -1164,13 +1175,12 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
                   .update({'status': 'cancelled'}).eq('id', appointmentId);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('Appointment cancelled.')),
+                  SnackBar(content: Text(s.appointmentCancelled)),
                 );
               }
             },
-            child: const Text('Cancel It',
-                style: TextStyle(color: Color(0xFFD32F2F))),
+            child: Text(s.cancelIt,
+                style: const TextStyle(color: Color(0xFFD32F2F))),
           ),
         ],
       ),
@@ -1214,11 +1224,12 @@ class _PatientMyDoctorsScreenState extends State<_PatientMyDoctorsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStrings(context.watch<LanguageProvider>().isArabic);
     return Scaffold(
       backgroundColor: const Color(0xFFF0F4F8),
       appBar: AppBar(
-        title: const Text('My Doctors/Therapists',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(s.myDoctors,
+            style: const TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         foregroundColor: AppColors.textPrimary,
         elevation: 0,
@@ -1242,7 +1253,7 @@ class _PatientMyDoctorsScreenState extends State<_PatientMyDoctorsScreen> {
               controller: _searchCtrl,
               onChanged: (v) => setState(() => _query = v.toLowerCase()),
               decoration: InputDecoration(
-                hintText: 'Search doctors',
+                hintText: s.searchDoctors,
                 prefixIcon: const Icon(Icons.search_rounded,
                     color: AppColors.textSecondary),
                 filled: true,
@@ -1293,16 +1304,16 @@ class _PatientMyDoctorsScreenState extends State<_PatientMyDoctorsScreen> {
                               size: 40, color: _kBlue),
                         ),
                         const SizedBox(height: 20),
-                        const Text('No Doctors Added',
-                            style: TextStyle(
+                        Text(s.noDoctorsAdded,
+                            style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 color: AppColors.textPrimary)),
                         const SizedBox(height: 8),
-                        const Text(
-                          'Search for a doctor and add them to your list.',
+                        Text(
+                          s.searchForDoctor,
                           textAlign: TextAlign.center,
-                          style: TextStyle(
+                          style: const TextStyle(
                               color: AppColors.textSecondary, height: 1.5),
                         ),
                         const SizedBox(height: 24),
@@ -1313,7 +1324,7 @@ class _PatientMyDoctorsScreenState extends State<_PatientMyDoctorsScreen> {
                                   builder: (_) =>
                                       const FindDoctorsScreen())),
                           icon: const Icon(Icons.search_rounded),
-                          label: const Text('Find a Doctor or Therapist'),
+                          label: Text(s.findDoctorOrTherapist),
                         ),
                       ]),
                     ),
@@ -1321,7 +1332,7 @@ class _PatientMyDoctorsScreenState extends State<_PatientMyDoctorsScreen> {
                 }
                 if (doctors.isEmpty) {
                   return Center(
-                    child: Text('No results for "$_query"',
+                    child: Text(s.noResultsFor(_query),
                         style: const TextStyle(
                             color: AppColors.textSecondary)),
                   );

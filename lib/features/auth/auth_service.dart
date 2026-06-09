@@ -21,6 +21,16 @@ class AuthService {
     await _supabase.auth.signOut();
   }
 
+  Future<bool> resetPassword(String email) async {
+    try {
+      await _supabase.auth.resetPasswordForEmail(email);
+      return true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('resetPassword error: $e');
+      return false;
+    }
+  }
+
   // Calls the `admin-delete-user` Edge Function with the current user's own ID,
   // then signs out. The Edge Function must verify the requester matches userId
   // before invoking the Supabase Admin API to delete the auth record.

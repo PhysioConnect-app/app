@@ -1,0 +1,82 @@
+workflows:
+
+  # ── Android — signed AAB for Play Store ──────────────────────────────────
+  android-release:
+    name: Android Release (AAB)
+    max_build_duration: 60
+    environment:
+      flutter: stable
+      java: 17
+      # Set these secrets in Codemagic → App settings → Environment variables
+      # (mark each one as "Secure")
+      vars:
+        STORE_PASSWORD: $STORE_PASSWORD          # keystore password
+        KEY_ALIAS: $KEY_ALIAS                    # key alias inside keystore
+        KEY_PASSWORD: $KEY_PASSWORD              # key password
+      # Upload your .jks / .keystore file under
+      # Codemagic → App settings → Code signing → Android keystores
+      # and reference it via $CM_KEYSTORE_PATH (set automatically by Codemagic)
+    scripts:
+      - name: Get dependencies
+        script: flutter pub get
+      - name: Build signed AAB
+        script: |
+          flutter build appbundle --release \
+            --build-name=1.0.0 \
+            --build-number=$BUILD_NUMBER
+        environment:
+          KEYSTORE_PATH: $CM_KEYSTORE_PATH
+    artifacts:
+      - build/app/outputs/bundle/release/app-release.aab
+    publishing:
+      google_play:
+        # ── FILL IN ──────────────────────────────────────────────────────────
+        # 1. Create a Google Play service-account JSON key
+        # 2. Upload it under Codemagic → Integrations → Google Play
+        # 3. Set the package name below
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS  # set in Codemagic secrets
+        track: internal   # promote to alpha/beta/production manually
+
+  # ── iOS — signed IPA for App Store ───────────────────────────────────────
+  ios-release:
+    name: iOS Release (IPA)
+    max_build_duration: 90
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      # Set these secrets in Codemagic → App settings → Environment variables
+      vars:
+        APP_STORE_CONNECT_ISSUER_ID: $APP_STORE_CONNECT_ISSUER_ID
+        APP_STORE_CONNECT_KEY_IDENTIFIER: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        APP_STORE_CONNECT_PRIVATE_KEY: $APP_STORE_CONNECT_PRIVATE_KEY
+        CERTIFICATE_PRIVATE_KEY: $CERTIFICATE_PRIVATE_KEY
+    integrations:
+      app_store_connect: PhysioConnect  # name of your App Store Connect API key in Codemagic
+    scripts:
+      - name: Get dependencies
+        script: flutter pub get
+      - name: Install pods
+        script: find . -name "Podfile" -execdir pod install \;
+      - name: Set up code signing
+        script: |
+          keychain initialize
+          app-store-connect fetch-signing-files com.physioconnect.app \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
+          xcode-project use-profiles
+      - name: Build signed IPA
+        script: |
+          flutter build ipa --release \
+            --export-options-plist=/Users/builder/export_options.plist \
+            --build-name=1.0.0 \
+            --build-number=$BUILD_NUMBER
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        beta_groups:
+          - Internal Testers
