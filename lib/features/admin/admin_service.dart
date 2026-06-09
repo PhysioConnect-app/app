@@ -1,0 +1,99 @@
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class AdminService {
+  final _supabase = Supabase.instance.client;
+
+  // ── Helper: call an Edge Function and return null on success or an error string ──
+
+  Future<String?> _invoke(String fn, Map<String, dynamic> body) async {
+    try {
+      final res = await _supabase.functions.invoke(fn, body: body);
+      if (res.data is Map && (res.data as Map).containsKey('error')) {
+        return (res.data as Map)['error'].toString();
+      }
+      return null;
+    } on FunctionException catch (e) {
+      if (kDebugMode) debugPrint('$fn error: ${e.details}');
+      final details = e.details;
+      if (details is Map && details.containsKey('error')) {
+        return details['error'].toString();
+      }
+      return e.details?.toString() ?? e.toString();
+    } catch (e) {
+      if (kDebugMode) debugPrint('$fn error: $e');
+      return e.toString();
+    }
+  }
+
+  // ── Create doctor account ────────────────────────────────────────────────────
+
+  Future<String?> createDoctorAccount({
+    required String name,
+    required String email,
+    required String password,
+    required String specialty,
+  }) async {
+    return _invoke('admin-create-user', {
+      'email': email,
+      'password': password,
+      'role': 'doctor',
+      'name': name,
+      'specialty': specialty,
+    });
+  }
+
+  // ── Create polyclinic account ────────────────────────────────────────────────
+
+  Future<String?> createPolyclinicAccount({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    return _invoke('admin-create-user', {
+      'email': email,
+      'password': password,
+      'role': 'polyclinic',
+      'name': name,
+    });
+  }
+
+  // ── Create patient account — returns new patient UUID on success, null on failure ─
+
+  Future<String?> createPatientAccount({
+    required String name,
+    required String email,
+    required String password,
+    required String doctorId,
+    String? phone,
+    String? primaryDiagnosis,
+    DateTime? dateOfBirth,
+  }) async {
+    try {
+      final res = await _supabase.functions.invoke('admin-create-user', body: {
+        'email': email,
+        'password': password,
+        'role': 'patient',
+        'name': name,
+        'doctor_id': doctorId,
+        'phone': phone ?? '',
+        'primary_diagnosis': primaryDiagnosis ?? '',
+        if (dateOfBirth != null) 'date_of_birth': dateOfBirth.toIso8601String(),
+      });
+      if (res.data is Map && (res.data as Map).containsKey('error')) {
+        if (kDebugMode) debugPrint('createPatientAccount error: ${res.data}');
+        return null;
+      }
+      return (res.data as Map?)?['id'] as String?;
+    } catch (e) {
+      if (kDebugMode) debugPrint('createPatientAccount error: $e');
+      return null;
+    }
+  }
+
+  // ── Delete user account (auth + DB row) ─────────────────────────────────────
+
+  Future<String?> deleteUserAccount(String userId) async {
+    return _invoke('admin-delete-user', {'userId': userId});
+  }
+}

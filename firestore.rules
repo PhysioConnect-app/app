@@ -1,0 +1,75 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Users / Accounts
+    match /users/{userId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Patients
+    match /patients/{patientId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAuthenticated() && getUserData().role == 'doctor';
+    }
+
+    // Appointments
+    match /appointments/{appointmentId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Clinical Notes (SOAP + quick notes — doctors write, patients can read their own)
+    match /clinical_notes/{noteId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Invoices
+    match /invoices/{invoiceId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Inventory
+    match /inventory/{itemId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Expenses
+    match /expenses/{expenseId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Notifications
+    match /notifications/{notificationId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Chat Rooms
+    match /chatRooms/{roomId} {
+      // Allow reading a non-existent room (resource == null) so ensureRoomExists can check
+      allow read: if isAuthenticated() &&
+        (resource == null || request.auth.uid in resource.data.participants);
+
+      // Allow creating a room only if the creator includes themselves in participants
+      allow create: if isAuthenticated() &&
+        request.auth.uid in request.resource.data.participants;
+
+      // Allow updating/deleting only if the user is already a participant
+      allow update, delete: if isAuthenticated() &&
+        request.auth.uid in resource.data.participants;
+
+      match /messages/{messageId} {
+        allow read, write: if isAuthenticated();
+      }
+    }
+  }
+}

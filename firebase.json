@@ -1,0 +1,29 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "healthcareapp-43887",
+          "appId": "1:667774954320:android:1ed6c78d383eeca6d81a55",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "healthcareapp-43887",
+          "configurations": {
+            "android": "1:667774954320:android:1ed6c78d383eeca6d81a55",
+            "ios": "1:667774954320:ios:2763fe0db8ef4fc8d81a55",
+            "macos": "1:667774954320:ios:2763fe0db8ef4fc8d81a55",
+            "web": "1:667774954320:web:4834d7d7ae310c7bd81a55",
+            "windows": "1:667774954320:web:fe4a04a469a0314bd81a55"
+          }
+        }
+      }
+    }
+  }
+}

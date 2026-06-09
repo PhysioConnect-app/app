@@ -1,0 +1,64 @@
+name: clinic_telehealth_app
+description: A physical therapy clinic management and telehealth app.
+publish_to: 'none'
+version: 1.0.0+1
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Supabase
+  supabase_flutter: ^2.8.4
+  http: ^1.2.2
+  # Media
+  image_picker: ^1.1.2
+  cached_network_image: ^3.4.1
+  # Location & Maps
+  geolocator: ^13.0.1
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  # State management & persistence
+  provider: ^6.1.2
+  shared_preferences: ^2.3.3
+  connectivity_plus: ^6.1.1
+  # UI & utilities
+  fl_chart: ^0.70.2
+  flutter_local_notifications: ^18.0.1
+  intl: ^0.20.1
+  url_launcher: ^6.3.1
+  cupertino_icons: ^1.0.8
+  pdf: ^3.10.7
+  printing: ^5.11.1
+  excel: ^4.0.6
+  file_picker: ^8.1.2
+  share_plus: ^10.0.0
+  path_provider: ^2.1.3
+  web: ^1.1.1
+  flutter_svg: ^2.0.10+1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  msix: ^3.16.7
+
+msix_config:
+  display_name: PhysioConnect
+  publisher_display_name: PhysioConnect
+  identity_name: PhysioConnect.PhysioConnect
+  publisher: CN=83E191CA-6DED-4CE1-AAB4-C15B5CBAD17F
+  msix_version: 1.0.1.0
+  logo_path: assets\icon\icon_256.png
+  certificate_path: certs\physioconnect_store.pfx
+  certificate_password: "PhysioConnect2026!"
+  install_certificate: false
+  architecture: x64
+  capabilities: internetClient,privateNetworkClientServer,location
+  output_path: build\msix
+  output_name: PhysioConnect_Setup
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
