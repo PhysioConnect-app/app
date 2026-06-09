@@ -52,7 +52,6 @@ app.*.map.json
 
 # Android secrets
 android/local.properties
-android/app/google-services.json
 android/.gradle/
 
 # Windows generated

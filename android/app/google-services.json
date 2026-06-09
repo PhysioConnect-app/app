@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "667774954320",
+    "project_id": "healthcareapp-43887",
+    "storage_bucket": "healthcareapp-43887.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:667774954320:android:1ed6c78d383eeca6d81a55",
+        "android_client_info": {
+          "package_name": "com.example.my_clinic_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA7n-eQ77zOKx_l_Txffr2KGKVwgWhXMnY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:667774954320:android:838f1b81d08d1462d81a55",
+        "android_client_info": {
+          "package_name": "com.physioconnect.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA7n-eQ77zOKx_l_Txffr2KGKVwgWhXMnY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
