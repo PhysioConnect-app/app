@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -77,10 +78,13 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
       if (perm == LocationPermission.denied) {
         perm = await Geolocator.requestPermission();
       }
-      if (perm == LocationPermission.deniedForever) {
+      if (perm == LocationPermission.deniedForever ||
+          perm == LocationPermission.denied) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Location denied. Enable in device settings.'),
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(Platform.isWindows
+                ? 'Location denied. Enable in Windows Settings → Privacy & security → Location.'
+                : 'Location denied. Enable in device settings.'),
           ));
         }
         return;

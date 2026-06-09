@@ -40,17 +40,17 @@ dev_dependencies:
 
 msix_config:
   display_name: PhysioConnect
-  publisher_display_name: PhysioConnect
-  identity_name: PhysioConnect.PhysioConnect
-  publisher: CN=PhysioConnect
+  publisher_display_name: COPY_FROM_PARTNER_CENTER   # Partner Center → Account settings → Publisher display name
+  identity_name: COPY_FROM_PARTNER_CENTER            # Partner Center → App management → App identity → Package/Identity/Name
+  publisher: COPY_FROM_PARTNER_CENTER                # Partner Center → Account settings → Publisher (CN=...)
   msix_version: 1.0.1.0
   logo_path: assets\icon\icon_256.png
-  certificate_path: certs\physioconnect_store.pfx
-  # certificate_password is not stored here — pass at build time:
-  #   flutter pub run msix:create --certificate-password $MSIX_CERTIFICATE_PASSWORD
+  # Sideloading: flutter pub run msix:create --certificate-path certs\physioconnect_store.pfx --certificate-password $MSIX_CERTIFICATE_PASSWORD
+  # Store upload: flutter pub run msix:create --store   (Partner Center signs — no local cert needed)
   install_certificate: false
   architecture: x64
-  capabilities: internetClient,privateNetworkClientServer,location
+  capabilities: internetClient,location
+  languages: en-us,ar-sa
   output_path: build\msix
   output_name: PhysioConnect_Setup
 

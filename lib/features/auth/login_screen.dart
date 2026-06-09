@@ -1,6 +1,7 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
 import 'auth_service.dart';
@@ -20,6 +21,54 @@ class _LoginScreenState extends State<LoginScreen> {
   final _authService        = AuthService();
   bool _isLoading = false;
   bool _obscure   = true;
+
+  Future<void> _showForgotPasswordDialog() async {
+    final s = AppStrings(context.read<LanguageProvider>().isArabic);
+    final emailCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(s.forgotPasswordTitle),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(s.forgotPasswordHint,
+                style: const TextStyle(fontSize: 14, color: Color(0xFF607D8B))),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: s.email,
+                prefixIcon: const Icon(Icons.email_outlined),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(s.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(s.send),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final sent = await _authService.resetPassword(emailCtrl.text.trim());
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(sent ? s.forgotPasswordSent : s.forgotPasswordError),
+        backgroundColor: sent ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -92,11 +141,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     passwordController: _passwordController,
                     emailFocus:         _emailFocus,
                     passwordFocus:      _passwordFocus,
-                    isLoading:       _isLoading,
-                    obscure:         _obscure,
-                    onObscureToggle: () => setState(() => _obscure = !_obscure),
-                    onLogin:         _handleLogin,
-                    langProvider:    langProvider,
+                    isLoading:          _isLoading,
+                    obscure:            _obscure,
+                    onObscureToggle:    () => setState(() => _obscure = !_obscure),
+                    onLogin:            _handleLogin,
+                    onForgotPassword:   _showForgotPasswordDialog,
+                    langProvider:       langProvider,
                     s: s,
                   ),
                 ),
@@ -120,6 +170,7 @@ class _LoginCard extends StatelessWidget {
   final bool obscure;
   final VoidCallback onObscureToggle;
   final VoidCallback onLogin;
+  final VoidCallback onForgotPassword;
   final LanguageProvider langProvider;
   final AppStrings s;
 
@@ -132,6 +183,7 @@ class _LoginCard extends StatelessWidget {
     required this.obscure,
     required this.onObscureToggle,
     required this.onLogin,
+    required this.onForgotPassword,
     required this.langProvider,
     required this.s,
   });
@@ -184,9 +236,9 @@ class _LoginCard extends StatelessWidget {
           const SizedBox(height: 30),
 
           // ── "Welcome Back!" ──────────────────────────────────────────────────
-          const Text(
-            'Welcome Back!',
-            style: TextStyle(
+          Text(
+            s.welcomeBack,
+            style: const TextStyle(
               fontSize: 27,
               fontWeight: FontWeight.w800,
               color: Color(0xFF2E7D32),
@@ -197,9 +249,9 @@ class _LoginCard extends StatelessWidget {
           const SizedBox(height: 7),
 
           // ── Subheading ───────────────────────────────────────────────────────
-          const Text(
-            'Please sign in to your account',
-            style: TextStyle(
+          Text(
+            s.signInSubtitle,
+            style: const TextStyle(
               fontSize: 14,
               color: Color(0xFF90A4AE),
               fontWeight: FontWeight.w400,
@@ -211,7 +263,7 @@ class _LoginCard extends StatelessWidget {
           _InputField(
             controller: emailController,
             focusNode:  emailFocus,
-            hintText:   'Email or Username',
+            hintText:   s.emailOrUsername,
             icon:       Icons.person_outline_rounded,
             keyboardType: TextInputType.emailAddress,
             textDirection: langProvider.isArabic
@@ -225,7 +277,7 @@ class _LoginCard extends StatelessWidget {
           _InputField(
             controller: passwordController,
             focusNode:  passwordFocus,
-            hintText:   'Password',
+            hintText:   s.password,
             icon:       Icons.lock_outline_rounded,
             obscureText: obscure,
             onSubmitted: (_) => onLogin(),
@@ -234,7 +286,7 @@ class _LoginCard extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 child: Text(
-                  obscure ? 'Show' : 'Hide',
+                  obscure ? s.showPassword : s.hidePassword,
                   style: const TextStyle(
                     fontSize: 13,
                     color: Color(0xFF1565C0),
@@ -250,10 +302,10 @@ class _LoginCard extends StatelessWidget {
           Align(
             alignment: Alignment.centerRight,
             child: GestureDetector(
-              onTap: () {},
-              child: const Text(
-                'Forgot Password?',
-                style: TextStyle(
+              onTap: onForgotPassword,
+              child: Text(
+                s.forgotPassword,
+                style: const TextStyle(
                   color: Color(0xFF1565C0),
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -300,9 +352,9 @@ class _LoginCard extends StatelessWidget {
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
-                      child: const Text(
-                        'Sign In',
-                        style: TextStyle(
+                      child: Text(
+                        s.signIn,
+                        style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
@@ -324,6 +376,18 @@ class _LoginCard extends StatelessWidget {
               style: const TextStyle(color: Color(0xFFCFD8DC), fontSize: 13),
             ),
             style: TextButton.styleFrom(foregroundColor: const Color(0xFFCFD8DC)),
+          ),
+
+          // ── Privacy policy (required by App Store, Play Store, MS Store) ─────
+          TextButton(
+            onPressed: () => launchUrl(
+              Uri.parse(AppStrings.privacyPolicyUrl),
+              mode: LaunchMode.externalApplication,
+            ),
+            child: Text(
+              s.privacyPolicy,
+              style: const TextStyle(color: Color(0xFF78909C), fontSize: 11),
+            ),
           ),
         ],
       ),

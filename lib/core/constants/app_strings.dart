@@ -25,10 +25,29 @@ class AppStrings {
   String get areYouSure => _t('Are you sure?', 'هل أنت متأكد؟');
 
   // Auth
-  String get welcomeBack => _t('Welcome Back', 'مرحباً بعودتك');
+  String get welcomeBack => _t('Welcome Back!', 'مرحباً بعودتك!');
+  String get signInSubtitle => _t('Please sign in to your account', 'يرجى تسجيل الدخول إلى حسابك');
   String get ptLogin => _t('Physical Therapy Portal', 'بوابة العلاج الطبيعي');
   String get email => _t('Email Address', 'البريد الإلكتروني');
+  String get emailOrUsername => _t('Email or Username', 'البريد الإلكتروني أو اسم المستخدم');
   String get password => _t('Password', 'كلمة المرور');
+  String get showPassword => _t('Show', 'إظهار');
+  String get hidePassword => _t('Hide', 'إخفاء');
+  String get signIn => _t('Sign In', 'تسجيل الدخول');
+  String get forgotPassword => _t('Forgot Password?', 'نسيت كلمة المرور؟');
+  String get forgotPasswordTitle => _t('Reset Password', 'إعادة تعيين كلمة المرور');
+  String get forgotPasswordHint => _t(
+    'Enter your email address and we\'ll send you a reset link.',
+    'أدخل بريدك الإلكتروني وسنرسل لك رابط إعادة التعيين.',
+  );
+  String get forgotPasswordSent => _t(
+    'Reset link sent! Check your inbox.',
+    'تم إرسال رابط الإعادة! تحقق من صندوق الوارد.',
+  );
+  String get forgotPasswordError => _t(
+    'Could not send reset email. Check the address and try again.',
+    'تعذر إرسال البريد. تحقق من العنوان وحاول مجدداً.',
+  );
   String get login => _t('Log In', 'تسجيل الدخول');
   String get loginFailed => _t('Login failed. Check your credentials.', 'فشل تسجيل الدخول. تحقق من بياناتك.');
 
@@ -181,6 +200,59 @@ class AppStrings {
   String get clinicalNotes => _t('Clinical Notes & History', 'الملاحظات السريرية');
   String get noUpcomingSessions => _t('No upcoming sessions scheduled.', 'لا توجد جلسات قادمة مجدولة.');
   String get noNotes => _t('No clinical notes yet.', 'لا توجد ملاحظات سريرية بعد.');
+  // Patient Dashboard — header & greeting
+  String get welcome => _t('Welcome', 'مرحباً');
+  String get goodMorning => _t('Good Morning', 'صباح الخير');
+  String get goodAfternoon => _t('Good Afternoon', 'مساء الخير');
+  String get goodEvening => _t('Good Evening', 'مساء النور');
+  // Patient Dashboard — appointment banner
+  String get noUpcomingAppointments => _t('No Upcoming Appointments', 'لا توجد مواعيد قادمة');
+  String get bookSessionToday => _t('Book a session with your doctor today.', 'احجز جلسة مع طبيبك اليوم.');
+  String get upcomingAppointment => _t('Upcoming Appointment', 'الموعد القادم');
+  String get viewDetails => _t('View Details', 'عرض التفاصيل');
+  // Patient — appointments screen
+  String get myAppointments => _t('My Appointments', 'مواعيدي');
+  String get upcomingTab => _t('Upcoming', 'القادمة');
+  String get requestedTab => _t('Requested', 'المطلوبة');
+  String get previousTab => _t('Previous', 'السابقة');
+  String get summaryTab => _t('Summary', 'الملخص');
+  String get totalSessionsAttended => _t('Total Sessions Attended', 'إجمالي الجلسات المحضورة');
+  String get sessionsByDoctor => _t('Sessions by Doctor', 'الجلسات حسب الطبيب');
+  String get noUpcomingApptsMsg => _t('No upcoming appointments.', 'لا توجد مواعيد قادمة.');
+  String get noPastApptsMsg => _t('No past appointments yet.', 'لا توجد مواعيد سابقة بعد.');
+  String get noRequestsMsg => _t('No appointment requests yet.', 'لا توجد طلبات مواعيد بعد.');
+  String get noSessionsMsg => _t('No sessions attended yet.', 'لم تحضر أي جلسات بعد.');
+  String get reschedule => _t('Reschedule', 'إعادة الجدولة');
+  String get completed => _t('Completed', 'مكتمل');
+  String get contactYourDoctor => _t('Contact your doctor to reschedule.', 'تواصل مع طبيبك لإعادة الجدولة.');
+  String get cancelAppointment => _t('Cancel Appointment', 'إلغاء الموعد');
+  String get cancelAppointmentConfirm => _t(
+    'Are you sure you want to cancel this appointment?',
+    'هل أنت متأكد من إلغاء هذا الموعد؟',
+  );
+  String get keepIt => _t('Keep It', 'احتفظ به');
+  String get cancelIt => _t('Cancel It', 'إلغاء');
+  String get appointmentCancelled => _t('Appointment cancelled.', 'تم إلغاء الموعد.');
+  String lastSessionDate(String date) => _t('Last session: $date', 'آخر جلسة: $date');
+  // Patient — my doctors screen
+  String get myDoctors => _t('My Doctors/Therapists', 'أطبائي / معالجيّ');
+  String get searchDoctors => _t('Search doctors', 'ابحث عن أطباء');
+  String get noDoctorsAdded => _t('No Doctors Added', 'لم يضف أطباء بعد');
+  String get searchForDoctor => _t('Search for a doctor and add them to your list.', 'ابحث عن طبيب وأضفه إلى قائمتك.');
+  String get findDoctorOrTherapist => _t('Find a Doctor or Therapist', 'ابحث عن طبيب أو معالج');
+  String noResultsFor(String q) => _t('No results for "$q"', 'لا نتائج لـ "$q"');
+  // Notification permission rationale (shown before iOS system dialog)
+  String get notifPermTitle => _t('Stay Updated', 'ابقَ على اطلاع');
+  String get notifPermBody => _t(
+    'PhysioConnect sends reminders for upcoming sessions and new clinical notes from your care team.',
+    'يرسل فيزيو كونكت تذكيرات بالجلسات القادمة والملاحظات السريرية الجديدة من فريق رعايتك.',
+  );
+  String get notifPermAllow => _t('Allow', 'السماح');
+  String get notifPermNotNow => _t('Not Now', 'ليس الآن');
+
+  // Privacy policy — replace URL with your real hosted page before Store submission
+  static const String privacyPolicyUrl = 'https://physioconnect.app/privacy'; // TODO: replace
+  String get privacyPolicy => _t('Privacy Policy', 'سياسة الخصوصية');
 
   // Find Therapist
   String get nearbyTherapists => _t('Nearby Therapists', 'معالجون قريبون');

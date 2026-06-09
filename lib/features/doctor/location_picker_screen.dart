@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -44,10 +45,13 @@ class _DoctorLocationPickerScreenState
       if (perm == LocationPermission.denied) {
         perm = await Geolocator.requestPermission();
       }
-      if (perm == LocationPermission.deniedForever) {
+      if (perm == LocationPermission.deniedForever ||
+          perm == LocationPermission.denied) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Location permission denied. Enable in settings.'),
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(Platform.isWindows
+                ? 'Location denied. Enable in Windows Settings → Privacy & security → Location.'
+                : 'Location permission denied. Enable in settings.'),
           ));
         }
         return;
