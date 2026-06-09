@@ -251,7 +251,7 @@ class AppStrings {
   String get notifPermNotNow => _t('Not Now', 'ليس الآن');
 
   // Privacy policy — replace URL with your real hosted page before Store submission
-  static const String privacyPolicyUrl = 'https://physioconnect.app/privacy'; // TODO: replace
+  static const String privacyPolicyUrl = 'https://jihadzhour-dot.github.io/physioconnect-privacy/';
   String get privacyPolicy => _t('Privacy Policy', 'سياسة الخصوصية');
 
   // Find Therapist
