@@ -51,6 +51,10 @@ void main() {
   testWidgets('Patient dashboard home — desktop', (tester) async {
     await ensureSupabaseInitialized();
     await signInFakeUser();
+    // Pin the time-of-day greeting so this golden doesn't depend on the
+    // wall-clock time the test happens to run at.
+    patientDashboardClock = () => DateTime(2024, 1, 1, 9, 0);
+    addTearDown(() => patientDashboardClock = DateTime.now);
     await pumpAtSize(tester, const PatientDashboardScreen(), size: desktopSize);
     _drainExceptions(tester);
     await _golden(tester, 'patient_dashboard_home');

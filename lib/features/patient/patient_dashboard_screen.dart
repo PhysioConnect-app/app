@@ -18,6 +18,11 @@ const _kNavy = Color(0xFF1A237E);
 const _kBlue = Color(0xFF1565C0);
 const _kGreen = Color(0xFF2E7D32);
 
+/// Overridable in tests so the time-of-day greeting doesn't make golden
+/// renders depend on the wall-clock time the test happens to run at.
+@visibleForTesting
+DateTime Function() patientDashboardClock = DateTime.now;
+
 // ════════════════════════════════════════════════════════════════════════════
 // Home
 // ════════════════════════════════════════════════════════════════════════════
@@ -109,7 +114,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
   }
 
   String _greeting(AppStrings s) {
-    final h = DateTime.now().hour;
+    final h = patientDashboardClock().hour;
     if (h < 12) return s.goodMorning;
     if (h < 17) return s.goodAfternoon;
     return s.goodEvening;
