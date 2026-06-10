@@ -3769,10 +3769,12 @@ void _showPickPatientForDoc(AppStrings s) {
                                         color: AppColors.textSecondary)),
                               ),
                             )
-                          : _buildPatientsTable(s, filteredPatients,
-                              sortBy: sortBy,
-                              onSortChanged: (v) =>
-                                  setState(() => sortBy = v)),
+                          : FormFactorFeatures.of(context).isMobile
+                              ? _buildPatientsCardList(s, filteredPatients)
+                              : _buildPatientsTable(s, filteredPatients,
+                                  sortBy: sortBy,
+                                  onSortChanged: (v) =>
+                                      setState(() => sortBy = v)),
                     ),
                   ),
                 ],
@@ -3781,6 +3783,98 @@ void _showPickPatientForDoc(AppStrings s) {
           );
         },
       ),
+    );
+  }
+
+  /// Mobile replacement for the desktop 5-column patients table: a vertical
+  /// list of cards (avatar, name, condition). Tapping a card opens the same
+  /// action sheet as the desktop table row (schedule / view appointments /
+  /// add documentation / etc.). Desktop's table is unchanged.
+  Widget _buildPatientsCardList(
+      AppStrings s, List<Map<String, dynamic>> patients) {
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: patients.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (_, i) {
+        final data       = patients[i];
+        final patientId  = patients[i]['id'] as String;
+        final name       = (data['name'] ?? data['email'] ?? 'Patient') as String;
+        final diagnosis  = (data['primary_diagnosis'] ?? 'General') as String;
+        final photoUrl   = (data['profile_photo_url'] ?? '') as String;
+        final phone      = (data['phone'] ?? '') as String;
+        final hasAccount = (data['email'] as String? ?? '').isNotEmpty &&
+            (data['hasAccount'] as bool? ?? true);
+
+        return Card(
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: const BorderSide(color: AppColors.cardBorder),
+          ),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => _showPatientActions(
+                s, patientId, name, photoUrl,
+                hasAccount: hasAccount, phone: phone),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(children: [
+                Stack(children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor:
+                        AppColors.primary.withValues(alpha: 0.15),
+                    backgroundImage: photoUrl.isNotEmpty
+                        ? NetworkImage(photoUrl)
+                        : null,
+                    child: photoUrl.isEmpty
+                        ? Icon(Icons.person_rounded,
+                            color: AppColors.primary)
+                        : null,
+                  ),
+                  // Account status dot
+                  Positioned(
+                    right: 0, bottom: 0,
+                    child: Container(
+                      width: 11, height: 11,
+                      decoration: BoxDecoration(
+                        color: hasAccount
+                            ? const Color(0xFF2E7D32)
+                            : Colors.grey.shade400,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1.5),
+                      ),
+                    ),
+                  ),
+                ]),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(name,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14),
+                          overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 2),
+                      Text(diagnosis,
+                          style: const TextStyle(
+                              fontSize: 12, color: AppColors.textSecondary),
+                          overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+              ]),
+            ),
+          ),
+        );
+      },
     );
   }
 
