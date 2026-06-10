@@ -7,6 +7,7 @@ import 'package:intl/intl.dart' hide TextDirection;
 import 'package:provider/provider.dart';
 import 'package:excel/excel.dart' as xl;
 import 'package:file_picker/file_picker.dart';
+import '../../core/config/form_factor_features.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
@@ -1310,14 +1311,17 @@ class _BillingScreenState extends State<BillingScreen> {
             ),
             const SizedBox(height: 8),
             Row(children: [
-              Expanded(
-                child: _smallActionBtn(
-                  icon: Icons.download_rounded,
-                  label: 'Export Report',
-                  onTap: () => _showExport(filtered, s),
+              if (FormFactorFeatures.of(context)
+                  .showBillingImportExport) ...[
+                Expanded(
+                  child: _smallActionBtn(
+                    icon: Icons.download_rounded,
+                    label: 'Export Report',
+                    onTap: () => _showExport(filtered, s),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 7),
+                const SizedBox(width: 7),
+              ],
               Expanded(
                 child: _smallActionBtn(
                   icon: Icons.shield_rounded,
@@ -1325,48 +1329,51 @@ class _BillingScreenState extends State<BillingScreen> {
                   onTap: () => _showInsuranceClaim(pendingDocs, s),
                 ),
               ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: _smallActionBtn(
-                  icon: Icons.upload_file_rounded,
-                  label: 'Import Excel',
-                  onTap: _importBillingFromExcel,
-                ),
-              ),
-              const SizedBox(width: 6),
-              GestureDetector(
-                onTap: () => showImportHelpSheet(
-                  context,
-                  title: 'Import Bills',
-                  subtitle: 'Expected Excel column order',
-                  columns: [
-                    'Name', 'Service', 'Date', 'Amount', 'Status', 'Note'
-                  ],
-                  examples: [
-                    ['John Smith', 'Physical Therapy', '01/15/2024',
-                     '150', 'paid', 'Insurance'],
-                    ['Sara Lee', 'Follow-up Session', '02/10/2024',
-                     '80', 'pending', ''],
-                  ],
-                  notes: [
-                    'Name: patient full name (matched to existing patients)',
-                    'Service: description of the billed service',
-                    'Date format: dd/MM/yyyy or yyyy-MM-dd',
-                    'Amount: number only, e.g. 150 or 150.00',
-                    'Status values: pending · paid · partially paid · cancelled',
-                    'Note: optional — any extra information about the invoice',
-                  ],
-                ),
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(10),
+              if (FormFactorFeatures.of(context)
+                  .showBillingImportExport) ...[
+                const SizedBox(width: 7),
+                Expanded(
+                  child: _smallActionBtn(
+                    icon: Icons.upload_file_rounded,
+                    label: 'Import Excel',
+                    onTap: _importBillingFromExcel,
                   ),
-                  child: Icon(Icons.help_outline_rounded,
-                      color: Colors.grey.shade600, size: 20),
                 ),
-              ),
+                const SizedBox(width: 6),
+                GestureDetector(
+                  onTap: () => showImportHelpSheet(
+                    context,
+                    title: 'Import Bills',
+                    subtitle: 'Expected Excel column order',
+                    columns: [
+                      'Name', 'Service', 'Date', 'Amount', 'Status', 'Note'
+                    ],
+                    examples: [
+                      ['John Smith', 'Physical Therapy', '01/15/2024',
+                       '150', 'paid', 'Insurance'],
+                      ['Sara Lee', 'Follow-up Session', '02/10/2024',
+                       '80', 'pending', ''],
+                    ],
+                    notes: [
+                      'Name: patient full name (matched to existing patients)',
+                      'Service: description of the billed service',
+                      'Date format: dd/MM/yyyy or yyyy-MM-dd',
+                      'Amount: number only, e.g. 150 or 150.00',
+                      'Status values: pending · paid · partially paid · cancelled',
+                      'Note: optional — any extra information about the invoice',
+                    ],
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(Icons.help_outline_rounded,
+                        color: Colors.grey.shade600, size: 20),
+                  ),
+                ),
+              ],
             ]),
           ],
         ),

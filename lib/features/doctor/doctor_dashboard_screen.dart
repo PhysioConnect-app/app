@@ -16,6 +16,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/utils/file_saver.dart';
 import 'location_picker_screen.dart';
+import '../../core/config/form_factor_features.dart';
+import '../../core/widgets/available_on_desktop_screen.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/models/subscription_model.dart';
@@ -471,8 +473,11 @@ Future<void> _showLogout(AppStrings s) async {
             _buildScheduleTab(s),                                              // 0
             _buildDocumentationTab(s),                                         // 1
             _buildPatientsTab(s),                                              // 2
-            _isLocked(3) ? _buildLockedScreen('Statistics', SubTier.premium) // 3
-                         : SessionStatsScreen(onAddAppointment: () => _navigateTo(0)),
+            !FormFactorFeatures.of(context).showStatistics // 3
+                ? _buildAvailableOnDesktopScreen('Statistics')
+                : _isLocked(3)
+                    ? _buildLockedScreen('Statistics', SubTier.premium)
+                    : SessionStatsScreen(onAddAppointment: () => _navigateTo(0)),
             _isLocked(4) ? _buildLockedScreen('Income',     SubTier.premium) // 4
                          : const BillingScreen(),
             _isLocked(5) ? _buildLockedScreen('Expenses',   SubTier.premium) // 5
@@ -608,6 +613,11 @@ Future<void> _showLogout(AppStrings s) async {
           child: LayoutBuilder(
             builder: (ctx, constraints) {
               final cols = constraints.maxWidth > 600 ? 4 : 2;
+              final showStats = FormFactorFeatures.of(context).showStatistics;
+              final visibleIndices = [
+                for (var i = 0; i < sections.length; i++)
+                  if (i != 3 || showStats) i,
+              ];
               return GridView.builder(
                 padding: const EdgeInsets.all(16),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -616,9 +626,12 @@ Future<void> _showLogout(AppStrings s) async {
                   mainAxisSpacing: 12,
                   childAspectRatio: cols == 4 ? 1.15 : 1.05,
                 ),
-                itemCount: sections.length,
-                itemBuilder: (_, i) => _buildHomeTile(
-                    sections[i], _allNavIcons[i], _allTileColors[i], i),
+                itemCount: visibleIndices.length,
+                itemBuilder: (_, i) {
+                  final idx = visibleIndices[i];
+                  return _buildHomeTile(
+                      sections[idx], _allNavIcons[idx], _allTileColors[idx], idx);
+                },
               );
             },
           ),
@@ -827,11 +840,22 @@ Future<void> _showLogout(AppStrings s) async {
     );
   }
 
+  /// Shown instead of a desktop-only screen (e.g. Statistics) when the
+  /// doctor is using a mobile-width viewport, such as via a deep link.
+  Widget _buildAvailableOnDesktopScreen(String feature) {
+    return AvailableOnDesktopNotice(feature: feature);
+  }
+
   // ════════════════════════════════════════════════════════════════════════════
   // Navigation Drawer
   // ════════════════════════════════════════════════════════════════════════════
 
   Widget _buildNavDrawer(AppStrings s, List<String> sections) {
+    final showStats = FormFactorFeatures.of(context).showStatistics;
+    final visibleIndices = [
+      for (var i = 0; i < sections.length; i++)
+        if (i != 3 || showStats) i,
+    ];
     return Drawer(
       child: Column(
         children: [
@@ -873,8 +897,9 @@ Future<void> _showLogout(AppStrings s) async {
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: sections.length,
-              itemBuilder: (_, i) {
+              itemCount: visibleIndices.length,
+              itemBuilder: (_, pos) {
+                final i = visibleIndices[pos];
                 final selected = _currentIndex == i;
                 final locked   = _isLocked(i);
                 return Padding(
@@ -1887,71 +1912,73 @@ Future<void> _showLogout(AppStrings s) async {
             ),
           ),
         ),
-        const SizedBox(width: 6),
-        // Import from Excel — compact
-        SizedBox(
-          height: 38,
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2E7D32),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 0),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-              elevation: 0,
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            icon: const Icon(Icons.upload_file_rounded, size: 14),
-            label: const Text('Import',
-                style: TextStyle(
-                    fontWeight: FontWeight.bold, fontSize: 11)),
-            onPressed: () => _importScheduleFromExcel(s),
-          ),
-        ),
-        const SizedBox(width: 6),
-        // Help
-        GestureDetector(
-          onTap: () => showImportHelpSheet(
-            context,
-            title: 'Import Schedule',
-            subtitle: 'Each row = one appointment for the patient in col B',
-            columns: ['Date (Col A)', 'Patient Name (Col B)'],
-            examples: [
-              ['01/15/2024', 'John Smith'],
-              ['03/20/2024', 'John Smith'],
-              ['02/10/2024', 'Sarah Lee'],
-            ],
-            notes: [
-              'Column A: Appointment date — added to the schedule',
-              'Column B: Patient name — must match a patient in My Patients',
-              'Same patient on multiple rows = multiple appointments',
-              'Past dates → Previous (completed), Future → Upcoming',
-              'Accepted formats: dd/MM/yyyy · yyyy-MM-dd · d/M/yyyy',
-              'First row can be a header (auto-detected)',
-            ],
-          ),
-          child: Container(
-            height: 46,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: Colors.amber.shade50,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.amber.shade200),
-            ),
-            child: Row(mainAxisSize: MainAxisSize.min, children: const [
-              Icon(Icons.help_outline_rounded,
-                  color: Colors.amber, size: 16),
-              SizedBox(width: 4),
-              Text('Format',
+        if (FormFactorFeatures.of(context).showScheduleImportExport) ...[
+          const SizedBox(width: 6),
+          // Import from Excel — compact
+          SizedBox(
+            height: 38,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2E7D32),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 0),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+                elevation: 0,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              icon: const Icon(Icons.upload_file_rounded, size: 14),
+              label: const Text('Import',
                   style: TextStyle(
-                      color: Colors.amber,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold)),
-            ]),
+                      fontWeight: FontWeight.bold, fontSize: 11)),
+              onPressed: () => _importScheduleFromExcel(s),
+            ),
           ),
-        ),
+          const SizedBox(width: 6),
+          // Help
+          GestureDetector(
+            onTap: () => showImportHelpSheet(
+              context,
+              title: 'Import Schedule',
+              subtitle: 'Each row = one appointment for the patient in col B',
+              columns: ['Date (Col A)', 'Patient Name (Col B)'],
+              examples: [
+                ['01/15/2024', 'John Smith'],
+                ['03/20/2024', 'John Smith'],
+                ['02/10/2024', 'Sarah Lee'],
+              ],
+              notes: [
+                'Column A: Appointment date — added to the schedule',
+                'Column B: Patient name — must match a patient in My Patients',
+                'Same patient on multiple rows = multiple appointments',
+                'Past dates → Previous (completed), Future → Upcoming',
+                'Accepted formats: dd/MM/yyyy · yyyy-MM-dd · d/M/yyyy',
+                'First row can be a header (auto-detected)',
+              ],
+            ),
+            child: Container(
+              height: 46,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber.shade200),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: const [
+                Icon(Icons.help_outline_rounded,
+                    color: Colors.amber, size: 16),
+                SizedBox(width: 4),
+                Text('Format',
+                    style: TextStyle(
+                        color: Colors.amber,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold)),
+              ]),
+            ),
+          ),
+        ],
       ]),
     );
 
@@ -2447,17 +2474,20 @@ Future<void> _showLogout(AppStrings s) async {
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 10),
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                foregroundColor: AppColors.primary,
+                            if (FormFactorFeatures.of(context)
+                                .showDocumentationExport) ...[
+                              const SizedBox(width: 10),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: AppColors.primary,
+                                ),
+                                icon: const Icon(Icons.download_rounded),
+                                label: const Text('Export PDF'),
+                                onPressed: () =>
+                                    _showExportPdfPatientPicker(s, allNotes),
                               ),
-                              icon: const Icon(Icons.download_rounded),
-                              label: const Text('Export PDF'),
-                              onPressed: () =>
-                                  _showExportPdfPatientPicker(s, allNotes),
-                            ),
+                            ],
                           ],
                         ),
                       ],
@@ -3024,41 +3054,44 @@ void _showPickPatientForDoc(AppStrings s) {
                   _showSearchExistingPatients(s);
                 },
               ),
-              const SizedBox(height: 10),
-              _addPatientTile(
-                ctx: ctx,
-                icon: Icons.upload_file_rounded,
-                color: const Color(0xFF2E7D32),
-                bgColor: const Color(0xFFE8F5E9),
-                title: 'Import from Excel',
-                subtitle: 'Col A: Date → Schedule  ·  Col B: Patient Name',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _importPatientsFromExcel();
-                },
-                onHelp: () => showImportHelpSheet(
-                  ctx,
-                  title: 'Import Patients & Schedule',
-                  subtitle: 'Each row = one appointment assigned to the patient',
-                  columns: ['Date (Col A)', 'Patient Name (Col B)'],
-                  examples: [
-                    ['01/15/2024', 'John Smith'],
-                    ['03/20/2024', 'John Smith'],
-                    ['02/10/2024', 'Sarah Johnson'],
-                  ],
-                  notes: [
-                    'Column A — Appointment date: fills the doctor\'s schedule',
-                    'Column B — Patient name: the appointment is assigned to this patient',
-                    'Each row creates ONE appointment linked to the patient in col B',
-                    'Same patient can appear on multiple rows (different dates)',
-                    'Past dates → shown in Schedule "Previous" section (status: completed)',
-                    'Future dates → shown in Schedule "Upcoming" section (status: scheduled)',
-                    'Accepted date formats: dd/MM/yyyy · yyyy-MM-dd · d/M/yyyy',
-                    'First row can be a header (auto-detected by keyword)',
-                    'Toggle "Account" in the preview to create a patient login',
-                  ],
+              if (FormFactorFeatures.of(context)
+                  .showPatientsImportExport) ...[
+                const SizedBox(height: 10),
+                _addPatientTile(
+                  ctx: ctx,
+                  icon: Icons.upload_file_rounded,
+                  color: const Color(0xFF2E7D32),
+                  bgColor: const Color(0xFFE8F5E9),
+                  title: 'Import from Excel',
+                  subtitle: 'Col A: Date → Schedule  ·  Col B: Patient Name',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _importPatientsFromExcel();
+                  },
+                  onHelp: () => showImportHelpSheet(
+                    ctx,
+                    title: 'Import Patients & Schedule',
+                    subtitle: 'Each row = one appointment assigned to the patient',
+                    columns: ['Date (Col A)', 'Patient Name (Col B)'],
+                    examples: [
+                      ['01/15/2024', 'John Smith'],
+                      ['03/20/2024', 'John Smith'],
+                      ['02/10/2024', 'Sarah Johnson'],
+                    ],
+                    notes: [
+                      'Column A — Appointment date: fills the doctor\'s schedule',
+                      'Column B — Patient name: the appointment is assigned to this patient',
+                      'Each row creates ONE appointment linked to the patient in col B',
+                      'Same patient can appear on multiple rows (different dates)',
+                      'Past dates → shown in Schedule "Previous" section (status: completed)',
+                      'Future dates → shown in Schedule "Upcoming" section (status: scheduled)',
+                      'Accepted date formats: dd/MM/yyyy · yyyy-MM-dd · d/M/yyyy',
+                      'First row can be a header (auto-detected by keyword)',
+                      'Toggle "Account" in the preview to create a patient login',
+                    ],
+                  ),
                 ),
-              ),
+              ],
               const SizedBox(height: 6),
             ],
           ),
@@ -3643,23 +3676,26 @@ void _showPickPatientForDoc(AppStrings s) {
                                   style: TextStyle(fontSize: 13)),
                               onPressed: () => _showAddPatientMenu(s),
                             ),
-                            const SizedBox(width: 8),
-                            Tooltip(
-                              message: 'Export to Excel',
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF2E7D32),
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 10),
-                                  minimumSize: Size.zero,
+                            if (FormFactorFeatures.of(context)
+                                .showPatientsImportExport) ...[
+                              const SizedBox(width: 8),
+                              Tooltip(
+                                message: 'Export to Excel',
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF2E7D32),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 10),
+                                    minimumSize: Size.zero,
+                                  ),
+                                  child: const Icon(Icons.download_rounded,
+                                      size: 20),
+                                  onPressed: () =>
+                                      _exportPatientsExcel(filteredPatients),
                                 ),
-                                child: const Icon(Icons.download_rounded,
-                                    size: 20),
-                                onPressed: () =>
-                                    _exportPatientsExcel(filteredPatients),
                               ),
-                            ),
+                            ],
                           ],
                         ),
                       ],
@@ -5362,23 +5398,25 @@ void _showPickPatientForDoc(AppStrings s) {
                                 color: AppColors.textSecondary)),
                       ]),
                     ),
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2E7D32),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
+                    if (FormFactorFeatures.of(context)
+                        .showPatientsImportExport)
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2E7D32),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        icon: const Icon(Icons.download_rounded, size: 16),
+                        label: const Text('Excel',
+                            style: TextStyle(fontSize: 13)),
+                        onPressed: docs.isEmpty
+                            ? null
+                            : () => _exportAppointmentsExcel(
+                                patientName, docs),
                       ),
-                      icon: const Icon(Icons.download_rounded, size: 16),
-                      label: const Text('Excel',
-                          style: TextStyle(fontSize: 13)),
-                      onPressed: docs.isEmpty
-                          ? null
-                          : () => _exportAppointmentsExcel(
-                              patientName, docs),
-                    ),
                   ]),
                 ),
                 const Divider(height: 1),

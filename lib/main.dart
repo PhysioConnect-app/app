@@ -2,10 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
+import 'core/config/form_factor_features.dart';
 import 'core/config/supabase_config.dart';
 import 'core/constants/app_colors.dart';
 import 'core/constants/app_strings.dart';
 import 'core/providers/language_provider.dart';
+import 'core/widgets/available_on_desktop_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/admin/admin_dashboard_screen.dart';
 import 'features/doctor/doctor_dashboard_screen.dart';
@@ -98,7 +100,12 @@ class AuthGate extends StatelessWidget {
               final userData = roleSnapshot.data;
               if (userData != null) {
                 final role = (userData['role'] as String?) ?? '';
-                if (role == 'admin') return const _WithNotificationPrompt(child: AdminDashboardScreen());
+                if (role == 'admin') {
+                  return FormFactorFeatures.of(context).showAdminDashboard
+                      ? const _WithNotificationPrompt(child: AdminDashboardScreen())
+                      : const _WithNotificationPrompt(
+                          child: AvailableOnDesktopScreen(feature: 'Admin Dashboard'));
+                }
                 if (role == 'doctor') return const _WithNotificationPrompt(child: DoctorDashboardScreen());
                 if (role == 'polyclinic') return const _WithNotificationPrompt(child: PolyclinicDashboardScreen());
                 if (role == 'patient') return const _WithNotificationPrompt(child: PatientDashboardScreen());
