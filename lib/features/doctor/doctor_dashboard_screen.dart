@@ -638,47 +638,102 @@ Future<void> _showLogout(AppStrings s) async {
         ),
 
         // ── Footer ────────────────────────────────────────────────────────
-        Container(
-          width: double.infinity,
-          color: const Color(0xFF1A3A5C),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-          child: SafeArea(
-            top: false,
-            child: Row(children: [
-              const Icon(Icons.monitor_heart_rounded,
-                  color: Color(0xFF4FC3F7), size: 20),
-              const SizedBox(width: 8),
-              RichText(
-                text: TextSpan(
-                  style: const TextStyle(fontSize: 14),
-                  children: [
-                    TextSpan(
-                      text: '${_showDrPrefix ? "Dr. " : ""}$name  ',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold),
+        FormFactorFeatures.of(context).isMobile
+            ? _buildMobileHomeFooter(name, clinic)
+            : Container(
+                width: double.infinity,
+                color: const Color(0xFF1A3A5C),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                child: SafeArea(
+                  top: false,
+                  child: Row(children: [
+                    const Icon(Icons.monitor_heart_rounded,
+                        color: Color(0xFF4FC3F7), size: 20),
+                    const SizedBox(width: 8),
+                    RichText(
+                      text: TextSpan(
+                        style: const TextStyle(fontSize: 14),
+                        children: [
+                          TextSpan(
+                            text: '${_showDrPrefix ? "Dr. " : ""}$name  ',
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold),
+                          ),
+                          TextSpan(
+                            text: clinic,
+                            style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.55)),
+                          ),
+                        ],
+                      ),
                     ),
-                    TextSpan(
-                      text: clinic,
-                      style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.55)),
+                    const Spacer(),
+                    // Logout button
+                    TextButton.icon(
+                      onPressed: () => _showLogout(AppStrings(false)),
+                      icon: const Icon(Icons.logout_rounded,
+                          color: Colors.white54, size: 16),
+                      label: const Text('Logout',
+                          style:
+                              TextStyle(color: Colors.white54, fontSize: 12)),
                     ),
-                  ],
+                  ]),
                 ),
               ),
-              const Spacer(),
-              // Logout button
-              TextButton.icon(
-                onPressed: () => _showLogout(AppStrings(false)),
-                icon: const Icon(Icons.logout_rounded,
-                    color: Colors.white54, size: 16),
-                label: const Text('Logout',
-                    style: TextStyle(color: Colors.white54, fontSize: 12)),
-              ),
-            ]),
-          ),
-        ),
       ],
+    );
+  }
+
+  /// Mobile replacement for the desktop home footer. The desktop Row above
+  /// lets the doctor's name + clinic text grow unbounded next to a Spacer
+  /// and Logout button, which overflows at narrow widths; here the identity
+  /// text is constrained to a single ellipsized line and Logout is an
+  /// icon-only button so the row always fits.
+  Widget _buildMobileHomeFooter(String name, String clinic) {
+    return Container(
+      width: double.infinity,
+      color: const Color(0xFF1A3A5C),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: SafeArea(
+        top: false,
+        child: Row(children: [
+          const Icon(Icons.monitor_heart_rounded,
+              color: Color(0xFF4FC3F7), size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: RichText(
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              text: TextSpan(
+                style: const TextStyle(fontSize: 13),
+                children: [
+                  TextSpan(
+                    text: '${_showDrPrefix ? "Dr. " : ""}$name  ',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold),
+                  ),
+                  TextSpan(
+                    text: clinic,
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.55)),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: () => _showLogout(AppStrings(false)),
+            icon: const Icon(Icons.logout_rounded,
+                color: Colors.white54, size: 20),
+            tooltip: 'Logout',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+        ]),
+      ),
     );
   }
 
