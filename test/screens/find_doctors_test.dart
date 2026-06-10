@@ -9,4 +9,11 @@ void main() {
     await pumpAtSize(tester, const FindDoctorsScreen());
     expect(find.byType(FindDoctorsScreen), findsOneWidget);
   });
+
+  testWidgets('FindDoctorsScreen guest mode renders without overflow at 390x844',
+      (tester) async {
+    await ensureSupabaseInitialized();
+    await pumpAtSize(tester, const FindDoctorsScreen(isGuest: true));
+    expect(find.byType(FindDoctorsScreen), findsOneWidget);
+  });
 }

@@ -12,7 +12,13 @@ import '../../core/providers/language_provider.dart';
 import 'patient_service.dart';
 
 class FindDoctorsScreen extends StatefulWidget {
-  const FindDoctorsScreen({super.key});
+  /// When true, this screen is shown to a patient who has not signed in
+  /// (mobile "Continue as Guest" flow). Browsing/searching for therapists
+  /// stays available, but actions that require an account (e.g. "Add to My
+  /// List") show a sign-in prompt instead of writing any data.
+  final bool isGuest;
+
+  const FindDoctorsScreen({super.key, this.isGuest = false});
 
   @override
   State<FindDoctorsScreen> createState() => _FindDoctorsScreenState();
@@ -36,7 +42,7 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadLinkedDoctors();
+    if (!widget.isGuest) _loadLinkedDoctors();
   }
 
   Future<void> _loadLinkedDoctors() async {
@@ -105,6 +111,40 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
     } finally {
       if (mounted) setState(() => _locating = false);
     }
+  }
+
+  /// Routes "Add to My List" through the guest sign-in prompt when browsing
+  /// without an account; otherwise performs the action normally.
+  void _handleAddToList(String doctorId) {
+    if (widget.isGuest) {
+      _showGuestSignInPrompt();
+      return;
+    }
+    _addToMyList(doctorId);
+  }
+
+  void _showGuestSignInPrompt() {
+    final s = AppStrings(context.read<LanguageProvider>().isArabic);
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(s.guestSignInRequiredTitle),
+        content: Text(s.guestSignInPrompt),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(s.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.of(context).pop();
+            },
+            child: Text(s.signIn),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _addToMyList(String doctorId) async {
@@ -507,7 +547,7 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
                     ? null
                     : () {
                         Navigator.pop(ctx);
-                        _addToMyList(docId);
+                        _handleAddToList(docId);
                       },
               ),
             ),
@@ -576,7 +616,7 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
           distanceKm: dist,
           isLinked: isLinked,
           showDrPrefix: showDr,
-          onAddToList: () => _addToMyList(docId),
+          onAddToList: () => _handleAddToList(docId),
         );
       },
     );

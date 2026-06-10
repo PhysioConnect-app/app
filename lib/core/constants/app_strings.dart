@@ -51,6 +51,14 @@ class AppStrings {
   String get login => _t('Log In', 'تسجيل الدخول');
   String get loginFailed => _t('Login failed. Check your credentials.', 'فشل تسجيل الدخول. تحقق من بياناتك.');
 
+  // Guest mode (mobile patient login)
+  String get continueAsGuest => _t('Continue as Guest', 'المتابعة كزائر');
+  String get guestSignInRequiredTitle => _t('Sign In Required', 'تسجيل الدخول مطلوب');
+  String get guestSignInPrompt => _t(
+    'Sign in or create an account to book',
+    'سجّل الدخول أو أنشئ حساباً للحجز',
+  );
+
   // Doctor Dashboard
   String get doctorDashboard => _t('PT Dashboard', 'لوحة العلاج الطبيعي');
   String get myPatients => _t('My Patients', 'مرضاي');

@@ -2,8 +2,10 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/config/form_factor_features.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
+import '../patient/find_doctors_screen.dart';
 import 'auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -79,6 +81,17 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  /// Mobile-only "Continue as Guest" entry. No Supabase session is created
+  /// and no data is written — the patient just gets a restricted preview of
+  /// the Find a Therapist screen until they sign in.
+  void _continueAsGuest() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const FindDoctorsScreen(isGuest: true),
+      ),
+    );
+  }
+
   Future<void> _handleLogin() async {
     final s = AppStrings(context.read<LanguageProvider>().isArabic);
     if (_emailController.text.trim().isEmpty || _passwordController.text.isEmpty) return;
@@ -148,6 +161,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     onForgotPassword:   _showForgotPasswordDialog,
                     langProvider:       langProvider,
                     s: s,
+                    showGuestLogin:     FormFactorFeatures.of(context).showGuestLogin,
+                    onContinueAsGuest:  _continueAsGuest,
                   ),
                 ),
               ),
@@ -173,6 +188,8 @@ class _LoginCard extends StatelessWidget {
   final VoidCallback onForgotPassword;
   final LanguageProvider langProvider;
   final AppStrings s;
+  final bool showGuestLogin;
+  final VoidCallback onContinueAsGuest;
 
   const _LoginCard({
     required this.emailController,
@@ -186,6 +203,8 @@ class _LoginCard extends StatelessWidget {
     required this.onForgotPassword,
     required this.langProvider,
     required this.s,
+    required this.showGuestLogin,
+    required this.onContinueAsGuest,
   });
 
   @override
@@ -364,6 +383,32 @@ class _LoginCard extends StatelessWidget {
                     ),
                   ),
           ),
+
+          // ── Continue as Guest (mobile only) ──────────────────────────────────
+          if (showGuestLogin) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: OutlinedButton(
+                onPressed: onContinueAsGuest,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF2E7D32),
+                  side: const BorderSide(color: Color(0xFFBBD1EA)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: Text(
+                  s.continueAsGuest,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 26),
 
           // ── Language toggle ──────────────────────────────────────────────────

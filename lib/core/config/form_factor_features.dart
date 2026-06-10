@@ -52,4 +52,10 @@ class FormFactorFeatures {
   /// anywhere in the app, so this flag has no effect yet. Kept so that if a
   /// nav entry is ever added, it is gated by construction.
   bool get showInventory => !isMobile;
+
+  // ── Patient: Guest mode ───────────────────────────────────────────────────
+  /// "Continue as Guest" entry on the login screen, giving patients a
+  /// restricted, account-free preview (Find a Therapist only). Mobile only;
+  /// the desktop login screen is unchanged.
+  bool get showGuestLogin => isMobile;
 }
