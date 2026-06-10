@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/config/form_factor_features.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
@@ -494,6 +495,7 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
   @override
   Widget build(BuildContext context) {
     final s = AppStrings(context.watch<LanguageProvider>().isArabic);
+    final isMobile = FormFactorFeatures.of(context).isMobile;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -523,44 +525,51 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
                     const TextStyle(color: Colors.white, fontSize: 12)),
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          indicatorWeight: 3,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white60,
-          tabs: const [
-            Tab(
-              child: _SectionTabLabel(
-                  letter: 'S', title: 'Subjective', color: Colors.blue),
-            ),
-            Tab(
-              child: _SectionTabLabel(
-                  letter: 'O', title: 'Objective', color: Colors.green),
-            ),
-            Tab(
-              child: _SectionTabLabel(
-                  letter: 'A', title: 'Assessment', color: Colors.orange),
-            ),
-            Tab(
-              child: _SectionTabLabel(
-                  letter: 'P', title: 'Plan', color: Colors.purple),
-            ),
-          ],
-        ),
+        // Mobile uses a vertical accordion instead of these tabs (the
+        // single-letter tab labels overflow the AppBar's TabBar at narrow
+        // widths) — see _buildMobileAccordion. Desktop TabBar is unchanged.
+        bottom: isMobile
+            ? null
+            : TabBar(
+                controller: _tabController,
+                indicatorColor: Colors.white,
+                indicatorWeight: 3,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white60,
+                tabs: const [
+                  Tab(
+                    child: _SectionTabLabel(
+                        letter: 'S', title: 'Subjective', color: Colors.blue),
+                  ),
+                  Tab(
+                    child: _SectionTabLabel(
+                        letter: 'O', title: 'Objective', color: Colors.green),
+                  ),
+                  Tab(
+                    child: _SectionTabLabel(
+                        letter: 'A', title: 'Assessment', color: Colors.orange),
+                  ),
+                  Tab(
+                    child: _SectionTabLabel(
+                        letter: 'P', title: 'Plan', color: Colors.purple),
+                  ),
+                ],
+              ),
       ),
       body: Column(
         children: [
           Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildSubjectiveTab(),
-                _buildObjectiveTab(),
-                _buildAssessmentTab(),
-                _buildPlanTab(),
-              ],
-            ),
+            child: isMobile
+                ? _buildMobileAccordion()
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildSubjectiveTab(),
+                      _buildObjectiveTab(),
+                      _buildAssessmentTab(),
+                      _buildPlanTab(),
+                    ],
+                  ),
           ),
           // ── Save button ──────────────────────────────────────────────────
           Container(
@@ -594,13 +603,7 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
 
   // ── Tab content ───────────────────────────────────────────────────────────
 
-  Widget _buildSubjectiveTab() {
-    final color = Colors.blue.shade700;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(children: [
-        _sectionHeader('S', 'Subjective', 'الملاحظات الذاتية', color),
-        const SizedBox(height: 14),
+  List<Widget> _subjectiveFields(Color color) => [
         _subField('Chief Complaint', 'الشكوى الرئيسية',
             _chiefComplaintCtrl, color, lines: 2),
         _subField('Onset & Duration', 'بداية ومدة الأعراض',
@@ -622,17 +625,21 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
             _medicationsCtrl, color),
         _subField('Social & Occupational Context', 'السياق الاجتماعي والمهني',
             _socialContextCtrl, color),
+      ];
+
+  Widget _buildSubjectiveTab() {
+    final color = Colors.blue.shade700;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(children: [
+        _sectionHeader('S', 'Subjective', 'الملاحظات الذاتية', color),
+        const SizedBox(height: 14),
+        ..._subjectiveFields(color),
       ]),
     );
   }
 
-  Widget _buildObjectiveTab() {
-    final color = Colors.green.shade700;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(children: [
-        _sectionHeader('O', 'Objective', 'الفحص الموضوعي', color),
-        const SizedBox(height: 14),
+  List<Widget> _objectiveFields(Color color) => [
         _subField('Observation', 'الملاحظة',
             _observationCtrl, color),
         _subField('Palpation', 'الجس',
@@ -651,17 +658,21 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
             _functionalTestsCtrl, color),
         _subField('Assistive Devices', 'الأجهزة المساعدة',
             _assistiveCtrl, color),
+      ];
+
+  Widget _buildObjectiveTab() {
+    final color = Colors.green.shade700;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(children: [
+        _sectionHeader('O', 'Objective', 'الفحص الموضوعي', color),
+        const SizedBox(height: 14),
+        ..._objectiveFields(color),
       ]),
     );
   }
 
-  Widget _buildAssessmentTab() {
-    final color = Colors.orange.shade700;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(children: [
-        _sectionHeader('A', 'Assessment', 'التقييم', color),
-        const SizedBox(height: 14),
+  List<Widget> _assessmentFields(Color color) => [
         _subField('Clinical Impression', 'الانطباع السريري',
             _clinicalImpressionCtrl, color, lines: 2),
         _subField('Severity & Stage', 'شدة ومرحلة الحالة',
@@ -674,17 +685,21 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
             _responseCtrl, color),
         _subField('Prognosis', 'التوقعات المستقبلية',
             _prognosisCtrl, color),
+      ];
+
+  Widget _buildAssessmentTab() {
+    final color = Colors.orange.shade700;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(children: [
+        _sectionHeader('A', 'Assessment', 'التقييم', color),
+        const SizedBox(height: 14),
+        ..._assessmentFields(color),
       ]),
     );
   }
 
-  Widget _buildPlanTab() {
-    final color = Colors.purple.shade700;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(children: [
-        _sectionHeader('P', 'Plan', 'الخطة العلاجية', color),
-        const SizedBox(height: 14),
+  List<Widget> _planFields(Color color) => [
         _subField('Treatment Focus', 'محاور العلاج',
             _treatmentFocusCtrl, color),
         _subField('Interventions', 'التدخلات العلاجية',
@@ -697,7 +712,134 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
             _referralsCtrl, color),
         _subField('Follow-up', 'المتابعة',
             _followUpCtrl, color),
+      ];
+
+  Widget _buildPlanTab() {
+    final color = Colors.purple.shade700;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(children: [
+        _sectionHeader('P', 'Plan', 'الخطة العلاجية', color),
+        const SizedBox(height: 14),
+        ..._planFields(color),
       ]),
+    );
+  }
+
+  // ── Mobile: vertical accordion (replaces TabBar/TabBarView) ────────────────
+
+  /// Mobile replacement for the desktop TabBar/TabBarView. Each SOAP section
+  /// becomes a collapsible card sharing the same fields and styling as the
+  /// desktop tabs, so editing stays fully available on mobile. Desktop's
+  /// TabBar/TabBarView path above is unchanged.
+  Widget _buildMobileAccordion() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(children: [
+        _accordionSection(
+          letter: 'S',
+          enTitle: 'Subjective',
+          arTitle: 'الملاحظات الذاتية',
+          color: Colors.blue.shade700,
+          initiallyExpanded: true,
+          fields: _subjectiveFields(Colors.blue.shade700),
+        ),
+        const SizedBox(height: 12),
+        _accordionSection(
+          letter: 'O',
+          enTitle: 'Objective',
+          arTitle: 'الفحص الموضوعي',
+          color: Colors.green.shade700,
+          fields: _objectiveFields(Colors.green.shade700),
+        ),
+        const SizedBox(height: 12),
+        _accordionSection(
+          letter: 'A',
+          enTitle: 'Assessment',
+          arTitle: 'التقييم',
+          color: Colors.orange.shade700,
+          fields: _assessmentFields(Colors.orange.shade700),
+        ),
+        const SizedBox(height: 12),
+        _accordionSection(
+          letter: 'P',
+          enTitle: 'Plan',
+          arTitle: 'الخطة العلاجية',
+          color: Colors.purple.shade700,
+          fields: _planFields(Colors.purple.shade700),
+        ),
+      ]),
+    );
+  }
+
+  Widget _accordionSection({
+    required String letter,
+    required String enTitle,
+    required String arTitle,
+    required Color color,
+    required List<Widget> fields,
+    bool initiallyExpanded = false,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: color.withValues(alpha: 0.08),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            initiallyExpanded: initiallyExpanded,
+            tilePadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+            iconColor: color,
+            collapsedIconColor: color,
+            title: Row(children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: Text(letter,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(enTitle,
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: color)),
+                    Text(arTitle,
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: color.withValues(alpha: 0.7))),
+                  ],
+                ),
+              ),
+            ]),
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                child: Column(children: fields),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
