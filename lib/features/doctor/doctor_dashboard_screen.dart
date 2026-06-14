@@ -6206,20 +6206,42 @@ void _showPickPatientForDoc(AppStrings s) {
 
       String patientId = entry.patientId ?? '';
 
-      // If unmatched, create a stub patient and link them
+      // If unmatched against this doctor's own patients, check globally by
+      // exact name before creating a duplicate stub patient (mirrors
+      // _doPatientImport's matching so the same person isn't re-created).
       if (patientId.isEmpty) {
-        final newRow = await Supabase.instance.client.from('users').insert({
-          'name':       entry.name,
-          'role':       'patient',
-          'doctor_ids': [myUid],
-          'created_at': DateTime.now().toIso8601String(),
-        }).select().single();
-        patientId = newRow['id'] as String;
+        final existingList = await Supabase.instance.client
+            .from('users').select('id, doctor_ids')
+            .eq('role', 'patient').eq('name', entry.name).limit(1);
+
+        if (existingList.isNotEmpty) {
+          patientId = existingList.first['id'] as String;
+          final patIds = List<String>.from(
+              (existingList.first['doctor_ids'] as List?) ?? []);
+          if (!patIds.contains(myUid)) {
+            patIds.add(myUid);
+            await Supabase.instance.client
+                .from('users').update({'doctor_ids': patIds}).eq('id', patientId);
+          }
+        } else {
+          final newRow = await Supabase.instance.client.from('users').insert({
+            'name':       entry.name,
+            'role':       'patient',
+            'doctor_ids': [myUid],
+            'created_at': DateTime.now().toIso8601String(),
+          }).select().single();
+          patientId = newRow['id'] as String;
+        }
+
         final myData = await Supabase.instance.client.from('users').select('assigned_patient_ids').eq('id', myUid).single();
-        final myIds = List<String>.from((myData['assigned_patient_ids'] as List?) ?? [])..add(patientId);
-        await Supabase.instance.client.from('users').update({'assigned_patient_ids': myIds}).eq('id', myUid);
+        final myIds = List<String>.from((myData['assigned_patient_ids'] as List?) ?? []);
+        if (!myIds.contains(patientId)) {
+          myIds.add(patientId);
+          await Supabase.instance.client.from('users').update({'assigned_patient_ids': myIds}).eq('id', myUid);
+        }
         await _service.notifyPatientAdded(
             patientId, await _service.getMyName());
+        await _service.notifySelfPatientAdded(entry.name);
       }
 
       // Create one appointment per calendar day (deduplicate same-day entries)
