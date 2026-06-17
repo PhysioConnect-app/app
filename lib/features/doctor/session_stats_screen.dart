@@ -17,38 +17,53 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
   static const _red    = Color(0xFFC62828);
   static const _amber  = Color(0xFFFF8F00);
 
-  String   _period  = 'monthly';
-  DateTime _refDate = DateTime.now();
+  String   _period         = 'monthly';
+  DateTime _refDate        = DateTime.now();
+  bool     _showComparison = false;
 
   // ── Period helpers ──────────────────────────────────────────────────────
 
-  DateTime get _start {
-    final r = _refDate;
-    return switch (_period) {
-      'daily'  => DateTime(r.year, r.month, r.day),
+  // Returns (start, end) for any reference date in the current _period,
+  // allowing the same logic to serve both current and previous period.
+  (DateTime, DateTime) _rangeForRef(DateTime ref) {
+    final start = switch (_period) {
+      'daily'  => DateTime(ref.year, ref.month, ref.day),
       'weekly' => () {
-          final m = r.subtract(Duration(days: r.weekday - 1));
+          final m = ref.subtract(Duration(days: ref.weekday - 1));
           return DateTime(m.year, m.month, m.day);
         }(),
-      'yearly' => DateTime(r.year, 1, 1),
-      _        => DateTime(r.year, r.month, 1),
+      'yearly' => DateTime(ref.year, 1, 1),
+      _        => DateTime(ref.year, ref.month, 1),
     };
-  }
-
-  DateTime get _end {
-    final r = _refDate;
-    return switch (_period) {
-      'daily'  => DateTime(r.year, r.month, r.day, 23, 59, 59),
+    final end = switch (_period) {
+      'daily'  => DateTime(ref.year, ref.month, ref.day, 23, 59, 59),
       'weekly' => () {
-          final m = r.subtract(Duration(days: r.weekday - 1));
+          final m = ref.subtract(Duration(days: ref.weekday - 1));
           final s = DateTime(m.year, m.month, m.day);
           final e = s.add(const Duration(days: 6));
           return DateTime(e.year, e.month, e.day, 23, 59, 59);
         }(),
-      'yearly' => DateTime(r.year, 12, 31, 23, 59, 59),
-      _        => DateTime(r.year, r.month + 1, 0, 23, 59, 59),
+      'yearly' => DateTime(ref.year, 12, 31, 23, 59, 59),
+      _        => DateTime(ref.year, ref.month + 1, 0, 23, 59, 59),
     };
+    return (start, end);
   }
+
+  DateTime get _start => _rangeForRef(_refDate).$1;
+  DateTime get _end   => _rangeForRef(_refDate).$2;
+
+  DateTime get _prevRefDate => switch (_period) {
+    'daily'  => _refDate.subtract(const Duration(days: 1)),
+    'weekly' => _refDate.subtract(const Duration(days: 7)),
+    'yearly' => DateTime(_refDate.year - 1, _refDate.month, _refDate.day),
+    _        => DateTime(_refDate.year, _refDate.month - 1, _refDate.day),
+  };
+
+  DateTime get _prevStart => _rangeForRef(_prevRefDate).$1;
+  DateTime get _prevEnd   => _rangeForRef(_prevRefDate).$2;
+
+  bool _inPrevRange(DateTime dt) =>
+      !dt.isBefore(_prevStart) && !dt.isAfter(_prevEnd);
 
   String get _rangeLabel {
     final s = _start;
@@ -321,6 +336,8 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
               ),
             ),
             const SizedBox(width: 8),
+            _comparisonToggle(),
+            const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(
                   horizontal: 10, vertical: 6),
@@ -377,6 +394,34 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
             );
           }).toList()),
         ],
+      ),
+    );
+  }
+
+  // ── vs-previous-period toggle chip ───────────────────────────────────────
+
+  Widget _comparisonToggle() {
+    return GestureDetector(
+      onTap: () => setState(() => _showComparison = !_showComparison),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: _showComparison
+              ? Colors.white
+              : Colors.white.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.compare_arrows_rounded,
+              color: _showComparison ? _navy : Colors.white,
+              size: 14),
+          const SizedBox(width: 4),
+          Text('vs prev',
+              style: TextStyle(
+                  color: _showComparison ? _navy : Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold)),
+        ]),
       ),
     );
   }
