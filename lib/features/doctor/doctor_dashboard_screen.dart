@@ -32,6 +32,7 @@ import 'billing_screen.dart';
 import 'expenses_screen.dart';
 import 'doctor_service.dart';
 import 'import_help_sheet.dart';
+import '../store/doctor_storefront_screen.dart';
 import '../auth/auth_service.dart';
 
 // ── Patient import entry ──────────────────────────────────────────────────
@@ -7430,21 +7431,7 @@ void _showPickPatientForDoc(AppStrings s) {
   // 8 – Doctor: Store Tab  (replaced with DoctorStorefrontScreen in Task 3)
   // ════════════════════════════════════════════════════════════════════════════
 
-  Widget _buildStoreTab() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.storefront_rounded, size: 64, color: Color(0xFF00838F)),
-          SizedBox(height: 16),
-          Text('Physiogate Store',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          SizedBox(height: 8),
-          Text('Loading store…', style: TextStyle(color: Colors.grey)),
-        ],
-      ),
-    );
-  }
+  Widget _buildStoreTab() => const DoctorStorefrontScreen();
 
   // ════════════════════════════════════════════════════════════════════════════
   // 8 – Polyclinic: My Doctors Tab

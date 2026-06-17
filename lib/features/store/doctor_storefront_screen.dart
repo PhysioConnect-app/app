@@ -1,0 +1,633 @@
+// ignore_for_file: use_build_context_synchronously
+
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'store_service.dart';
+
+const _kStoreColor = Color(0xFF00838F);
+
+class DoctorStorefrontScreen extends StatefulWidget {
+  const DoctorStorefrontScreen({super.key});
+
+  @override
+  State<DoctorStorefrontScreen> createState() => _DoctorStorefrontScreenState();
+}
+
+class _DoctorStorefrontScreenState extends State<DoctorStorefrontScreen> {
+  final _svc = StoreService();
+
+  // ── Navigation state ───────────────────────────────────────────────────────
+  // Empty  → root category grid
+  // [cat]  → cat's subcategories + direct products
+  // [c, s] → subcategory s's products
+  final List<Map<String, dynamic>> _catStack = [];
+  Map<String, dynamic>? _selectedProduct;
+
+  // ── Root data ──────────────────────────────────────────────────────────────
+  List<Map<String, dynamic>> _rootCats = [];
+  bool _rootLoading = true;
+  String? _rootError;
+
+  // ── Per-category cache (avoids reloading on back navigation) ──────────────
+  final Map<String, List<Map<String, dynamic>>> _subcatCache = {};
+  final Map<String, List<Map<String, dynamic>>> _productCache = {};
+  bool _levelLoading = false;
+
+  // Current level's data (mirrors cache entry for _catStack.last)
+  List<Map<String, dynamic>> _currentSubcats = [];
+  List<Map<String, dynamic>> _currentProducts = [];
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRoot();
+  }
+
+  Future<void> _loadRoot() async {
+    setState(() { _rootLoading = true; _rootError = null; });
+    try {
+      _rootCats = await _svc.getRootCategories();
+    } catch (e) {
+      _rootError = e.toString();
+    }
+    if (mounted) setState(() => _rootLoading = false);
+  }
+
+  Future<void> _openCategory(Map<String, dynamic> cat) async {
+    final id = cat['id'] as String;
+    if (!_subcatCache.containsKey(id)) {
+      setState(() => _levelLoading = true);
+      try {
+        _subcatCache[id] = await _svc.getSubcategories(id);
+        _productCache[id] = await _svc.getProducts(id);
+      } catch (_) {
+        _subcatCache[id] = [];
+        _productCache[id] = [];
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _catStack.add(cat);
+      _currentSubcats = _subcatCache[id]!;
+      _currentProducts = _productCache[id]!;
+      _levelLoading = false;
+    });
+  }
+
+  void _openProduct(Map<String, dynamic> product) =>
+      setState(() => _selectedProduct = product);
+
+  void _back() {
+    setState(() {
+      if (_selectedProduct != null) {
+        _selectedProduct = null;
+      } else if (_catStack.isNotEmpty) {
+        _catStack.removeLast();
+        if (_catStack.isNotEmpty) {
+          final parentId = _catStack.last['id'] as String;
+          _currentSubcats = _subcatCache[parentId] ?? [];
+          _currentProducts = _productCache[parentId] ?? [];
+        }
+      }
+    });
+  }
+
+  // ── Build ──────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final showBack = _catStack.isNotEmpty || _selectedProduct != null;
+    return Column(
+      children: [
+        if (showBack) _buildSubNav(),
+        Expanded(child: _buildBody()),
+      ],
+    );
+  }
+
+  // Inline sub-navigation bar shown when we've drilled in.
+  Widget _buildSubNav() {
+    String label;
+    if (_selectedProduct != null) {
+      label = (_selectedProduct!['title'] as String? ?? '').trim();
+    } else {
+      label = (_catStack.last['name'] as String? ?? '').trim();
+    }
+    // Breadcrumb prefix
+    String prefix = '';
+    if (_catStack.length == 2 && _selectedProduct == null) {
+      prefix = '${(_catStack.first['name'] as String? ?? '')}  ›  ';
+    } else if (_selectedProduct != null && _catStack.isNotEmpty) {
+      prefix = '${(_catStack.last['name'] as String? ?? '')}  ›  ';
+    }
+
+    return Material(
+      color: _kStoreColor.withValues(alpha: 0.08),
+      child: InkWell(
+        onTap: _back,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              const Icon(Icons.arrow_back_rounded, size: 20, color: _kStoreColor),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$prefix$label',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: _kStoreColor),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_selectedProduct != null) return _buildProductDetail(_selectedProduct!);
+    if (_catStack.isEmpty) return _buildRootGrid();
+    return _buildCategoryContent();
+  }
+
+  // ── Root category grid ─────────────────────────────────────────────────────
+
+  Widget _buildRootGrid() {
+    if (_rootLoading) {
+      return const Center(child: CircularProgressIndicator(color: _kStoreColor));
+    }
+    if (_rootError != null) {
+      return _buildError(_rootError!, _loadRoot);
+    }
+    if (_rootCats.isEmpty) {
+      return _buildEmpty('No products available yet.\nCheck back soon.');
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(
+            icon: Icons.storefront_rounded,
+            title: 'Physiogate Catalog',
+            subtitle: 'Browse our product categories'),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (ctx, constraints) {
+              final cols = constraints.maxWidth > 500 ? 3 : 2;
+              return GridView.builder(
+                padding: const EdgeInsets.all(16),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: cols,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 1.1,
+                ),
+                itemCount: _rootCats.length,
+                itemBuilder: (_, i) => _buildCategoryCard(_rootCats[i]),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCategoryCard(Map<String, dynamic> cat) {
+    final name = (cat['name'] as String? ?? '').trim();
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      elevation: 1,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => _openCategory(cat),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _kStoreColor.withValues(alpha: 0.2)),
+          ),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: _kStoreColor.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.category_rounded,
+                    color: _kStoreColor, size: 28),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                name,
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: Color(0xFF1A2332)),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              const Icon(Icons.chevron_right_rounded,
+                  color: _kStoreColor, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Category content (subcategories + products) ────────────────────────────
+
+  Widget _buildCategoryContent() {
+    if (_levelLoading) {
+      return const Center(child: CircularProgressIndicator(color: _kStoreColor));
+    }
+    final hasSubcats  = _currentSubcats.isNotEmpty;
+    final hasProducts = _currentProducts.isNotEmpty;
+
+    if (!hasSubcats && !hasProducts) {
+      return _buildEmpty('No items in this category yet.');
+    }
+
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 24),
+      children: [
+        if (hasSubcats) ...[
+          _buildListSectionLabel('Sub-categories'),
+          ...(_currentSubcats.map((s) => _buildSubcatTile(s))),
+        ],
+        if (hasProducts) ...[
+          _buildListSectionLabel('Products'),
+          ...(_currentProducts.map((p) => _buildProductTile(p))),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSubcatTile(Map<String, dynamic> cat) {
+    final name = (cat['name'] as String? ?? '').trim();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        elevation: 1,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _openCategory(cat),
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _kStoreColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.folder_open_rounded,
+                      color: _kStoreColor, size: 20),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600, fontSize: 14)),
+                ),
+                const Icon(Icons.chevron_right_rounded,
+                    color: Colors.grey, size: 20),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProductTile(Map<String, dynamic> p) {
+    final title    = (p['title']       as String? ?? '').trim();
+    final price    = (p['price']       as num?)    ?? 0;
+    final currency = (p['currency']    as String? ?? 'USD').trim();
+    final imageUrl = (p['image_url']   as String? ?? '').trim();
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        elevation: 1,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _openProduct(p),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: imageUrl.isNotEmpty
+                      ? Image.network(imageUrl,
+                          width: 64, height: 64, fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _productPlaceholder())
+                      : _productPlaceholder(),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _kStoreColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '$currency ${price.toStringAsFixed(price.truncateToDouble() == price ? 0 : 2)}',
+                          style: const TextStyle(
+                              color: _kStoreColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded,
+                    color: Colors.grey, size: 20),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Product detail ─────────────────────────────────────────────────────────
+
+  Widget _buildProductDetail(Map<String, dynamic> p) {
+    final title       = (p['title']           as String? ?? '').trim();
+    final description = (p['description']     as String? ?? '').trim();
+    final price       = (p['price']           as num?)    ?? 0;
+    final currency    = (p['currency']        as String? ?? 'USD').trim();
+    final imageUrl    = (p['image_url']       as String? ?? '').trim();
+    final phone       = (p['phone_number']    as String? ?? '').trim();
+    final whatsapp    = (p['whatsapp_number'] as String? ?? '').trim();
+
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 32),
+      children: [
+        // Product image
+        if (imageUrl.isNotEmpty)
+          Image.network(
+            imageUrl,
+            height: 220,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _productPlaceholder(height: 160),
+          )
+        else
+          _productPlaceholder(height: 140),
+
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title + price row
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(title,
+                        style: const TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold)),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _kStoreColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '$currency ${price.toStringAsFixed(price.truncateToDouble() == price ? 0 : 2)}',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14),
+                    ),
+                  ),
+                ],
+              ),
+
+              // Description
+              if (description.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Text('Description',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                        color: Colors.grey)),
+                const SizedBox(height: 6),
+                Text(description,
+                    style: const TextStyle(fontSize: 14, height: 1.55)),
+              ],
+
+              // Contact section
+              if (phone.isNotEmpty || whatsapp.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                Container(
+                  decoration: BoxDecoration(
+                    color: _kStoreColor.withValues(alpha: 0.07),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                        color: _kStoreColor.withValues(alpha: 0.25)),
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Row(
+                        children: [
+                          Icon(Icons.contact_phone_rounded,
+                              color: _kStoreColor, size: 18),
+                          SizedBox(width: 8),
+                          Text('Contact Physiogate',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  color: _kStoreColor)),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      if (phone.isNotEmpty)
+                        _contactButton(
+                          icon: Icons.phone_rounded,
+                          label: 'Call',
+                          color: const Color(0xFF2E7D32),
+                          onTap: () => launchUrl(
+                            Uri.parse('tel:$phone'),
+                            mode: LaunchMode.externalApplication,
+                          ),
+                        ),
+                      if (phone.isNotEmpty && whatsapp.isNotEmpty)
+                        const SizedBox(height: 10),
+                      if (whatsapp.isNotEmpty)
+                        _contactButton(
+                          icon: Icons.chat_rounded,
+                          label: 'WhatsApp',
+                          color: const Color(0xFF1B5E20),
+                          onTap: () => launchUrl(
+                            Uri.parse('https://wa.me/$whatsapp'),
+                            mode: LaunchMode.externalApplication,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _contactButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 18),
+        label: Text(label),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      ),
+    );
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  Widget _buildSectionHeader(
+      {required IconData icon,
+      required String title,
+      required String subtitle}) {
+    return Container(
+      width: double.infinity,
+      color: _kStoreColor,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.white, size: 28),
+          const SizedBox(width: 14),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold)),
+              Text(subtitle,
+                  style: const TextStyle(
+                      color: Colors.white70, fontSize: 12)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListSectionLabel(String label) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+      child: Text(label.toUpperCase(),
+          style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.1,
+              color: Colors.grey)),
+    );
+  }
+
+  Widget _productPlaceholder({double height = 64}) {
+    return Container(
+      width: height,
+      height: height,
+      color: _kStoreColor.withValues(alpha: 0.08),
+      child: const Center(
+        child: Icon(Icons.inventory_2_rounded,
+            color: _kStoreColor, size: 28),
+      ),
+    );
+  }
+
+  Widget _buildEmpty(String message) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.storefront_outlined, size: 60, color: Colors.grey),
+          const SizedBox(height: 16),
+          Text(message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.grey, fontSize: 14)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildError(String message, VoidCallback retry) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.cloud_off_rounded, size: 52, color: Colors.grey),
+          const SizedBox(height: 14),
+          const Text('Could not load store',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 6),
+          Text(message,
+              style: const TextStyle(color: Colors.grey, fontSize: 12),
+              textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: retry,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Retry'),
+            style: ElevatedButton.styleFrom(backgroundColor: _kStoreColor),
+          ),
+        ],
+      ),
+    );
+  }
+}
