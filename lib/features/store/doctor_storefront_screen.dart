@@ -303,13 +303,16 @@ class _DoctorStorefrontScreenState extends State<DoctorStorefrontScreen> {
       child: Material(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        elevation: 1,
+        elevation: 0,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () => _openCategory(cat),
-          child: Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 0.5),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               children: [
                 Container(
@@ -318,17 +321,18 @@ class _DoctorStorefrontScreenState extends State<DoctorStorefrontScreen> {
                     color: _kStoreColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.folder_open_rounded,
-                      color: _kStoreColor, size: 20),
+                  child: const Icon(Icons.category_rounded,
+                      color: _kStoreColor, size: 18),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(name,
                       style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 14)),
+                          fontWeight: FontWeight.w600, fontSize: 13,
+                          color: Color(0xFF1A2332))),
                 ),
                 const Icon(Icons.chevron_right_rounded,
-                    color: Colors.grey, size: 20),
+                    color: Color(0xFFADB5BD), size: 18),
               ],
             ),
           ),
@@ -345,40 +349,45 @@ class _DoctorStorefrontScreenState extends State<DoctorStorefrontScreen> {
     final imageUrl = images.isNotEmpty ? images.first : '';
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Material(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        elevation: 1,
+        elevation: 0,
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () => _openProduct(p),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 0.5),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: imageUrl.isNotEmpty
                       ? Image.network(imageUrl,
-                          width: 64, height: 64, fit: BoxFit.cover,
+                          width: 56, height: 56, fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => _productPlaceholder())
                       : _productPlaceholder(),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(title,
                           style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 14),
+                              fontWeight: FontWeight.w600, fontSize: 13,
+                              color: Color(0xFF1A2332)),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 5),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                            horizontal: 7, vertical: 2),
                         decoration: BoxDecoration(
                           color: _kStoreColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
@@ -388,14 +397,15 @@ class _DoctorStorefrontScreenState extends State<DoctorStorefrontScreen> {
                           style: const TextStyle(
                               color: _kStoreColor,
                               fontWeight: FontWeight.bold,
-                              fontSize: 13),
+                              fontSize: 12),
                         ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 const Icon(Icons.chevron_right_rounded,
-                    color: Colors.grey, size: 20),
+                    color: Color(0xFFADB5BD), size: 18),
               ],
             ),
           ),
@@ -598,24 +608,24 @@ class _DoctorStorefrontScreenState extends State<DoctorStorefrontScreen> {
 
   Widget _buildListSectionLabel(String label) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 6),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
       child: Text(label.toUpperCase(),
           style: const TextStyle(
-              fontSize: 11,
+              fontSize: 10,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.1,
               color: Colors.grey)),
     );
   }
 
-  Widget _productPlaceholder({double height = 64}) {
+  Widget _productPlaceholder({double height = 56}) {
     return Container(
       width: height,
       height: height,
-      color: _kStoreColor.withValues(alpha: 0.08),
+      color: const Color(0xFFF3F4F6),
       child: const Center(
         child: Icon(Icons.inventory_2_rounded,
-            color: _kStoreColor, size: 28),
+            color: Color(0xFFD1D5DB), size: 22),
       ),
     );
   }
