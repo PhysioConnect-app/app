@@ -356,7 +356,6 @@ class _StoreManagerProductsScreenState
   void _openForm(BuildContext ctx, {Map<String, dynamic>? existing}) {
     showDialog(
       context: ctx,
-      barrierDismissible: false,
       builder: (_) => _ProductFormDialog(
         svc: _svc,
         existing: existing,
@@ -486,51 +485,48 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      scrollable: true,
       title: Text(_isEditing ? 'Edit Product' : 'Add Product'),
-      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
       content: SizedBox(
-        width: 460,
-        child: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildImagePicker(),
-                const SizedBox(height: 16),
-                _buildCategoryDropdown(),
-                const SizedBox(height: 16),
-                _buildTextField(_titleCtrl, 'Title *', required: true),
-                const SizedBox(height: 16),
-                _buildTextField(_descCtrl, 'Description', maxLines: 3),
-                const SizedBox(height: 16),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: _buildPriceField()),
-                    const SizedBox(width: 12),
-                    _buildCurrencyDropdown(),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                _buildTextField(_phoneCtrl, 'Phone (with country code)'),
-                const SizedBox(height: 16),
-                _buildTextField(
-                    _waCtrl, 'WhatsApp (digits only, e.g. 9613XXXXXX)'),
-                const SizedBox(height: 16),
-                _buildTextField(
-                  _sortCtrl,
-                  'Sort order',
-                  keyboardType: TextInputType.number,
-                  helperText: 'Lower numbers appear first',
-                  validator: (v) => int.tryParse(v ?? '') == null
-                      ? 'Must be a whole number'
-                      : null,
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
+        width: 440,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildImagePicker(),
+              const SizedBox(height: 16),
+              _buildCategoryDropdown(),
+              const SizedBox(height: 16),
+              _buildTextField(_titleCtrl, 'Title *', required: true),
+              const SizedBox(height: 16),
+              _buildTextField(_descCtrl, 'Description', maxLines: 3),
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: _buildPriceField()),
+                  const SizedBox(width: 12),
+                  SizedBox(width: 120, child: _buildCurrencyDropdown()),
+                ],
+              ),
+              const SizedBox(height: 16),
+              _buildTextField(_phoneCtrl, 'Phone (with country code)'),
+              const SizedBox(height: 16),
+              _buildTextField(
+                  _waCtrl, 'WhatsApp (digits only, e.g. 9613XXXXXX)'),
+              const SizedBox(height: 16),
+              _buildTextField(
+                _sortCtrl,
+                'Sort order',
+                keyboardType: TextInputType.number,
+                helperText: 'Lower numbers appear first',
+                validator: (v) => int.tryParse(v ?? '') == null
+                    ? 'Must be a whole number'
+                    : null,
+              ),
+            ],
           ),
         ),
       ),
@@ -563,7 +559,6 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
     return GestureDetector(
       onTap: _uploadingImage ? null : _pickImage,
       child: Container(
-        width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           color: hasImage
