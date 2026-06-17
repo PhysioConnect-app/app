@@ -13,11 +13,7 @@ class StoreManagerCategoriesScreen extends StatefulWidget {
 }
 
 class _StoreManagerCategoriesScreenState
-    extends State<StoreManagerCategoriesScreen>
-    with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
-
+    extends State<StoreManagerCategoriesScreen> {
   final _svc = StoreManagerService();
   List<Map<String, dynamic>> _categories = [];
   bool _loading = true;
@@ -61,29 +57,36 @@ class _StoreManagerCategoriesScreenState
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) return _buildError();
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: _kStoreColor,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Category'),
-        onPressed: () => _openForm(context),
-      ),
-      body: _roots.isEmpty
-          ? _buildEmpty()
-          : RefreshIndicator(
-              onRefresh: _load,
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-                itemCount: _roots.length,
-                itemBuilder: (_, i) => _buildRootCard(_roots[i]),
-              ),
+    return ColoredBox(
+      color: AppColors.background,
+      child: Stack(
+        children: [
+          _roots.isEmpty
+              ? _buildEmpty()
+              : RefreshIndicator(
+                  onRefresh: _load,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                    itemCount: _roots.length,
+                    itemBuilder: (_, i) => _buildRootCard(_roots[i]),
+                  ),
+                ),
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: FloatingActionButton.extended(
+              backgroundColor: _kStoreColor,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add Category'),
+              onPressed: () => _openForm(context),
             ),
+          ),
+        ],
+      ),
     );
   }
 

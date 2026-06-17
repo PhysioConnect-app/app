@@ -13,11 +13,7 @@ class StoreManagerProductsScreen extends StatefulWidget {
 }
 
 class _StoreManagerProductsScreenState
-    extends State<StoreManagerProductsScreen>
-    with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
-
+    extends State<StoreManagerProductsScreen> {
   final _svc = StoreManagerService();
   List<Map<String, dynamic>> _products = [];
   List<Map<String, dynamic>> _categories = [];
@@ -66,33 +62,41 @@ class _StoreManagerProductsScreenState
 
   @override
   Widget build(BuildContext context) {
-    super.build(context);
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) return _buildError();
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: _kStoreColor,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Product'),
-        onPressed: () => _openForm(context),
-      ),
-      body: Column(
+    return ColoredBox(
+      color: AppColors.background,
+      child: Stack(
         children: [
-          if (_categories.isNotEmpty) _buildCategoryFilter(),
-          Expanded(
-            child: _filtered.isEmpty
-                ? _buildEmpty()
-                : RefreshIndicator(
-                    onRefresh: _load,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
-                      itemCount: _filtered.length,
-                      itemBuilder: (_, i) => _buildProductCard(_filtered[i]),
-                    ),
-                  ),
+          Column(
+            children: [
+              if (_categories.isNotEmpty) _buildCategoryFilter(),
+              Expanded(
+                child: _filtered.isEmpty
+                    ? _buildEmpty()
+                    : RefreshIndicator(
+                        onRefresh: _load,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+                          itemCount: _filtered.length,
+                          itemBuilder: (_, i) =>
+                              _buildProductCard(_filtered[i]),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+          Positioned(
+            bottom: 16,
+            right: 16,
+            child: FloatingActionButton.extended(
+              backgroundColor: _kStoreColor,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add Product'),
+              onPressed: () => _openForm(context),
+            ),
           ),
         ],
       ),
