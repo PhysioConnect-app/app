@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/breakpoints.dart';
 import 'store_manager_service.dart';
 
 const _kStoreColor = Color(0xFF00838F);
@@ -220,24 +221,67 @@ class _StoreManagerProductsScreenState
           ],
         ),
         isThreeLine: true,
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _publishBtn(published, () => _toggleStatus(product)),
-            _iconBtn(
-              Icons.edit_rounded,
-              AppColors.textSecondary,
-              'Edit',
-              () => _openForm(context, existing: product),
-            ),
-            _iconBtn(
-              Icons.delete_rounded,
-              AppColors.error,
-              'Delete',
-              () => _confirmDelete(product),
-            ),
-          ],
-        ),
+        trailing: MediaQuery.sizeOf(context).width < kMobileBreakpoint
+            ? PopupMenuButton<String>(
+                onSelected: (v) {
+                  if (v == 'toggle') _toggleStatus(product);
+                  if (v == 'edit') _openForm(context, existing: product);
+                  if (v == 'delete') _confirmDelete(product);
+                },
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: 'toggle',
+                    child: Row(children: [
+                      Icon(
+                        published
+                            ? Icons.visibility_off_rounded
+                            : Icons.publish_rounded,
+                        size: 18,
+                        color: AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(published ? 'Unpublish' : 'Publish'),
+                    ]),
+                  ),
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Row(children: [
+                      const Icon(Icons.edit_rounded,
+                          size: 18, color: AppColors.textSecondary),
+                      const SizedBox(width: 12),
+                      const Text('Edit'),
+                    ]),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(children: [
+                      const Icon(Icons.delete_rounded,
+                          size: 18, color: AppColors.error),
+                      const SizedBox(width: 12),
+                      const Text('Delete',
+                          style: TextStyle(color: AppColors.error)),
+                    ]),
+                  ),
+                ],
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _publishBtn(published, () => _toggleStatus(product)),
+                  _iconBtn(
+                    Icons.edit_rounded,
+                    AppColors.textSecondary,
+                    'Edit',
+                    () => _openForm(context, existing: product),
+                  ),
+                  _iconBtn(
+                    Icons.delete_rounded,
+                    AppColors.error,
+                    'Delete',
+                    () => _confirmDelete(product),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -573,71 +617,87 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile =
+        MediaQuery.sizeOf(context).width < kMobileBreakpoint;
+
+    final priceRow = isMobile
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildPriceField(),
+              const SizedBox(height: 16),
+              _buildCurrencyDropdown(),
+            ],
+          )
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _buildPriceField()),
+              const SizedBox(width: 12),
+              SizedBox(width: 120, child: _buildCurrencyDropdown()),
+            ],
+          );
+
+    final form = Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildMultiImagePicker(),
+          const SizedBox(height: 16),
+          _buildCategoryDropdown(),
+          const SizedBox(height: 16),
+          _buildTextField(_titleCtrl, 'Title *', required: true),
+          const SizedBox(height: 16),
+          _buildTextField(_descCtrl, 'Description', maxLines: 3),
+          const SizedBox(height: 16),
+          priceRow,
+          const SizedBox(height: 16),
+          _buildTextField(
+            _phoneCtrl,
+            'Phone (with country code)',
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) return null;
+              if (!RegExp(r'^\d+$').hasMatch(v.trim())) {
+                return 'Digits only — no spaces, dashes, or +';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildTextField(
+            _waCtrl,
+            'WhatsApp (digits only, e.g. 9613XXXXXX)',
+            validator: (v) {
+              if (v == null || v.trim().isEmpty) return null;
+              if (!RegExp(r'^\d+$').hasMatch(v.trim())) {
+                return 'Digits only with country code (e.g. 9613XXXXXX)';
+              }
+              return null;
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildTextField(
+            _sortCtrl,
+            'Sort order',
+            keyboardType: TextInputType.number,
+            helperText: 'Lower numbers appear first',
+            validator: (v) => int.tryParse(v ?? '') == null
+                ? 'Must be a whole number'
+                : null,
+          ),
+        ],
+      ),
+    );
+
     return AlertDialog(
       scrollable: true,
+      insetPadding: isMobile
+          ? const EdgeInsets.symmetric(horizontal: 8, vertical: 24)
+          : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
       title: Text(_isEditing ? 'Edit Product' : 'Add Product'),
-      content: SizedBox(
-        width: 440,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildMultiImagePicker(),
-              const SizedBox(height: 16),
-              _buildCategoryDropdown(),
-              const SizedBox(height: 16),
-              _buildTextField(_titleCtrl, 'Title *', required: true),
-              const SizedBox(height: 16),
-              _buildTextField(_descCtrl, 'Description', maxLines: 3),
-              const SizedBox(height: 16),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: _buildPriceField()),
-                  const SizedBox(width: 12),
-                  SizedBox(width: 120, child: _buildCurrencyDropdown()),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _buildTextField(
-                _phoneCtrl,
-                'Phone (with country code)',
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return null;
-                  if (!RegExp(r'^\d+$').hasMatch(v.trim())) {
-                    return 'Digits only — no spaces, dashes, or +';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              _buildTextField(
-                _waCtrl,
-                'WhatsApp (digits only, e.g. 9613XXXXXX)',
-                validator: (v) {
-                  if (v == null || v.trim().isEmpty) return null;
-                  if (!RegExp(r'^\d+$').hasMatch(v.trim())) {
-                    return 'Digits only with country code (e.g. 9613XXXXXX)';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              _buildTextField(
-                _sortCtrl,
-                'Sort order',
-                keyboardType: TextInputType.number,
-                helperText: 'Lower numbers appear first',
-                validator: (v) => int.tryParse(v ?? '') == null
-                    ? 'Must be a whole number'
-                    : null,
-              ),
-            ],
-          ),
-        ),
-      ),
+      content: isMobile ? form : SizedBox(width: 440, child: form),
       actions: [
         TextButton(
           onPressed: _saving ? null : () => Navigator.pop(context),
