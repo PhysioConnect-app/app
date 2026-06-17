@@ -110,9 +110,19 @@ class _StoreManagerCategoriesScreenState
             Icon(Icons.category_outlined, size: 64, color: Colors.grey.shade300),
             const SizedBox(height: 16),
             const Text(
-              'No categories yet.\nTap + to add one.',
+              'No categories yet\nAdd your first category to get started.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add Category'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kStoreColor,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => _openForm(context),
             ),
           ],
         ),

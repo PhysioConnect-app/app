@@ -345,11 +345,21 @@ class _StoreManagerProductsScreenState
             const SizedBox(height: 16),
             Text(
               _filterCategoryId != null
-                  ? 'No products in this category.\nTap + to add one.'
-                  : 'No products yet.\nTap + to add one.',
+                  ? 'No products in this category yet.'
+                  : 'No products yet\nAdd your first product to get started.',
               textAlign: TextAlign.center,
               style: const TextStyle(
                   color: AppColors.textSecondary, fontSize: 15),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add Product'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _kStoreColor,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => _openForm(context),
             ),
           ],
         ),
