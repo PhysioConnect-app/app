@@ -1,0 +1,24 @@
+-- ============================================================
+-- Add public.users to the supabase_realtime publication
+--
+-- Many screens use `.from('users').stream(...)` expecting live
+-- updates via Postgres Realtime — most notably the doctor dashboard's
+-- own-profile listener (lib/features/doctor/doctor_dashboard_screen.dart)
+-- which rebuilds `_sub` (subscription tier/features/expiry/etc.) from
+-- every row change. Admin dashboard, polyclinic dashboard and patient
+-- dashboard have similar `.stream()` calls on `users`.
+--
+-- Without `users` in the `supabase_realtime` publication, these
+-- streams only emit their initial snapshot and never receive
+-- UPDATE/INSERT/DELETE events. This is most visible when an admin
+-- changes a doctor's subscription plan/features while that doctor is
+-- logged in: the doctor's dashboard doesn't reflect the change until
+-- they reload the app.
+--
+-- `public.users` already has REPLICA IDENTITY DEFAULT (primary key),
+-- which is sufficient for realtime change events. Existing RLS
+-- policies on `users` continue to govern which rows each client is
+-- allowed to receive, same as for the initial `.stream()` snapshot.
+-- ============================================================
+
+alter publication supabase_realtime add table public.users;

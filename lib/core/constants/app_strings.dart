@@ -258,6 +258,9 @@ class AppStrings {
   String get notifPermAllow => _t('Allow', 'السماح');
   String get notifPermNotNow => _t('Not Now', 'ليس الآن');
 
+  // Physiogate Store
+  String get store => _t('Store', 'المتجر');
+
   // Privacy policy — replace URL with your real hosted page before Store submission
   static const String privacyPolicyUrl = 'https://jihadzhour-dot.github.io/physioconnect-privacy/';
   String get privacyPolicy => _t('Privacy Policy', 'سياسة الخصوصية');

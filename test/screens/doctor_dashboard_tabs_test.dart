@@ -44,16 +44,14 @@ void main() {
     _expectNoOverflow(tester);
   });
 
-  testWidgets('Doctor > Documentation tab renders without overflow at 390x844',
+  testWidgets('Doctor > Documentation tile is hidden at 390x844',
       (tester) async {
     await ensureSupabaseInitialized();
     await signInFakeUser();
     await pumpAtSize(tester, const DoctorDashboardScreen());
     _drainExceptions(tester);
 
-    await tester.tap(find.text('Documentation'));
-    await _settle(tester);
-    _expectNoOverflow(tester);
+    expect(find.text('Documentation'), findsNothing);
   });
 
   testWidgets('Doctor > My Patients tab renders without overflow at 390x844',

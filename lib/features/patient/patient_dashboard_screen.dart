@@ -13,6 +13,7 @@ import '../../core/providers/language_provider.dart';
 import 'find_doctors_screen.dart';
 import 'patient_service.dart';
 import '../auth/auth_service.dart';
+import '../../core/widgets/lebanon_phone_field.dart';
 
 const _kNavy = Color(0xFF1A237E);
 const _kBlue = Color(0xFF1565C0);
@@ -751,7 +752,7 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
 
   Widget _requestCard(Map<String, dynamic> doc) {
     final data = doc;
-    final doctorName = data['doctorName'] as String? ?? 'Doctor';
+    final doctorName = data['doctor_name'] as String? ?? 'Doctor';
     final rtStr = data['requested_time'] as String?;
     final dt = rtStr != null ? DateTime.parse(rtStr) : null;
     final notes = data['notes'] as String? ?? '';
@@ -1175,9 +1176,25 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              await Supabase.instance.client
+              final updated = await Supabase.instance.client
                   .from('appointments')
-                  .update({'status': 'cancelled'}).eq('id', appointmentId);
+                  .update({'status': 'cancelled'})
+                  .eq('id', appointmentId)
+                  .select()
+                  .single();
+              final doctorId   = updated['doctor_id'] as String?;
+              final patientName = (updated['patient_name'] as String?) ?? 'A patient';
+              if (doctorId != null) {
+                await Supabase.instance.client.from('notifications').insert({
+                  'recipient_id': doctorId,
+                  'recipient_type': 'doctor',
+                  'type': 'appointment_cancelled',
+                  'title': 'Appointment Cancelled',
+                  'body': '$patientName cancelled their appointment.',
+                  'read': false,
+                  'created_at': DateTime.now().toIso8601String(),
+                });
+              }
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text(s.appointmentCancelled)),
@@ -1385,6 +1402,37 @@ class _LinkedDoctorCard extends StatelessWidget {
     return res.isNotEmpty ? res.first : null;
   }
 
+  Future<void> _confirmRemove(BuildContext context, String displayName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove Doctor'),
+        content: Text('Remove $displayName from your doctors list?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove',
+                style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final ok = await PatientService().removeDoctorFromMyList(docId);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? '$displayName removed from your doctors'
+            : 'Failed to remove doctor'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final name       = data['name'] as String? ?? 'Doctor';
@@ -1474,6 +1522,13 @@ class _LinkedDoctorCard extends StatelessWidget {
                 ),
             ]),
           ),
+          IconButton(
+            onPressed: () => _confirmRemove(context, showDrCard && name.isNotEmpty ? 'Dr. $name' : name),
+            icon: const Icon(Icons.person_remove_rounded,
+                color: AppColors.textSecondary, size: 20),
+            tooltip: 'Remove doctor',
+            visualDensity: VisualDensity.compact,
+          ),
         ]),
         FutureBuilder<Map<String, dynamic>?>(
           future: _getNextAppt(),
@@ -1539,7 +1594,7 @@ class _LinkedDoctorCard extends StatelessWidget {
           Expanded(
             child: Builder(builder: (ctx) {
               final phone = (data['phone'] as String? ?? '');
-              final rawPhone = phone.replaceAll(RegExp(r'[\s\-()]'), '');
+              final rawPhone = phone.replaceAll(RegExp(r'[\s\-()+]'), '');
               final hasPhone = rawPhone.isNotEmpty;
               return GestureDetector(
                 onTap: () {
@@ -2123,7 +2178,7 @@ class _LinkedDoctorCard extends StatelessWidget {
 
   void _openPhone(BuildContext ctx, String phone) {
     if (phone.isEmpty) return;
-    final cleaned = phone.replaceAll(RegExp(r'[\s\-()]'), '');
+    final cleaned = phone.replaceAll(RegExp(r'[\s\-()+]'), '');
     showModalBottomSheet(
       context: ctx,
       shape: const RoundedRectangleBorder(
@@ -2263,6 +2318,10 @@ class _PatientNotificationsScreen extends StatelessWidget {
                   ),
                 'appointment_scheduled' => (
                     Icons.event_available_rounded,
+                    _kBlue
+                  ),
+                'doctor_added_confirmation' => (
+                    Icons.how_to_reg_rounded,
                     _kBlue
                   ),
                 'appointment_reminder' => (
@@ -2412,7 +2471,8 @@ class _PatientProfileScreenState extends State<_PatientProfileScreen> {
     _nameCtrl = TextEditingController(
         text: widget.profile?['name'] as String? ?? '');
     _phoneCtrl = TextEditingController(
-        text: widget.profile?['phone'] as String? ?? '');
+        text: LebanonPhoneField.stripCountryCode(
+            widget.profile?['phone'] as String? ?? ''));
     _photoUrl = widget.profile?['profile_photo_url'] as String?;
   }
 
@@ -2490,7 +2550,7 @@ class _PatientProfileScreenState extends State<_PatientProfileScreen> {
     try {
       final uid = Supabase.instance.client.auth.currentUser!.id;
       await Supabase.instance.client.from('users').update({
-        'phone': _phoneCtrl.text.trim(),
+        'phone': LebanonPhoneField.toStored(_phoneCtrl.text),
       }).eq('id', uid);
       if (sheetCtx.mounted) {
         Navigator.pop(sheetCtx);
@@ -2599,8 +2659,7 @@ class _PatientProfileScreenState extends State<_PatientProfileScreen> {
               ]),
             ),
             const SizedBox(height: 10),
-            _field(_phoneCtrl, 'Phone Number', Icons.phone_outlined,
-                keyboardType: TextInputType.phone),
+            LebanonPhoneField(controller: _phoneCtrl, label: 'Phone Number'),
             const SizedBox(height: 10),
             AbsorbPointer(
               child: TextFormField(
@@ -2877,6 +2936,10 @@ class _PatientProfileScreenState extends State<_PatientProfileScreen> {
                           onPressed: () async {
                             Navigator.pop(ctx);
                             await Supabase.instance.client.auth.signOut();
+                            if (context.mounted) {
+                              Navigator.of(context)
+                                  .popUntil((route) => route.isFirst);
+                            }
                           },
                           child: const Text('Sign Out',
                               style: TextStyle(color: AppColors.error)),
@@ -2896,28 +2959,33 @@ class _PatientProfileScreenState extends State<_PatientProfileScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _deletingAccount
-                      ? null
-                      : () => _showDeleteAccountDialog(context),
-                  icon: _deletingAccount
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.red),
-                        )
-                      : const Icon(Icons.delete_forever_rounded,
-                          color: Colors.red),
-                  label: Text(
-                    _deletingAccount ? 'Deleting...' : 'Delete Account',
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.red),
-                    minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                Align(
+                  alignment: Alignment.center,
+                  child: OutlinedButton.icon(
+                    onPressed: _deletingAccount
+                        ? null
+                        : () => _showDeleteAccountDialog(context),
+                    icon: _deletingAccount
+                        ? const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.red),
+                          )
+                        : const Icon(Icons.delete_forever_rounded,
+                            color: Colors.red, size: 14),
+                    label: Text(
+                      _deletingAccount ? 'Deleting...' : 'Delete Account',
+                      style: const TextStyle(color: Colors.red, fontSize: 11),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.red),
+                      minimumSize: const Size(0, 28),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 2),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
               ]),
@@ -2960,20 +3028,6 @@ class _PatientProfileScreenState extends State<_PatientProfileScreen> {
       trailing: const Icon(Icons.chevron_right_rounded,
           color: AppColors.textSecondary),
       onTap: onTap,
-    );
-  }
-
-  Widget _field(TextEditingController ctrl, String label, IconData icon,
-      {TextInputType? keyboardType}) {
-    return TextField(
-      controller: ctrl,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, size: 20),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        contentPadding: const EdgeInsets.all(12),
-      ),
     );
   }
 

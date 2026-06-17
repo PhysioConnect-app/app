@@ -96,4 +96,20 @@ class AdminService {
   Future<String?> deleteUserAccount(String userId) async {
     return _invoke('admin-delete-user', {'userId': userId});
   }
+
+  // ── Merge duplicate patient records into one canonical record ───────────────
+  //
+  // Re-points appointments/notes/invoices/notifications/appointment requests,
+  // chat history and doctor assignments from `duplicateIds` onto `canonicalId`,
+  // then removes the duplicate rows (including their auth accounts, if any).
+
+  Future<String?> mergePatients({
+    required String canonicalId,
+    required List<String> duplicateIds,
+  }) async {
+    return _invoke('admin-merge-patients', {
+      'canonicalId': canonicalId,
+      'duplicateIds': duplicateIds,
+    });
+  }
 }

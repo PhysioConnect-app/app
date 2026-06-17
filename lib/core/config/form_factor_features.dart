@@ -30,6 +30,10 @@ class FormFactorFeatures {
   bool get showPatientsImportExport => !isMobile;
 
   // ── Doctor: Documentation ────────────────────────────────────────────────
+  /// The Documentation tab — its nav entry, home tile, and screen content.
+  /// Desktop only.
+  bool get showDocumentation => !isMobile;
+
   /// "Export PDF" action on the Documentation tab.
   bool get showDocumentationExport => !isMobile;
 
@@ -42,10 +46,6 @@ class FormFactorFeatures {
   /// The Statistics tab (Session Stats) — its nav entry, home tile, and
   /// screen content. Desktop only.
   bool get showStatistics => !isMobile;
-
-  // ── Admin ─────────────────────────────────────────────────────────────────
-  /// The Admin dashboard — desktop only.
-  bool get showAdminDashboard => !isMobile;
 
   // ── Inventory ─────────────────────────────────────────────────────────────
   /// Reserved: the inventory screen currently has no navigation entry

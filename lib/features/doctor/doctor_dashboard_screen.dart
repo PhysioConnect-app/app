@@ -18,6 +18,8 @@ import '../../core/utils/file_saver.dart';
 import 'location_picker_screen.dart';
 import '../../core/config/form_factor_features.dart';
 import '../../core/widgets/available_on_desktop_screen.dart';
+import '../../core/widgets/patient_search_field.dart';
+import '../../core/widgets/lebanon_phone_field.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/models/subscription_model.dart';
@@ -69,6 +71,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   final _clinicNameCtrl    = TextEditingController();
   final _clinicAddrCtrl    = TextEditingController();
   final _workingHoursCtrl  = TextEditingController();
+  final _phoneCtrl         = TextEditingController();
   bool _homeVisit       = false;
   bool _profileLoaded   = false;
   bool _deletingAccount = false;
@@ -90,6 +93,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   SubConfig _sub = SubConfig.defaultsFor(SubTier.basic);
   StreamSubscription<List<Map<String, dynamic>>>? _subListener;
   StreamSubscription<List<Map<String, dynamic>>>? _notifListener;
+  Timer? _expiryTimer;
 
   static const List<IconData> _navIcons = [
     Icons.calendar_today_rounded,     // 0 Schedule
@@ -103,6 +107,8 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   ];
 
   int _doctorUnreadCount = 0;
+  Set<String> _seenNotifIds = {};
+  bool _notifStreamInitialized = false;
 
   // When the user is a polyclinic, append a 9th "My Doctors" entry.
   List<IconData> get _allNavIcons => _userRole == 'polyclinic'
@@ -129,10 +135,15 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
         if (list.isNotEmpty && mounted) {
           final d = list.first;
           setState(() {
-            _sub            = SubConfig.fromMap(d);
-            _userRole       = (d['role']             as String?) ?? 'doctor';
-            _showDrPrefix   = (d['show_dr_prefix']   as bool?)   ?? false;
-            _drPrefixStatus = (d['dr_prefix_request'] as String?) ?? 'none';
+            _sub               = SubConfig.fromMap(d);
+            _userRole          = (d['role']               as String?) ?? 'doctor';
+            _showDrPrefix      = (d['show_dr_prefix']      as bool?)   ?? false;
+            _drPrefixStatus    = (d['dr_prefix_request']   as String?) ?? 'none';
+            _nameChangeRequest = (d['name_change_request'] as String?) ?? 'none';
+            _pendingName       = (d['pending_name']        as String?) ?? '';
+            final newName      = (d['name'] as String?) ?? '';
+            if (newName.isNotEmpty) _nameCtrl.text = newName;
+            if (!_sub.allowHomeVisit) _homeVisit = false;
           });
         }
       });
@@ -140,23 +151,38 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
           .from('notifications').stream(primaryKey: ['id'])
           .eq('recipient_id', uid)
           .listen((list) {
-        if (mounted) {
-          setState(() {
-            _doctorUnreadCount = list.where(
-                (n) => !(n['read'] as bool? ?? false)).length;
-          });
+        if (!mounted) return;
+        if (_notifStreamInitialized) {
+          for (final n in list) {
+            final id = n['id'] as String;
+            if (!_seenNotifIds.contains(id)) _showNotifPopup(n);
+          }
         }
+        _notifStreamInitialized = true;
+        _seenNotifIds.addAll(list.map((n) => n['id'] as String));
+        setState(() {
+          _doctorUnreadCount = list.where(
+              (n) => !(n['read'] as bool? ?? false)).length;
+        });
       });
     }
     final now = DateTime.now();
     _calMonth = DateTime(now.year, now.month);
     _calDay   = DateTime(now.year, now.month, now.day);
+
+    // Re-check subscription expiry periodically so the account is
+    // locked out the moment `expires_at` passes, even with no other
+    // realtime updates triggering a rebuild.
+    _expiryTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
   void dispose() {
     _subListener?.cancel();
     _notifListener?.cancel();
+    _expiryTimer?.cancel();
     _nameCtrl.dispose();
     _bioCtrl.dispose();
     _photoCtrl.dispose();
@@ -164,6 +190,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     _clinicNameCtrl.dispose();
     _clinicAddrCtrl.dispose();
     _workingHoursCtrl.dispose();
+    _phoneCtrl.dispose();
     super.dispose();
   }
 
@@ -182,6 +209,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
       _clinicNameCtrl.text   = d['clinic_name'] ?? '';
       _clinicAddrCtrl.text   = d['clinic_address'] ?? '';
       _workingHoursCtrl.text = d['working_hours'] ?? '';
+      _phoneCtrl.text = LebanonPhoneField.stripCountryCode(d['phone'] ?? '');
       setState(() {
         _homeVisit       = d['offers_home_visit'] ?? false;
         _profileLoaded   = true;
@@ -431,8 +459,8 @@ Future<void> _showLogout(AppStrings s) async {
       s.billing,
       s.expenses,
       s.myProfile,
-      'Notifications',
-      if (_userRole == 'polyclinic') 'My Doctors',
+      s.notifications,
+      if (_userRole == 'polyclinic') s.myDoctors,
     ];
 
     return Directionality(
@@ -471,7 +499,9 @@ Future<void> _showLogout(AppStrings s) async {
           index: _currentIndex,
           children: [
             _buildScheduleTab(s),                                              // 0
-            _buildDocumentationTab(s),                                         // 1
+            !FormFactorFeatures.of(context).showDocumentation // 1
+                ? _buildAvailableOnDesktopScreen('Documentation')
+                : _buildDocumentationTab(s),
             _buildPatientsTab(s),                                              // 2
             !FormFactorFeatures.of(context).showStatistics // 3
                 ? _buildAvailableOnDesktopScreen('Statistics')
@@ -518,7 +548,7 @@ Future<void> _showLogout(AppStrings s) async {
     final sections = [
       s.schedule, s.documentation, s.myPatients,
       s.statistics, s.billing, s.expenses, s.myProfile,
-      'Notifications',
+      s.notifications,
     ];
 
     return Column(
@@ -614,9 +644,10 @@ Future<void> _showLogout(AppStrings s) async {
             builder: (ctx, constraints) {
               final cols = constraints.maxWidth > 600 ? 4 : 2;
               final showStats = FormFactorFeatures.of(context).showStatistics;
+              final showDocs = FormFactorFeatures.of(context).showDocumentation;
               final visibleIndices = [
                 for (var i = 0; i < sections.length; i++)
-                  if (i != 3 || showStats) i,
+                  if ((i != 3 || showStats) && (i != 1 || showDocs)) i,
               ];
               return GridView.builder(
                 padding: const EdgeInsets.all(16),
@@ -907,9 +938,10 @@ Future<void> _showLogout(AppStrings s) async {
 
   Widget _buildNavDrawer(AppStrings s, List<String> sections) {
     final showStats = FormFactorFeatures.of(context).showStatistics;
+    final showDocs = FormFactorFeatures.of(context).showDocumentation;
     final visibleIndices = [
       for (var i = 0; i < sections.length; i++)
-        if (i != 3 || showStats) i,
+        if ((i != 3 || showStats) && (i != 1 || showDocs)) i,
     ];
     return Drawer(
       child: Column(
@@ -1137,6 +1169,52 @@ Future<void> _showLogout(AppStrings s) async {
     );
   }
 
+  // Show a transient toast for a notification that just arrived via the
+  // realtime stream (i.e. not part of the initial snapshot).
+  void _showNotifPopup(Map<String, dynamic> n) {
+    final title = (n['title'] as String?) ?? 'Notification';
+    final body  = (n['body']  as String?) ?? '';
+    final (icon, color) = _notifIconFor((n['type'] as String?) ?? '');
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+      duration: const Duration(seconds: 5),
+      content: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Icon(icon, color: Colors.white, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14)),
+              if (body.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(body,
+                    style: const TextStyle(color: Colors.white, fontSize: 13)),
+              ],
+            ],
+          ),
+        ),
+      ]),
+    ));
+  }
+
+  static (IconData, Color) _notifIconFor(String type) => switch (type) {
+        'patient_added_you'           => (Icons.person_add_rounded,        const Color(0xFF1565C0)),
+        'appointment_request'
+        || 'appointment_reschedule'   => (Icons.event_rounded,             Colors.orange),
+        'appointment_cancelled'       => (Icons.event_busy_rounded,        AppColors.error),
+        'admin_note'                  => (Icons.campaign_rounded,          const Color(0xFF6A1B9A)),
+        'patient_added_confirmation'  => (Icons.person_add_rounded,        const Color(0xFF2E7D32)),
+        'admin'                       => (Icons.admin_panel_settings_rounded, Colors.teal),
+        _                             => (Icons.notifications_rounded,     const Color(0xFF6A1B9A)),
+      };
+
   Widget _notifCard(Map<String, dynamic> n) {
     final type    = (n['type']  as String?) ?? '';
     final title   = (n['title'] as String?) ?? 'Notification';
@@ -1148,13 +1226,7 @@ Future<void> _showLogout(AppStrings s) async {
         : '';
     final unread  = !(n['read'] as bool? ?? false);
 
-    final (IconData icon, Color iconColor) = switch (type) {
-      'patient_added_you'           => (Icons.person_add_rounded,        const Color(0xFF1565C0)),
-      'appointment_request'
-      || 'appointment_reschedule'   => (Icons.event_rounded,             Colors.orange),
-      'admin'                       => (Icons.admin_panel_settings_rounded, Colors.teal),
-      _                             => (Icons.notifications_rounded,     const Color(0xFF6A1B9A)),
-    };
+    final (IconData icon, Color iconColor) = _notifIconFor(type);
 
     return Material(
       color: unread ? const Color(0xFFF3E5F5) : Colors.white,
@@ -1270,10 +1342,7 @@ Future<void> _showLogout(AppStrings s) async {
                       ),
                       const SizedBox(width: 16),
                       // ── Appointments panel ───────────────────────────
-                      Expanded(
-                        child: _buildAppointmentsPanel(
-                            allAppts, s, shrinkWrap: false),
-                      ),
+                      _buildAppointmentsPanel(allAppts, s, shrinkWrap: false),
                     ],
                   ),
                 ),
@@ -2136,6 +2205,8 @@ Future<void> _showLogout(AppStrings s) async {
     String? selPatientName = prePatientName;
     DateTime? selDateTime;
     final notesCtrl = TextEditingController();
+    final patientSearchCtrl =
+        TextEditingController(text: prePatientName ?? '');
 
     showModalBottomSheet(
       context: context,
@@ -2159,28 +2230,15 @@ Future<void> _showLogout(AppStrings s) async {
                 stream: _service.getAssignedPatients(),
                 builder: (context, snap) {
                   final patients = snap.data ?? [];
-                  return DropdownButtonFormField<String>(
-                    decoration: InputDecoration(
-                      labelText: s.selectPatient,
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      filled: true,
-                      fillColor: AppColors.background,
-                    ),
-                    initialValue: selPatientId,
-                    items: patients.map((p) {
-                      final pid = p['id'] as String;
-                      return DropdownMenuItem<String>(
-                          value: pid,
-                          child: Text(p['name'] ?? p['email'] ?? pid));
-                    }).toList(),
-                    onChanged: (v) {
-                      final doc =
-                          patients.firstWhere((p) => p['id'] == v);
-                      final d = doc;
+                  return PatientSearchField(
+                    patients: patients,
+                    labelText: s.selectPatient,
+                    controller: patientSearchCtrl,
+                    fillColor: AppColors.background,
+                    onSelected: (id, name) {
                       setLocal(() {
-                        selPatientId   = v;
-                        selPatientName = d['name'] ?? d['email'] ?? v;
+                        selPatientId   = id;
+                        selPatientName = name;
                       });
                     },
                   );
@@ -3366,6 +3424,8 @@ void _showPickPatientForDoc(AppStrings s) {
                                             await _service.getMyName();
                                         await _service.notifyPatientAdded(
                                             results[i]['id'] as String, dName);
+                                        await _service
+                                            .notifySelfPatientAdded(name);
                                         messenger.showSnackBar(SnackBar(
                                           content: Text(
                                               '$name added to your roster!'),
@@ -4025,7 +4085,7 @@ void _showPickPatientForDoc(AppStrings s) {
                                     if (phone.isNotEmpty)
                                       GestureDetector(
                                         onTap: () {
-                                          final n = phone.replaceAll(RegExp(r'[\s\-()]'), '');
+                                          final n = phone.replaceAll(RegExp(r'[\s\-()+]'), '');
                                           launchUrl(Uri.parse('https://wa.me/$n'), mode: LaunchMode.externalApplication);
                                         },
                                         child: Text(phone,
@@ -4198,7 +4258,7 @@ void _showPickPatientForDoc(AppStrings s) {
 
   void _showPhoneOptions(BuildContext ctx, String phone) {
     if (phone.isEmpty) return;
-    final cleaned = phone.replaceAll(RegExp(r'[\s\-()]'), '');
+    final cleaned = phone.replaceAll(RegExp(r'[\s\-()+]'), '');
     showModalBottomSheet(
       context: ctx,
       shape: const RoundedRectangleBorder(
@@ -4334,31 +4394,40 @@ void _showPickPatientForDoc(AppStrings s) {
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          side:
-                              const BorderSide(color: Colors.white, width: 1),
-                          foregroundColor: Colors.white,
+                      child: Tooltip(
+                        message: _sub.allowHomeVisit
+                            ? ''
+                            : 'Disabled by your administrator',
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(
+                                color: Colors.white, width: 1),
+                            foregroundColor: Colors.white,
+                            disabledForegroundColor:
+                                Colors.white.withValues(alpha: 0.4),
+                          ),
+                          icon: const Icon(Icons.map_rounded),
+                          label: Text(s.updateLocation),
+                          onPressed: !_sub.allowHomeVisit
+                              ? null
+                              : () async {
+                                  final result = await Navigator.push<LatLng>(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => DoctorLocationPickerScreen(
+                                        initialLat: _lat,
+                                        initialLng: _lng,
+                                      ),
+                                    ),
+                                  );
+                                  if (result != null && mounted) {
+                                    setState(() {
+                                      _lat = result.latitude;
+                                      _lng = result.longitude;
+                                    });
+                                  }
+                                },
                         ),
-                        icon: const Icon(Icons.map_rounded),
-                        label: Text(s.updateLocation),
-                        onPressed: () async {
-                          final result = await Navigator.push<LatLng>(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => DoctorLocationPickerScreen(
-                                initialLat: _lat,
-                                initialLng: _lng,
-                              ),
-                            ),
-                          );
-                          if (result != null && mounted) {
-                            setState(() {
-                              _lat = result.latitude;
-                              _lng = result.longitude;
-                            });
-                          }
-                        },
                       ),
                     ),
                   ],
@@ -4372,19 +4441,34 @@ void _showPickPatientForDoc(AppStrings s) {
                     color: Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(s.homeVisit,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500)),
-                      Switch(
-                        value: _homeVisit,
-                        onChanged: (v) => setState(() => _homeVisit = v),
-                        activeThumbColor: Colors.white,
-                        activeTrackColor: Colors.white30,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(s.homeVisit,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w500)),
+                          Switch(
+                            value: _homeVisit,
+                            onChanged: _sub.allowHomeVisit
+                                ? (v) => setState(() => _homeVisit = v)
+                                : null,
+                            activeThumbColor: Colors.white,
+                            activeTrackColor: Colors.white30,
+                          ),
+                        ],
                       ),
+                      if (!_sub.allowHomeVisit)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text('Disabled by your administrator',
+                              style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.7),
+                                  fontSize: 11)),
+                        ),
                     ],
                   ),
                 ),
@@ -4545,14 +4629,12 @@ void _showPickPatientForDoc(AppStrings s) {
                 _profileSection(
                   s.professionalOverview,
                   [
-                    _profileItem(Icons.school_rounded, s.experience,
-                        '12 ${s.yearsOfExperience}'),
-                    _profileItem(Icons.verified_rounded, s.certifications,
-                        'DPT, CMT'),
-                    _profileItem(Icons.star_rounded, s.expertiseAreas,
-                        'Pediatric Rehab, Sports Therapy'),
-                    _profileItem(
-                        Icons.language_rounded, s.languages, 'Arabic, English'),
+                    _profileItem(Icons.info_outline_rounded, s.bio,
+                        _bioCtrl.text.isNotEmpty ? _bioCtrl.text : '—'),
+                    _profileItem(Icons.phone_rounded, 'Mobile Number',
+                        _phoneCtrl.text.isNotEmpty
+                            ? '+961 ${_phoneCtrl.text}'
+                            : '—'),
                   ],
                 ),
                 const SizedBox(height: 20),
@@ -4562,28 +4644,33 @@ void _showPickPatientForDoc(AppStrings s) {
                 // ── Dr. prefix request card ──────────────────────────────
                 _buildDrPrefixCard(),
                 const SizedBox(height: 16),
-                OutlinedButton.icon(
-                  onPressed: _deletingAccount
-                      ? null
-                      : () => _showDeleteAccountDialog(),
-                  icon: _deletingAccount
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.red),
-                        )
-                      : const Icon(Icons.delete_forever_rounded,
-                          color: Colors.red),
-                  label: Text(
-                    _deletingAccount ? 'Deleting...' : 'Delete Account',
-                    style: const TextStyle(color: Colors.red),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.red),
-                    minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                Align(
+                  alignment: Alignment.center,
+                  child: OutlinedButton.icon(
+                    onPressed: _deletingAccount
+                        ? null
+                        : () => _showDeleteAccountDialog(),
+                    icon: _deletingAccount
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.red),
+                          )
+                        : const Icon(Icons.delete_forever_rounded,
+                            color: Colors.red, size: 16),
+                    label: Text(
+                      _deletingAccount ? 'Deleting...' : 'Delete Account',
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.red),
+                      minimumSize: const Size(0, 32),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 4),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -5120,6 +5207,11 @@ void _showPickPatientForDoc(AppStrings s) {
                     Icons.access_time_rounded,
                     maxLines: 3,
                     hint: 'e.g. Mon–Fri: 9am–5pm, Sat: 9am–1pm'),
+                const SizedBox(height: 10),
+                _pField(s.bio, _bioCtrl, Icons.notes_rounded, maxLines: 4),
+                const SizedBox(height: 10),
+                LebanonPhoneField(
+                    controller: _phoneCtrl, label: 'Mobile Number'),
                 const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
@@ -5139,8 +5231,10 @@ void _showPickPatientForDoc(AppStrings s) {
                         clinicAddress: _clinicAddrCtrl.text,
                         offersHomeVisit: _homeVisit,
                         workingHours: _workingHoursCtrl.text,
+                        phone: LebanonPhoneField.toStored(_phoneCtrl.text),
                       );
                       if (!mounted) return;
+                      setState(() {});
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text(ok
                             ? s.profileSaved
@@ -6693,6 +6787,7 @@ void _showPickPatientForDoc(AppStrings s) {
         }
 
         await _service.notifyPatientAdded(patientId, doctorName);
+        await _service.notifySelfPatientAdded(entry.name);
 
         for (final date in entry.dates) {
           if (date == null) continue;

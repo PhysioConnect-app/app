@@ -43,6 +43,7 @@ Future<void> ensureSupabaseInitialized() async {
   }
   await Supabase.initialize(
     url: 'http://127.0.0.1:54321',
+    // ignore: deprecated_member_use
     anonKey: 'test-anon-key-not-real',
     authOptions: const FlutterAuthClientOptions(autoRefreshToken: false),
     httpClient: http_testing.MockClient((request) async {

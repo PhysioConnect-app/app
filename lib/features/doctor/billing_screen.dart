@@ -9,6 +9,7 @@ import 'package:excel/excel.dart' as xl;
 import 'package:file_picker/file_picker.dart';
 import '../../core/config/form_factor_features.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/widgets/patient_search_field.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
 import '../../core/utils/file_saver.dart';
@@ -177,6 +178,7 @@ class _BillingScreenState extends State<BillingScreen> {
     final svcCtrl     = TextEditingController();
     final noteCtrl    = TextEditingController();
     final paidAmtCtrl = TextEditingController();
+    final patientSearchCtrl = TextEditingController();
 
     showModalBottomSheet(
       context: context,
@@ -208,23 +210,14 @@ class _BillingScreenState extends State<BillingScreen> {
                         }).toList()),
                 builder: (_, snap) {
                   final pats = snap.data ?? [];
-                  return DropdownButtonFormField<String>(
-                    decoration: InputDecoration(
-                      labelText: s.selectPatient,
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      filled: true, fillColor: Colors.white,
-                    ),
-                    items: pats.map((p) {
-                      return DropdownMenuItem(
-                          value: p['id'] as String,
-                          child: Text(p['name'] ?? p['email'] ?? p['id']));
-                    }).toList(),
-                    onChanged: (v) {
-                      final doc = pats.firstWhere((p) => p['id'] == v);
+                  return PatientSearchField(
+                    patients: pats,
+                    labelText: s.selectPatient,
+                    controller: patientSearchCtrl,
+                    onSelected: (id, name) {
                       set(() {
-                        patId   = v;
-                        patName = doc['name'] ?? doc['email'] ?? v;
+                        patId   = id;
+                        patName = name;
                       });
                     },
                   );

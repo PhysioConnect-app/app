@@ -43,6 +43,24 @@ class _FeatDef {
   const _FeatDef(this.key, this.label, this.subtitle, this.icon, this.color);
 }
 
+// ── Nav bar definitions ───────────────────────────────────────────────────────
+
+class _NavItem {
+  final IconData icon;
+  final String label;
+  const _NavItem(this.icon, this.label);
+}
+
+const _kAdminNavItems = [
+  _NavItem(Icons.dashboard_rounded, 'Overview'),
+  _NavItem(Icons.people_rounded, 'Doctors'),
+  _NavItem(Icons.business_rounded, 'Polyclinics'),
+  _NavItem(Icons.person_add_rounded, 'Register'),
+  _NavItem(Icons.notifications_rounded, 'Requests'),
+  _NavItem(Icons.personal_injury_rounded, 'Patients'),
+  _NavItem(Icons.campaign_rounded, 'Notes'),
+];
+
 const _kFeats = [
   _FeatDef('statistics', 'Statistics', 'Session & revenue analytics', Icons.bar_chart_rounded,    Color(0xFF00695C)),
   _FeatDef('billing',    'Income',     'Invoices & income tracking',  Icons.receipt_long_rounded, Color(0xFFF57F17)),
@@ -73,6 +91,37 @@ String _fmtDate(String? ts) {
   return '${mo[dt.month - 1]} ${dt.year}';
 }
 
+String _fmtDateTime(String? ts) {
+  if (ts == null) return '';
+  const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  final dt = DateTime.parse(ts).toLocal();
+  final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
+  final ampm = dt.hour < 12 ? 'AM' : 'PM';
+  final min = dt.minute.toString().padLeft(2, '0');
+  return '${mo[dt.month - 1]} ${dt.day}, ${dt.year} · $h:$min $ampm';
+}
+
+// ── Duplicate patient detection ─────────────────────────────────────────────
+// Groups patients whose names match after trimming/collapsing whitespace and
+// lower-casing, so admins can spot likely duplicate records to merge.
+
+List<List<Map<String, dynamic>>> _findDuplicatePatientGroups(
+    List<Map<String, dynamic>> patients) {
+  final byName = <String, List<Map<String, dynamic>>>{};
+  for (final p in patients) {
+    final name = ((p['name'] ?? '') as String)
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .toLowerCase();
+    if (name.isEmpty) continue;
+    byName.putIfAbsent(name, () => []).add(p);
+  }
+  final groups = byName.values.where((g) => g.length > 1).toList();
+  groups.sort((a, b) => ((a.first['name'] ?? '') as String)
+      .compareTo((b.first['name'] ?? '') as String));
+  return groups;
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // Screen
 // ════════════════════════════════════════════════════════════════════════════════
@@ -84,11 +133,10 @@ class AdminDashboardScreen extends StatefulWidget {
   State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
 }
 
-class _AdminDashboardScreenState extends State<AdminDashboardScreen>
-    with SingleTickerProviderStateMixin {
+class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final _supabase = Supabase.instance.client;
   final _adminService = AdminService();
-  late final TabController _tabs;
+  int _currentIndex = 0;
 
   // Register form
   final _nameCtrl  = TextEditingController();
@@ -103,20 +151,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
   String _searchQuery = '';
   // Polyclinics list
   String _polySearchQuery = '';
+  // Patients list
+  String _patientSearchQuery = '';
 
-  @override
-  void initState() {
-    super.initState();
-    _tabs = TabController(length: 5, vsync: this);
-  }
+  // Notes / broadcast tab
+  final _noteTitleCtrl = TextEditingController();
+  final _noteBodyCtrl  = TextEditingController();
+  final Set<String> _noteSelectedDoctorIds = {};
+  bool _noteSending = false;
 
   @override
   void dispose() {
-    _tabs.dispose();
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _passCtrl.dispose();
     _specCtrl.dispose();
+    _noteTitleCtrl.dispose();
+    _noteBodyCtrl.dispose();
     super.dispose();
   }
 
@@ -139,7 +190,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     if (error == null) {
       _snack('Doctor account created!', color: AppColors.success);
       _nameCtrl.clear(); _emailCtrl.clear(); _passCtrl.clear(); _specCtrl.clear();
-      _tabs.animateTo(1);
+      setState(() => _currentIndex = 1);
     } else {
       _snack('Error: $error', color: AppColors.error);
     }
@@ -475,6 +526,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                   onChanged: (v) =>
                       setLocal(() => config = config.copyWith(showInSearch: v)),
                 ),
+                const SizedBox(height: 8),
+                _adminToggleTile(
+                  icon: Icons.home_work_rounded,
+                  color: const Color(0xFF6A1B9A),
+                  title: 'Allow Home Visits',
+                  subtitle: 'Doctor can offer home visits & set a location',
+                  value: config.allowHomeVisit,
+                  onChanged: (v) =>
+                      setLocal(() => config = config.copyWith(allowHomeVisit: v)),
+                ),
                 const SizedBox(height: 14),
                 // Expiry date
                 InkWell(
@@ -667,15 +728,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
                                   fontWeight: FontWeight.bold)),
                           onPressed: () async {
                             setLocal(() => saving = true);
-                            await _supabase.from('users').update({
+                            final update = {
                               'name': nameCtrl.text.trim(),
                               'specialization': specCtrl.text.trim(),
                               'subscription': config.tier.name,
                               'features':     config.toFeaturesMap(),
                               'is_enabled':    config.isEnabled,
                               'show_in_search': config.showInSearch,
+                              'allow_home_visit': config.allowHomeVisit,
                               'expires_at': config.expiresAt?.toIso8601String(),
-                            }).eq('id', doc['id'] as String);
+                            };
+                            if (!config.allowHomeVisit) {
+                              update['offers_home_visit'] = false;
+                            }
+                            try {
+                              await _supabase
+                                  .from('users')
+                                  .update(update)
+                                  .eq('id', doc['id'] as String);
+                            } catch (e) {
+                              setLocal(() => saving = false);
+                              if (mounted) {
+                                _snack('Update failed: $e',
+                                    color: AppColors.error);
+                              }
+                              return;
+                            }
                             if (!ctx.mounted) return;
                             Navigator.pop(ctx);
                             _snack(
@@ -1012,12 +1090,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
       backgroundColor: const Color(0xFFF0F2F5),
       body: Column(children: [
         _header(),
-        _tabBar(),
+        _navBar(),
         Expanded(
-          child: TabBarView(
-            controller: _tabs,
-            children: [_overviewTab(), _doctorsTab(), _polyclinicsTab(), _registerTab(), _notificationsTab()],
-          ),
+          child: switch (_currentIndex) {
+            0 => _overviewTab(),
+            1 => _doctorsTab(),
+            2 => _polyclinicsTab(),
+            3 => _registerTab(),
+            4 => _notificationsTab(),
+            5 => _patientsTab(),
+            _ => _notesTab(),
+          },
         ),
       ]),
     );
@@ -1078,29 +1161,53 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     );
   }
 
-  Widget _tabBar() {
+  Widget _navBar() {
     return Container(
       color: _kSlate,
-      child: TabBar(
-        controller: _tabs,
-        indicatorColor: Colors.white,
-        indicatorWeight: 3,
-        labelColor: Colors.white,
-        unselectedLabelColor: Colors.white38,
-        labelStyle:
-            const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-        tabs: const [
-          Tab(icon: Icon(Icons.dashboard_rounded, size: 17),
-              text: 'Overview', height: 52),
-          Tab(icon: Icon(Icons.people_rounded, size: 17),
-              text: 'Doctors', height: 52),
-          Tab(icon: Icon(Icons.business_rounded, size: 17),
-              text: 'Polyclinics', height: 52),
-          Tab(icon: Icon(Icons.person_add_rounded, size: 17),
-              text: 'Register', height: 52),
-          Tab(icon: Icon(Icons.notifications_rounded, size: 17),
-              text: 'Requests', height: 52),
-        ],
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          children: [
+            for (var i = 0; i < _kAdminNavItems.length; i++)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: _navButton(i, _kAdminNavItems[i]),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _navButton(int index, _NavItem item) {
+    final selected = _currentIndex == index;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => setState(() => _currentIndex = index),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: selected ? Colors.white.withValues(alpha: 0.12) : null,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+                color: selected ? Colors.white : Colors.white24),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(item.icon,
+                size: 16,
+                color: selected ? Colors.white : Colors.white38),
+            const SizedBox(width: 6),
+            Text(item.label,
+                style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                    color: selected ? Colors.white : Colors.white38)),
+          ]),
+        ),
       ),
     );
   }
@@ -1212,19 +1319,22 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           child: Icon(icon, size: 20, color: color),
         ),
         const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(value,
-                style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                    height: 1)),
-            Text(label,
-                style: const TextStyle(
-                    color: AppColors.textSecondary, fontSize: 12)),
-          ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(value,
+                  style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                      height: 1)),
+              Text(label,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: AppColors.textSecondary, fontSize: 12)),
+            ],
+          ),
         ),
       ]),
     );
@@ -1498,7 +1608,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ),
         ),
         GestureDetector(
-          onTap: () => _tabs.animateTo(3),
+          onTap: () => setState(() => _currentIndex = 3),
           child: Container(
             padding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -2069,7 +2179,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
     if (error == null) {
       _snack('Polyclinic account created!', color: AppColors.success);
       _nameCtrl.clear(); _emailCtrl.clear(); _passCtrl.clear();
-      _tabs.animateTo(2);
+      setState(() => _currentIndex = 2);
     } else {
       _snack('Error: $error', color: AppColors.error);
     }
@@ -2240,7 +2350,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
           ]),
         ),
         GestureDetector(
-          onTap: () => _tabs.animateTo(3),
+          onTap: () => setState(() => _currentIndex = 3),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
@@ -2565,6 +2675,753 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen>
         ),
       ),
     );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Patients Tab
+  // ════════════════════════════════════════════════════════════════════════════
+
+  Widget _patientsTab() {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: _supabase.from('users').stream(primaryKey: ['id']).eq('role', 'patient'),
+      builder: (context, snap) {
+        if (snap.hasError) {
+          return Center(
+              child: Text('Error: ${snap.error}',
+                  style: const TextStyle(color: AppColors.error)));
+        }
+        if (!snap.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final all = List<Map<String, dynamic>>.from(snap.data!)
+          ..sort((a, b) {
+            final ta = a['created_at'] as String?;
+            final tb = b['created_at'] as String?;
+            if (ta == null && tb == null) return 0;
+            if (ta == null) return 1;
+            if (tb == null) return -1;
+            return tb.compareTo(ta);
+          });
+
+        final filtered = _patientSearchQuery.isEmpty
+            ? all
+            : all.where((d) {
+                final n = (d['name']  ?? '').toString().toLowerCase();
+                final e = (d['email'] ?? '').toString().toLowerCase();
+                return n.contains(_patientSearchQuery) ||
+                    e.contains(_patientSearchQuery);
+              }).toList();
+
+        final dupGroups = _findDuplicatePatientGroups(all);
+
+        return CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: Column(children: [
+                  _patientsSummaryCard(all.length),
+                  if (dupGroups.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    _duplicatePatientsCard(dupGroups),
+                  ],
+                  const SizedBox(height: 14),
+                  TextField(
+                    onChanged: (v) =>
+                        setState(() => _patientSearchQuery = v.toLowerCase()),
+                    decoration: InputDecoration(
+                      hintText: 'Search patient name or email...',
+                      hintStyle: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 13),
+                      prefixIcon: const Icon(Icons.search_rounded,
+                          size: 20, color: AppColors.textSecondary),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 0, horizontal: 16),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(13),
+                          borderSide:
+                              const BorderSide(color: AppColors.cardBorder)),
+                      enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(13),
+                          borderSide:
+                              const BorderSide(color: AppColors.cardBorder)),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (filtered.isNotEmpty)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                          '${filtered.length} patient${filtered.length != 1 ? 's' : ''}',
+                          style: const TextStyle(
+                              color: AppColors.textSecondary, fontSize: 12)),
+                    ),
+                ]),
+              ),
+            ),
+            if (filtered.isEmpty)
+              SliverFillRemaining(
+                child: Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Container(
+                      width: 76, height: 76,
+                      decoration: BoxDecoration(
+                          color: const Color(0xFF1565C0).withValues(alpha: 0.07),
+                          shape: BoxShape.circle),
+                      child: Icon(Icons.personal_injury_outlined,
+                          size: 36,
+                          color: const Color(0xFF1565C0).withValues(alpha: 0.35)),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                        _patientSearchQuery.isEmpty
+                            ? 'No patient accounts yet'
+                            : 'No results for "$_patientSearchQuery"',
+                        style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 15)),
+                    const SizedBox(height: 6),
+                    Text(
+                        _patientSearchQuery.isEmpty
+                            ? 'Patients appear here once they register.'
+                            : 'Try a different search term.',
+                        style: const TextStyle(
+                            color: AppColors.textSecondary, fontSize: 13)),
+                  ]),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 32),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (_, i) => _patientCard(filtered[i]),
+                    childCount: filtered.length,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  // ── Possible duplicates card ─────────────────────────────────────────────────
+
+  Widget _duplicatePatientsCard(List<List<Map<String, dynamic>>> groups) {
+    final totalRows = groups.fold<int>(0, (sum, g) => sum + g.length);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFFFE082)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.warning_amber_rounded,
+              color: Color(0xFFF9A825), size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '${groups.length} possible duplicate name'
+              '${groups.length != 1 ? 's' : ''} ($totalRows records)',
+              style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  color: AppColors.textPrimary),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 10),
+        ...groups.map((g) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(children: [
+                Expanded(
+                  child: Text(
+                    '${(g.first['name'] ?? '') as String} (${g.length})',
+                    style: const TextStyle(
+                        fontSize: 13, color: AppColors.textPrimary),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => _openMergeDuplicatesSheet(g),
+                  style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10)),
+                  child: const Text('Review'),
+                ),
+              ]),
+            )),
+      ]),
+    );
+  }
+
+  // ── Merge duplicate patients sheet ──────────────────────────────────────────
+
+  void _openMergeDuplicatesSheet(List<Map<String, dynamic>> group) {
+    final sorted = List<Map<String, dynamic>>.from(group)
+      ..sort((a, b) => ((a['created_at'] as String?) ?? '')
+          .compareTo((b['created_at'] as String?) ?? ''));
+    // Default to keeping the oldest record — most likely to have a linked login.
+    String canonicalId = sorted.first['id'] as String;
+    bool merging = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => Padding(
+          padding: EdgeInsets.only(
+            left: 20, right: 20, top: 12,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 28,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36, height: 4,
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const Text('Merge Duplicate Patients',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 17,
+                        color: AppColors.textPrimary)),
+                const SizedBox(height: 4),
+                const Text(
+                  'Pick the record to keep. Appointments, notes, invoices, '
+                  'messages and doctor links from the others will be moved '
+                  'onto it, and the duplicate records removed.',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12.5),
+                ),
+                const SizedBox(height: 14),
+                ...sorted.map((p) {
+                  final id    = p['id'] as String;
+                  final name  = (p['name']  ?? '') as String;
+                  final email = (p['email'] ?? '') as String;
+                  final phone = (p['phone'] ?? '') as String;
+                  final ac    = _avatarColor(name);
+                  final selected = id == canonicalId;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: InkWell(
+                      onTap: merging
+                          ? null
+                          : () => setLocal(() => canonicalId = id),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? const Color(0xFF1565C0).withValues(alpha: 0.06)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                              color: selected
+                                  ? const Color(0xFF1565C0)
+                                  : const Color(0xFFE8EAED),
+                              width: selected ? 1.5 : 1),
+                        ),
+                        child: Row(children: [
+                          Icon(
+                            selected
+                                ? Icons.radio_button_checked_rounded
+                                : Icons.radio_button_unchecked_rounded,
+                            color: selected
+                                ? const Color(0xFF1565C0)
+                                : AppColors.textSecondary,
+                            size: 22,
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            width: 40, height: 40,
+                            decoration: BoxDecoration(
+                              color: ac.withValues(alpha: 0.13),
+                              borderRadius: BorderRadius.circular(11),
+                            ),
+                            child: Center(
+                              child: Text(_initials(name),
+                                  style: TextStyle(
+                                      color: ac,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 14)),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(name,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                        color: AppColors.textPrimary)),
+                                if (email.isNotEmpty)
+                                  Text(email,
+                                      style: const TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 12)),
+                                if (phone.isNotEmpty)
+                                  Text(phone,
+                                      style: const TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 12)),
+                                Text('Added ${_fmtDateTime(p['created_at'] as String?)}',
+                                    style: const TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 11)),
+                              ],
+                            ),
+                          ),
+                        ]),
+                      ),
+                    ),
+                  );
+                }),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: merging
+                        ? null
+                        : () async {
+                            final keep = sorted
+                                .firstWhere((p) => p['id'] == canonicalId);
+                            final others = sorted
+                                .where((p) => p['id'] != canonicalId)
+                                .toList();
+                            final ok = await showDialog<bool>(
+                              context: ctx,
+                              builder: (_) => AlertDialog(
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20)),
+                                title: const Text('Merge Patients?'),
+                                content: Text(
+                                    'Merge ${others.length} record'
+                                    '${others.length != 1 ? 's' : ''} into '
+                                    '"${keep['name']}"?\nThis cannot be undone.'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx, false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () => Navigator.pop(ctx, true),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF1565C0),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10)),
+                                    ),
+                                    child: const Text('Merge'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (ok != true) return;
+                            setLocal(() => merging = true);
+                            final err = await _adminService.mergePatients(
+                              canonicalId: canonicalId,
+                              duplicateIds:
+                                  others.map((p) => p['id'] as String).toList(),
+                            );
+                            if (!ctx.mounted) return;
+                            if (err == null) {
+                              Navigator.pop(ctx);
+                              _snack('Merged into "${keep['name']}".',
+                                  color: AppColors.success);
+                            } else {
+                              setLocal(() => merging = false);
+                              _snack('Merge failed: $err', color: AppColors.error);
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1565C0),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: merging
+                        ? const SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : Text('Merge ${sorted.length - 1} into selected'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _patientsSummaryCard(int total) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1565C0), Color(0xFF0D47A1)],
+        ),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(children: [
+        Container(
+          width: 52, height: 52,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Icon(Icons.personal_injury_rounded,
+              color: Colors.white, size: 28),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('$total',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 30,
+                    fontWeight: FontWeight.bold,
+                    height: 1)),
+            Text('Patient${total != 1 ? 's' : ''} Registered',
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
+          ]),
+        ),
+      ]),
+    );
+  }
+
+  Widget _patientCard(Map<String, dynamic> doc) {
+    final name  = (doc['name']  ?? 'Unknown') as String;
+    final email = (doc['email'] ?? '')         as String;
+    final phone = (doc['phone'] ?? '')         as String;
+    final ac    = _avatarColor(name);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE8EAED)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            width: 48, height: 48,
+            decoration: BoxDecoration(
+              color: ac.withValues(alpha: 0.13),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Center(
+              child: Text(_initials(name),
+                  style: TextStyle(
+                      color: ac, fontWeight: FontWeight.bold, fontSize: 17)),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(name,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      color: AppColors.textPrimary)),
+              const SizedBox(height: 2),
+              Text(email,
+                  style: const TextStyle(
+                      color: AppColors.textSecondary, fontSize: 12),
+                  overflow: TextOverflow.ellipsis),
+              if (phone.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Row(children: [
+                  Icon(Icons.phone_rounded, size: 12, color: AppColors.textSecondary),
+                  const SizedBox(width: 4),
+                  Text(phone,
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 12)),
+                ]),
+              ],
+            ]),
+          ),
+          IconButton(
+            onPressed: () => _confirmDeletePatient(doc['id'] as String, name),
+            icon: const Icon(Icons.delete_outline_rounded,
+                color: AppColors.error, size: 20),
+            tooltip: 'Remove patient',
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeletePatient(String patientId, String name) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.1),
+                shape: BoxShape.circle),
+            child: const Icon(Icons.delete_rounded,
+                color: AppColors.error, size: 18),
+          ),
+          const SizedBox(width: 12),
+          const Text('Remove Patient'),
+        ]),
+        content: Text(
+            'Remove "$name" from the system?\nThis action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final err = await _adminService.deleteUserAccount(patientId);
+    if (!mounted) return;
+    _snack(err == null ? 'Patient account removed.' : 'Error: $err',
+        color: err == null ? null : AppColors.error);
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Notes Tab (broadcast a note to one or more doctors)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  Widget _notesTab() {
+    return StreamBuilder<List<Map<String, dynamic>>>(
+      stream: _supabase.from('users').stream(primaryKey: ['id']).eq('role', 'doctor'),
+      builder: (context, snap) {
+        if (snap.hasError) {
+          return Center(
+              child: Text('Error: ${snap.error}',
+                  style: const TextStyle(color: AppColors.error)));
+        }
+        if (!snap.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final doctors = List<Map<String, dynamic>>.from(snap.data!)
+          ..sort((a, b) => ((a['name'] ?? '') as String)
+              .compareTo((b['name'] ?? '') as String));
+        final doctorIds = doctors.map((d) => d['id'] as String).toSet();
+        _noteSelectedDoctorIds.removeWhere((id) => !doctorIds.contains(id));
+        final allSelected =
+            doctors.isNotEmpty && _noteSelectedDoctorIds.length == doctors.length;
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _formSection('Send a Note to Doctors'),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _noteTitleCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Title',
+                  prefixIcon: const Icon(Icons.title_rounded,
+                      color: _kSlate, size: 20),
+                  border:
+                      OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _kSlate, width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _noteBodyCtrl,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  labelText: 'Message',
+                  alignLabelWithHint: true,
+                  border:
+                      OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: _kSlate, width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(children: [
+                _sheetSectionLabel('Send To'),
+                const Spacer(),
+                TextButton(
+                  onPressed: doctors.isEmpty
+                      ? null
+                      : () => setState(() {
+                            if (allSelected) {
+                              _noteSelectedDoctorIds.clear();
+                            } else {
+                              _noteSelectedDoctorIds
+                                ..clear()
+                                ..addAll(doctorIds);
+                            }
+                          }),
+                  child: Text(allSelected ? 'Deselect All' : 'Select All'),
+                ),
+              ]),
+              const SizedBox(height: 8),
+              if (doctors.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20),
+                  child: Text('No doctors registered yet.',
+                      style: TextStyle(color: AppColors.textSecondary)),
+                )
+              else
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.cardBorder),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: doctors.map((d) {
+                      final id = d['id'] as String;
+                      final name = (d['name'] ?? 'Unknown') as String;
+                      final email = (d['email'] ?? '') as String;
+                      return CheckboxListTile(
+                        value: _noteSelectedDoctorIds.contains(id),
+                        onChanged: (v) => setState(() {
+                          if (v == true) {
+                            _noteSelectedDoctorIds.add(id);
+                          } else {
+                            _noteSelectedDoctorIds.remove(id);
+                          }
+                        }),
+                        title: Text(name,
+                            style: const TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w600)),
+                        subtitle: email.isNotEmpty
+                            ? Text(email, style: const TextStyle(fontSize: 12))
+                            : null,
+                        activeColor: _kSlate,
+                        dense: true,
+                        controlAffinity: ListTileControlAffinity.leading,
+                      );
+                    }).toList(),
+                  ),
+                ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: _noteSending
+                    ? const Center(child: CircularProgressIndicator())
+                    : ElevatedButton.icon(
+                        onPressed: _noteSelectedDoctorIds.isEmpty
+                            ? null
+                            : _sendAdminNote,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _kSlate,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                        ),
+                        icon: const Icon(Icons.send_rounded, size: 20),
+                        label: const Text('Send',
+                            style: TextStyle(
+                                fontSize: 15, fontWeight: FontWeight.bold)),
+                      ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _sendAdminNote() async {
+    final title = _noteTitleCtrl.text.trim();
+    final body  = _noteBodyCtrl.text.trim();
+    if (title.isEmpty || body.isEmpty) {
+      _snack('Please enter a title and message.', color: AppColors.error);
+      return;
+    }
+    if (_noteSelectedDoctorIds.isEmpty) {
+      _snack('Select at least one doctor.', color: AppColors.error);
+      return;
+    }
+    setState(() => _noteSending = true);
+    final recipients = _noteSelectedDoctorIds.toList();
+    final now = DateTime.now().toIso8601String();
+    try {
+      await _supabase.from('notifications').insert([
+        for (final doctorId in recipients)
+          {
+            'recipient_id': doctorId,
+            'recipient_type': 'doctor',
+            'type': 'admin_note',
+            'title': title,
+            'body': body,
+            'read': false,
+            'created_at': now,
+          },
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _noteSending = false;
+        _noteTitleCtrl.clear();
+        _noteBodyCtrl.clear();
+        _noteSelectedDoctorIds.clear();
+      });
+      _snack('Note sent to ${recipients.length} doctor${recipients.length != 1 ? 's' : ''}.',
+          color: AppColors.success);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _noteSending = false);
+      _snack('Error: $e', color: AppColors.error);
+    }
   }
 
   // ════════════════════════════════════════════════════════════════════════════

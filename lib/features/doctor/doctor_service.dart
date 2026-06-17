@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DoctorService {
@@ -76,6 +77,18 @@ class DoctorService {
         'doctor_id': _uid,
         'appointment_time': dateTime.toIso8601String(),
         'notes': notes.trim().isEmpty ? 'Standard Protocol' : notes.trim(),
+        'created_at': DateTime.now().toIso8601String(),
+      });
+      final doctorName = await getMyName();
+      await _supabase.from('notifications').insert({
+        'patient_id': patientId,
+        'recipient_id': patientId,
+        'recipient_type': 'patient',
+        'type': 'appointment_scheduled',
+        'title': 'Appointment Scheduled',
+        'body': 'Dr. $doctorName scheduled an appointment for you on '
+            '${DateFormat('MMM d, yyyy – h:mm a').format(dateTime)}.',
+        'read': false,
         'created_at': DateTime.now().toIso8601String(),
       });
       return true;
@@ -261,6 +274,7 @@ class DoctorService {
     required String clinicAddress,
     required bool offersHomeVisit,
     String workingHours = '',
+    String phone = '',
   }) async {
     try {
       await _supabase.from('users').update({
@@ -271,6 +285,7 @@ class DoctorService {
         'clinic_address': clinicAddress.trim(),
         'offers_home_visit': offersHomeVisit,
         'working_hours': workingHours.trim(),
+        'phone': phone.trim(),
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', _uid);
       return true;
@@ -315,6 +330,18 @@ class DoctorService {
       'type': 'doctor_added_you',
       'title': 'Added to Patient List',
       'body': 'Dr. $doctorName has added you to their patient list.',
+      'read': false,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<void> notifySelfPatientAdded(String patientName) async {
+    await _supabase.from('notifications').insert({
+      'recipient_id': _uid,
+      'recipient_type': 'doctor',
+      'type': 'patient_added_confirmation',
+      'title': 'Patient Added',
+      'body': 'You added $patientName to your patient list.',
       'read': false,
       'created_at': DateTime.now().toIso8601String(),
     });

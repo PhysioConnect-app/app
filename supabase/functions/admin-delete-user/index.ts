@@ -35,12 +35,6 @@ Deno.serve(async (req) => {
     }
     const { data: callerRow } = await adminClient
       .from('users').select('role').eq('id', user.id).single()
-    if (callerRow?.role !== 'admin') {
-      return new Response(JSON.stringify({ error: 'Forbidden: admin only' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
 
     const { userId } = await req.json()
     if (!userId) {
@@ -50,10 +44,31 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Delete auth user (ignore error if already deleted)
-    await adminClient.auth.admin.deleteUser(userId)
+    // Admins can delete any account; everyone else can only delete their own
+    if (callerRow?.role !== 'admin' && userId !== user.id) {
+      return new Response(JSON.stringify({ error: 'Forbidden: admin only' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // Delete auth user (ignore "not found" if already deleted)
+    const { error: authDeleteErr } = await adminClient.auth.admin.deleteUser(userId)
+    if (authDeleteErr && !/not.*found/i.test(authDeleteErr.message)) {
+      return new Response(JSON.stringify({ error: `Auth delete failed: ${authDeleteErr.message}` }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
     // Delete DB row
-    await adminClient.from('users').delete().eq('id', userId)
+    const { error: dbDeleteErr } = await adminClient.from('users').delete().eq('id', userId)
+    if (dbDeleteErr) {
+      return new Response(JSON.stringify({ error: `Profile delete failed: ${dbDeleteErr.message}` }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

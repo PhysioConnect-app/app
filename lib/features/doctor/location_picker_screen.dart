@@ -1,10 +1,18 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import '../../core/constants/app_colors.dart';
+
+class _AddressResult {
+  final String displayName;
+  final LatLng location;
+  const _AddressResult(this.displayName, this.location);
+}
 
 class DoctorLocationPickerScreen extends StatefulWidget {
   final double? initialLat;
@@ -24,9 +32,12 @@ class DoctorLocationPickerScreen extends StatefulWidget {
 class _DoctorLocationPickerScreenState
     extends State<DoctorLocationPickerScreen> {
   final MapController _mapCtrl = MapController();
+  final _searchCtrl = TextEditingController();
   LatLng? _picked;
   bool _saving = false;
   bool _locating = false;
+  bool _searching = false;
+  List<_AddressResult> _searchResults = [];
 
   static const _defaultCenter = LatLng(31.9454, 35.9284); // Amman, Jordan
 
@@ -36,6 +47,64 @@ class _DoctorLocationPickerScreenState
     if (widget.initialLat != null && widget.initialLng != null) {
       _picked = LatLng(widget.initialLat!, widget.initialLng!);
     }
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _searchAddress() async {
+    final query = _searchCtrl.text.trim();
+    if (query.isEmpty) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _searching = true;
+      _searchResults = [];
+    });
+    try {
+      final uri = Uri.https('nominatim.openstreetmap.org', '/search', {
+        'format': 'json',
+        'q': query,
+        'limit': '5',
+      });
+      final res = await http
+          .get(uri, headers: {'User-Agent': 'com.physioconnect.app'});
+      final results = <_AddressResult>[];
+      if (res.statusCode == 200) {
+        final list = jsonDecode(res.body) as List;
+        for (final item in list) {
+          final lat = double.tryParse(item['lat'] as String);
+          final lon = double.tryParse(item['lon'] as String);
+          if (lat == null || lon == null) continue;
+          results.add(_AddressResult(
+              item['display_name'] as String, LatLng(lat, lon)));
+        }
+      }
+      if (!mounted) return;
+      setState(() => _searchResults = results);
+      if (results.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No matching locations found.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Search error: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _searching = false);
+    }
+  }
+
+  void _selectAddress(_AddressResult result) {
+    setState(() {
+      _picked = result.location;
+      _searchResults = [];
+      _searchCtrl.text = result.displayName;
+    });
+    _mapCtrl.move(result.location, 15);
   }
 
   Future<void> _useGps() async {
@@ -137,7 +206,10 @@ class _DoctorLocationPickerScreenState
             options: MapOptions(
               initialCenter: initial,
               initialZoom: _picked != null ? 15 : 12,
-              onTap: (_, latLng) => setState(() => _picked = latLng),
+              onTap: (_, latLng) => setState(() {
+                _picked = latLng;
+                _searchResults = [];
+              }),
             ),
             children: [
               TileLayer(
@@ -163,34 +235,111 @@ class _DoctorLocationPickerScreenState
             ],
           ),
 
-          // Instruction banner
+          // Search bar + instruction banner
           Positioned(
             top: 12,
             left: 12,
             right: 12,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black12, blurRadius: 6)
-                ],
-              ),
-              child: const Row(children: [
-                Icon(Icons.touch_app_rounded,
-                    color: AppColors.primary, size: 18),
-                SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Tap the map to pin your clinic. Tap again to repin.',
-                    style: TextStyle(
-                        fontSize: 12, color: AppColors.textSecondary),
+            child: Column(children: [
+              // Address search box
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black12, blurRadius: 6)
+                  ],
+                ),
+                child: TextField(
+                  controller: _searchCtrl,
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => _searchAddress(),
+                  decoration: InputDecoration(
+                    hintText: 'Search for an address or place',
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    prefixIcon: const Icon(Icons.search_rounded,
+                        color: AppColors.primary),
+                    suffixIcon: _searching
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2),
+                            ),
+                          )
+                        : IconButton(
+                            icon: const Icon(Icons.search_rounded),
+                            tooltip: 'Search',
+                            onPressed: _searchAddress,
+                          ),
                   ),
                 ),
-              ]),
-            ),
+              ),
+              // Search results
+              if (_searchResults.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(top: 6),
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black12, blurRadius: 6)
+                    ],
+                  ),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    itemCount: _searchResults.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1),
+                    itemBuilder: (_, i) {
+                      final r = _searchResults[i];
+                      return ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.location_on_rounded,
+                            color: AppColors.primary),
+                        title: Text(r.displayName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 13)),
+                        onTap: () => _selectAddress(r),
+                      );
+                    },
+                  ),
+                ),
+              // Instruction banner
+              if (_searchResults.isEmpty) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black12, blurRadius: 6)
+                    ],
+                  ),
+                  child: const Row(children: [
+                    Icon(Icons.touch_app_rounded,
+                        color: AppColors.primary, size: 18),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Search an address, or tap the map to pin your clinic.',
+                        style: TextStyle(
+                            fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                    ),
+                  ]),
+                ),
+              ],
+            ]),
           ),
 
           // Coordinates readout

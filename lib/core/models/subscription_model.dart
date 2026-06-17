@@ -26,6 +26,7 @@ class SubConfig {
   // Account-level settings (managed by admin)
   final bool isEnabled;
   final bool showInSearch;
+  final bool allowHomeVisit;
   final DateTime? expiresAt;
 
   const SubConfig({
@@ -35,6 +36,7 @@ class SubConfig {
     this.expenses   = false,
     this.isEnabled    = true,
     this.showInSearch = true,
+    this.allowHomeVisit = true,
     this.expiresAt,
   });
 
@@ -58,6 +60,7 @@ class SubConfig {
       expenses:     features['expenses']   as bool? ?? defaults.expenses,
       isEnabled:    data['is_enabled']    as bool? ?? true,
       showInSearch: data['show_in_search'] as bool? ?? true,
+      allowHomeVisit: data['allow_home_visit'] as bool? ?? true,
       expiresAt:    expiresStr != null ? DateTime.parse(expiresStr) : null,
     );
   }
@@ -90,6 +93,7 @@ class SubConfig {
     bool? expenses,
     bool? isEnabled,
     bool? showInSearch,
+    bool? allowHomeVisit,
     Object? expiresAt = _keep,
   }) =>
       SubConfig(
@@ -99,6 +103,7 @@ class SubConfig {
         expenses:     expenses     ?? this.expenses,
         isEnabled:    isEnabled    ?? this.isEnabled,
         showInSearch: showInSearch ?? this.showInSearch,
+        allowHomeVisit: allowHomeVisit ?? this.allowHomeVisit,
         expiresAt: identical(expiresAt, _keep)
             ? this.expiresAt
             : expiresAt as DateTime?,

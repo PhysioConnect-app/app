@@ -1,19 +1,20 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
-import 'core/config/form_factor_features.dart';
 import 'core/config/supabase_config.dart';
 import 'core/constants/app_colors.dart';
 import 'core/constants/app_strings.dart';
 import 'core/providers/language_provider.dart';
-import 'core/widgets/available_on_desktop_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/admin/admin_dashboard_screen.dart';
 import 'features/doctor/doctor_dashboard_screen.dart';
 import 'features/patient/patient_dashboard_screen.dart';
 import 'features/polyclinic/polyclinic_dashboard_screen.dart';
+import 'features/store/store_manager_dashboard_screen.dart';
 import 'features/notifications/notification_service.dart';
 
 void main() async {
@@ -24,7 +25,7 @@ void main() async {
     url: SupabaseConfig.url,
     publishableKey: SupabaseConfig.publishableKey,
   );
-  if (!Platform.isWindows) await NotificationService.initialize();
+  if (!kIsWeb && !Platform.isWindows) await NotificationService.initialize();
   runApp(
     ChangeNotifierProvider(
       create: (_) => LanguageProvider(),
@@ -104,14 +105,12 @@ class AuthGate extends StatelessWidget {
               if (userData != null) {
                 final role = (userData['role'] as String?) ?? '';
                 if (role == 'admin') {
-                  return FormFactorFeatures.of(context).showAdminDashboard
-                      ? const _WithNotificationPrompt(child: AdminDashboardScreen())
-                      : const _WithNotificationPrompt(
-                          child: AvailableOnDesktopScreen(feature: 'Admin Dashboard'));
+                  return const _WithNotificationPrompt(child: AdminDashboardScreen());
                 }
                 if (role == 'doctor') return const _WithNotificationPrompt(child: DoctorDashboardScreen());
                 if (role == 'polyclinic') return const _WithNotificationPrompt(child: PolyclinicDashboardScreen());
                 if (role == 'patient') return const _WithNotificationPrompt(child: PatientDashboardScreen());
+                if (role == 'store_manager') return const StoreManagerDashboardScreen();
               }
               return const LoginScreen();
             },
@@ -137,8 +136,11 @@ class _WithNotificationPromptState extends State<_WithNotificationPrompt> {
   @override
   void initState() {
     super.initState();
-    if (!Platform.isWindows) {
+    if (!kIsWeb && !Platform.isWindows) {
       Future.delayed(const Duration(seconds: 3), _promptIfNeeded);
+    }
+    if (!kIsWeb && Platform.isWindows) {
+      Future.delayed(const Duration(seconds: 4), _showPinTipIfNeeded);
     }
   }
 
@@ -146,6 +148,24 @@ class _WithNotificationPromptState extends State<_WithNotificationPrompt> {
     if (!mounted) return;
     final s = AppStrings(context.read<LanguageProvider>().isArabic);
     await NotificationService.requestPermissionsWithExplanation(context, s);
+  }
+
+  Future<void> _showPinTipIfNeeded() async {
+    if (!mounted) return;
+    final prefs = await SharedPreferences.getInstance();
+    const key = 'win_pin_tip_shown';
+    if (prefs.getBool(key) == true) return;
+    await prefs.setBool(key, true);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+          'Tip: Right-click PhysioConnect in the Start menu → "Pin to taskbar" or "Pin to Start" for quick access.',
+        ),
+        duration: const Duration(seconds: 10),
+        action: SnackBarAction(label: 'Got it', onPressed: () {}),
+      ),
+    );
   }
 
   @override

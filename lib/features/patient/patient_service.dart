@@ -72,11 +72,11 @@ class PatientService {
       if (!patIds.contains(doctorId)) patIds.add(doctorId);
       await _supabase.from('users').update({'doctor_ids': patIds}).eq('id', _uid);
       // Add patient to doctor's assigned list
-      final docData = await _supabase.from('users').select('assigned_patient_ids').eq('id', doctorId).single();
+      final docData = await _supabase.from('users').select('assigned_patient_ids, name').eq('id', doctorId).single();
       final docIds = List<String>.from((docData['assigned_patient_ids'] as List?) ?? []);
       if (!docIds.contains(_uid)) docIds.add(_uid);
       await _supabase.from('users').update({'assigned_patient_ids': docIds}).eq('id', doctorId);
-      // Send notification
+      // Notify the doctor
       final patName = (patData['name'] as String?) ?? 'A patient';
       await _supabase.from('notifications').insert({
         'recipient_id': doctorId,
@@ -87,6 +87,42 @@ class PatientService {
         'read': false,
         'created_at': DateTime.now().toIso8601String(),
       });
+      // Confirm to the patient
+      final docName = (docData['name'] as String?) ?? 'your doctor';
+      await _supabase.from('notifications').insert({
+        'patient_id': _uid,
+        'recipient_id': _uid,
+        'recipient_type': 'patient',
+        'type': 'doctor_added_confirmation',
+        'title': 'Doctor Added',
+        'body': 'You added Dr. $docName to your doctors list.',
+        'read': false,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> removeDoctorFromMyList(String doctorId) async {
+    try {
+      // Remove doctor from patient's list
+      final patData = await _supabase.from('users').select('doctor_ids, doctor_id').eq('id', _uid).single();
+      final patIds = List<String>.from((patData['doctor_ids'] as List?) ?? []);
+      patIds.remove(doctorId);
+      final update = <String, dynamic>{'doctor_ids': patIds};
+      if (patData['doctor_id'] == doctorId) {
+        update['doctor_id'] = null;
+      }
+      await _supabase.from('users').update(update).eq('id', _uid);
+      // Remove patient from doctor's assigned list
+      final docData = await _supabase.from('users').select('assigned_patient_ids').eq('id', doctorId).maybeSingle();
+      if (docData != null) {
+        final docIds = List<String>.from((docData['assigned_patient_ids'] as List?) ?? []);
+        docIds.remove(_uid);
+        await _supabase.from('users').update({'assigned_patient_ids': docIds}).eq('id', doctorId);
+      }
       return true;
     } catch (_) {
       return false;
