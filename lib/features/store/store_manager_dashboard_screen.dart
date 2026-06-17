@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'store_manager_categories_screen.dart';
-
-// Products tab is imported and wired in the next commit.
+import 'store_manager_products_screen.dart';
 
 const _kStoreColor = Color(0xFF00838F);
 
@@ -41,7 +40,7 @@ class StoreManagerDashboardScreen extends StatelessWidget {
         body: const TabBarView(
           children: [
             StoreManagerCategoriesScreen(),
-            Center(child: Text('Products — coming next')),
+            StoreManagerProductsScreen(),
           ],
         ),
       ),
