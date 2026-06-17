@@ -405,8 +405,18 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
       widget.existing?['currency'] as String? ?? 'USD';
   late String? _categoryId =
       widget.existing?['category_id'] as String?;
-  late String _imageUrl =
-      widget.existing?['image_url'] as String? ?? '';
+  late List<String> _imageUrls = _initImageUrls();
+
+  List<String> _initImageUrls() {
+    final raw = widget.existing?['image_urls'];
+    if (raw is List) {
+      final urls =
+          raw.whereType<String>().where((s) => s.isNotEmpty).toList();
+      if (urls.isNotEmpty) return urls;
+    }
+    final single = widget.existing?['image_url'] as String? ?? '';
+    return single.isNotEmpty ? [single] : [];
+  }
 
   bool _uploadingImage = false;
   bool _saving = false;
@@ -428,7 +438,7 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
     setState(() => _uploadingImage = true);
     try {
       final url = await widget.svc.pickAndUploadImage();
-      if (url != null && mounted) setState(() => _imageUrl = url);
+      if (url != null && mounted) setState(() => _imageUrls.add(url));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -454,7 +464,8 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
         'currency': _currency,
         'phone_number': _phoneCtrl.text.trim(),
         'whatsapp_number': _waCtrl.text.trim(),
-        'image_url': _imageUrl,
+        'image_url': _imageUrls.isNotEmpty ? _imageUrls.first : '',
+        'image_urls': _imageUrls,
         'sort_order': int.tryParse(_sortCtrl.text) ?? 0,
       };
 
@@ -495,7 +506,7 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildImagePicker(),
+              _buildMultiImagePicker(),
               const SizedBox(height: 16),
               _buildCategoryDropdown(),
               const SizedBox(height: 16),
@@ -554,67 +565,63 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
     );
   }
 
-  Widget _buildImagePicker() {
-    final hasImage = _imageUrl.isNotEmpty;
-    return GestureDetector(
-      onTap: _uploadingImage ? null : _pickImage,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: hasImage
-              ? _kStoreColor.withValues(alpha: 0.05)
-              : Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: hasImage ? _kStoreColor.withValues(alpha: 0.4) : Colors.grey.shade300,
-            width: hasImage ? 1.5 : 1,
-          ),
+  Widget _buildMultiImagePicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          'Product images',
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
         ),
-        child: _uploadingImage
-            ? const SizedBox(
-                height: 40,
-                child: Center(child: CircularProgressIndicator()),
-              )
-            : Row(
-                children: [
-                  Icon(
-                    hasImage
-                        ? Icons.check_circle_rounded
-                        : Icons.add_photo_alternate_rounded,
-                    size: 28,
-                    color: hasImage ? _kStoreColor : Colors.grey.shade400,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          hasImage ? 'Image uploaded' : 'Add product image',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                            color: hasImage ? _kStoreColor : AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          hasImage ? 'Tap to replace' : 'Tap to pick from gallery',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (hasImage)
-                    const Icon(Icons.edit_rounded,
-                        size: 18, color: AppColors.textSecondary),
-                ],
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ..._imageUrls.asMap().entries.map(
+              (e) => Chip(
+                avatar: const Icon(Icons.photo_rounded, size: 14),
+                label: Text('Image ${e.key + 1}',
+                    style: TextStyle(fontSize: 12, color: _kStoreColor)),
+                deleteIcon: const Icon(Icons.close_rounded, size: 14),
+                onDeleted: () => setState(() => _imageUrls.removeAt(e.key)),
+                backgroundColor: _kStoreColor.withValues(alpha: 0.07),
+                side: BorderSide(color: _kStoreColor.withValues(alpha: 0.25)),
+                visualDensity: VisualDensity.compact,
               ),
-      ),
+            ),
+            if (_uploadingImage)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2.5),
+                ),
+              )
+            else
+              ActionChip(
+                avatar: const Icon(Icons.add_photo_alternate_rounded, size: 14),
+                label: Text(
+                  _imageUrls.isEmpty ? 'Add image' : 'Add another',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                onPressed: _pickImage,
+                backgroundColor: Colors.white,
+                side: BorderSide(color: Colors.grey.shade300),
+                visualDensity: VisualDensity.compact,
+              ),
+          ],
+        ),
+        if (_imageUrls.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(
+            'Tap ✕ to remove an image',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+          ),
+        ],
+      ],
     );
   }
 

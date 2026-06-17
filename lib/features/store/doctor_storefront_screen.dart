@@ -79,6 +79,34 @@ class _DoctorStorefrontScreenState extends State<DoctorStorefrontScreen> {
   void _openProduct(Map<String, dynamic> product) =>
       setState(() => _selectedProduct = product);
 
+  // Returns image URLs for a product. Reads image_urls[] first; falls back
+  // to the legacy image_url string for products created before the migration.
+  List<String> _productImages(Map<String, dynamic> p) {
+    final raw = p['image_urls'];
+    if (raw is List) {
+      final urls =
+          raw.whereType<String>().where((s) => s.isNotEmpty).toList();
+      if (urls.isNotEmpty) return urls;
+    }
+    final single = (p['image_url'] as String? ?? '').trim();
+    return single.isNotEmpty ? [single] : const [];
+  }
+
+  void _openLightbox(
+      BuildContext context, List<String> images, int initialIndex) {
+    Navigator.of(context, rootNavigator: true).push(
+      PageRouteBuilder(
+        opaque: true,
+        transitionDuration: const Duration(milliseconds: 200),
+        reverseTransitionDuration: const Duration(milliseconds: 150),
+        pageBuilder: (_, __, ___) =>
+            _LightboxPage(images: images, initialIndex: initialIndex),
+        transitionsBuilder: (_, animation, __, child) =>
+            FadeTransition(opacity: animation, child: child),
+      ),
+    );
+  }
+
   void _back() {
     setState(() {
       if (_selectedProduct != null) {
@@ -318,7 +346,8 @@ class _DoctorStorefrontScreenState extends State<DoctorStorefrontScreen> {
     final title    = (p['title']       as String? ?? '').trim();
     final price    = (p['price']       as num?)    ?? 0;
     final currency = (p['currency']    as String? ?? 'USD').trim();
-    final imageUrl = (p['image_url']   as String? ?? '').trim();
+    final images   = _productImages(p);
+    final imageUrl = images.isNotEmpty ? images.first : '';
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
@@ -387,24 +416,18 @@ class _DoctorStorefrontScreenState extends State<DoctorStorefrontScreen> {
     final description = (p['description']     as String? ?? '').trim();
     final price       = (p['price']           as num?)    ?? 0;
     final currency    = (p['currency']        as String? ?? 'USD').trim();
-    final imageUrl    = (p['image_url']       as String? ?? '').trim();
+    final images      = _productImages(p);
     final phone       = (p['phone_number']    as String? ?? '').trim();
     final whatsapp    = (p['whatsapp_number'] as String? ?? '').trim();
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),
       children: [
-        // Product image
-        if (imageUrl.isNotEmpty)
-          Image.network(
-            imageUrl,
-            height: 220,
-            width: double.infinity,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _productPlaceholder(height: 160),
-          )
-        else
-          _productPlaceholder(height: 140),
+        // Image carousel — tap any image to open fullscreen lightbox
+        _ImageCarousel(
+          images: images,
+          onTap: (i) => _openLightbox(context, images, i),
+        ),
 
         Padding(
           padding: const EdgeInsets.all(20),
@@ -626,6 +649,269 @@ class _DoctorStorefrontScreenState extends State<DoctorStorefrontScreen> {
             label: const Text('Retry'),
             style: ElevatedButton.styleFrom(backgroundColor: _kStoreColor),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Image carousel (product detail) ──────────────────────────────────────────
+
+class _ImageCarousel extends StatefulWidget {
+  const _ImageCarousel({required this.images, required this.onTap});
+  final List<String> images;
+  final void Function(int index) onTap;
+
+  @override
+  State<_ImageCarousel> createState() => _ImageCarouselState();
+}
+
+class _ImageCarouselState extends State<_ImageCarousel> {
+  late final PageController _ctrl = PageController();
+  int _page = 0;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final images = widget.images;
+    if (images.isEmpty) {
+      return Container(
+        height: 180,
+        color: _kStoreColor.withValues(alpha: 0.08),
+        child: const Center(
+          child: Icon(Icons.inventory_2_rounded, color: _kStoreColor, size: 40),
+        ),
+      );
+    }
+    return SizedBox(
+      height: 240,
+      child: Stack(
+        alignment: Alignment.bottomCenter,
+        children: [
+          PageView.builder(
+            controller: _ctrl,
+            itemCount: images.length,
+            onPageChanged: (i) => setState(() => _page = i),
+            itemBuilder: (_, i) => GestureDetector(
+              onTap: () => widget.onTap(i),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(
+                    images[i],
+                    fit: BoxFit.cover,
+                    loadingBuilder: (_, child, prog) => prog == null
+                        ? child
+                        : Container(
+                            color: _kStoreColor.withValues(alpha: 0.05),
+                            child: const Center(
+                              child: CircularProgressIndicator(
+                                  color: _kStoreColor, strokeWidth: 2),
+                            ),
+                          ),
+                    errorBuilder: (_, __, ___) => Container(
+                      color: _kStoreColor.withValues(alpha: 0.08),
+                      child: const Center(
+                        child: Icon(Icons.broken_image_rounded,
+                            color: _kStoreColor, size: 40),
+                      ),
+                    ),
+                  ),
+                  // Expand hint
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(Icons.open_in_full_rounded,
+                          color: Colors.white, size: 14),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Dot indicators
+          if (images.length > 1)
+            Positioned(
+              bottom: 10,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: List.generate(
+                  images.length,
+                  (i) => AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: i == _page ? 18 : 6,
+                    height: 6,
+                    margin: const EdgeInsets.symmetric(horizontal: 2),
+                    decoration: BoxDecoration(
+                      color: i == _page ? Colors.white : Colors.white60,
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          // Prev arrow
+          if (images.length > 1 && _page > 0)
+            Positioned(
+              left: 8,
+              child: IconButton(
+                onPressed: () => _ctrl.previousPage(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut),
+                icon: const Icon(Icons.chevron_left_rounded,
+                    color: Colors.white, size: 30),
+                style: IconButton.styleFrom(
+                    backgroundColor: Colors.black45,
+                    padding: const EdgeInsets.all(4)),
+              ),
+            ),
+          // Next arrow
+          if (images.length > 1 && _page < images.length - 1)
+            Positioned(
+              right: 8,
+              child: IconButton(
+                onPressed: () => _ctrl.nextPage(
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut),
+                icon: const Icon(Icons.chevron_right_rounded,
+                    color: Colors.white, size: 30),
+                style: IconButton.styleFrom(
+                    backgroundColor: Colors.black45,
+                    padding: const EdgeInsets.all(4)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Fullscreen lightbox ───────────────────────────────────────────────────────
+
+class _LightboxPage extends StatefulWidget {
+  const _LightboxPage({required this.images, required this.initialIndex});
+  final List<String> images;
+  final int initialIndex;
+
+  @override
+  State<_LightboxPage> createState() => _LightboxPageState();
+}
+
+class _LightboxPageState extends State<_LightboxPage> {
+  late final PageController _ctrl =
+      PageController(initialPage: widget.initialIndex);
+  late int _page = widget.initialIndex;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.black87,
+      child: Stack(
+        children: [
+          // Swipeable image view
+          PageView.builder(
+            controller: _ctrl,
+            itemCount: widget.images.length,
+            onPageChanged: (i) => setState(() => _page = i),
+            itemBuilder: (_, i) => Center(
+              child: Image.network(
+                widget.images[i],
+                fit: BoxFit.contain,
+                loadingBuilder: (_, child, prog) => prog == null
+                    ? child
+                    : const Center(
+                        child: CircularProgressIndicator(color: Colors.white)),
+                errorBuilder: (_, __, ___) => const Center(
+                  child: Icon(Icons.broken_image_rounded,
+                      color: Colors.white60, size: 64),
+                ),
+              ),
+            ),
+          ),
+          // Top bar: close button + image counter
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(4, 8, 8, 12),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.black54, Colors.transparent],
+                ),
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded,
+                        color: Colors.white, size: 24),
+                    tooltip: 'Close',
+                  ),
+                  const Spacer(),
+                  if (widget.images.length > 1)
+                    Text(
+                      '${_page + 1} / ${widget.images.length}',
+                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                    ),
+                  const SizedBox(width: 8),
+                ],
+              ),
+            ),
+          ),
+          // Prev arrow
+          if (widget.images.length > 1 && _page > 0)
+            Positioned(
+              left: 8,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: IconButton(
+                  onPressed: () => _ctrl.previousPage(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeInOut),
+                  icon: const Icon(Icons.chevron_left_rounded,
+                      size: 36, color: Colors.white),
+                  style: IconButton.styleFrom(backgroundColor: Colors.black38),
+                ),
+              ),
+            ),
+          // Next arrow
+          if (widget.images.length > 1 && _page < widget.images.length - 1)
+            Positioned(
+              right: 8,
+              top: 0,
+              bottom: 0,
+              child: Center(
+                child: IconButton(
+                  onPressed: () => _ctrl.nextPage(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeInOut),
+                  icon: const Icon(Icons.chevron_right_rounded,
+                      size: 36, color: Colors.white),
+                  style: IconButton.styleFrom(backgroundColor: Colors.black38),
+                ),
+              ),
+            ),
         ],
       ),
     );
