@@ -142,6 +142,13 @@ class _StoreManagerProductsScreenState
     final price = product['price'];
     final currency = product['currency'] as String? ?? 'USD';
 
+    final catData = _categories.firstWhere(
+      (c) => c['id'] == product['category_id'],
+      orElse: () => <String, dynamic>{},
+    );
+    final showDraftWarning =
+        published && catData['status'] != null && catData['status'] != 'published';
+
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       elevation: 0,
@@ -189,6 +196,24 @@ class _StoreManagerProductsScreenState
                 _statusChip(published),
               ],
             ),
+            if (showDraftWarning) ...[
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded,
+                      size: 13, color: Colors.orange.shade700),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Category is draft — hidden from doctors',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.orange.shade700,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
         isThreeLine: true,
