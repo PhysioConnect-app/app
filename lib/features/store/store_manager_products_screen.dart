@@ -558,79 +558,70 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
     );
   }
 
-  Widget _buildImagePicker() => GestureDetector(
-        onTap: _uploadingImage ? null : _pickImage,
-        child: Container(
-          width: double.infinity,
-          height: 140,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: _imageUrl.isNotEmpty
-                  ? _kStoreColor.withValues(alpha: 0.4)
-                  : Colors.grey.shade300,
-              width: _imageUrl.isNotEmpty ? 2 : 1,
-            ),
+  Widget _buildImagePicker() {
+    final hasImage = _imageUrl.isNotEmpty;
+    return GestureDetector(
+      onTap: _uploadingImage ? null : _pickImage,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: hasImage
+              ? _kStoreColor.withValues(alpha: 0.05)
+              : Colors.grey.shade50,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: hasImage ? _kStoreColor.withValues(alpha: 0.4) : Colors.grey.shade300,
+            width: hasImage ? 1.5 : 1,
           ),
-          child: _uploadingImage
-              ? const Center(child: CircularProgressIndicator())
-              : _imageUrl.isNotEmpty
-                  ? Stack(
-                      alignment: Alignment.center,
+        ),
+        child: _uploadingImage
+            ? const SizedBox(
+                height: 40,
+                child: Center(child: CircularProgressIndicator()),
+              )
+            : Row(
+                children: [
+                  Icon(
+                    hasImage
+                        ? Icons.check_circle_rounded
+                        : Icons.add_photo_alternate_rounded,
+                    size: 28,
+                    color: hasImage ? _kStoreColor : Colors.grey.shade400,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            _imageUrl,
-                            height: 140,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const Icon(
-                                Icons.broken_image,
-                                size: 40,
-                                color: Colors.grey),
-                          ),
-                        ),
-                        Positioned(
-                          bottom: 8,
-                          right: 8,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.6),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.edit_rounded,
-                                    color: Colors.white, size: 14),
-                                SizedBox(width: 4),
-                                Text('Change',
-                                    style: TextStyle(
-                                        color: Colors.white, fontSize: 12)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    )
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.add_photo_alternate_rounded,
-                            size: 36, color: Colors.grey.shade400),
-                        const SizedBox(height: 8),
                         Text(
-                          'Tap to add image',
+                          hasImage ? 'Image uploaded' : 'Add product image',
                           style: TextStyle(
-                              color: Colors.grey.shade500, fontSize: 13),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: hasImage ? _kStoreColor : AppColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          hasImage ? 'Tap to replace' : 'Tap to pick from gallery',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
+                          ),
                         ),
                       ],
                     ),
-        ),
-      );
+                  ),
+                  if (hasImage)
+                    const Icon(Icons.edit_rounded,
+                        size: 18, color: AppColors.textSecondary),
+                ],
+              ),
+      ),
+    );
+  }
 
   Widget _buildCategoryDropdown() => DropdownButtonFormField<String?>(
         initialValue: _categoryId,
