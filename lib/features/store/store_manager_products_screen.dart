@@ -479,6 +479,15 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
 
   bool get _isEditing => widget.existing != null;
 
+  bool get _canSave =>
+      _categoryId != null && _titleCtrl.text.trim().isNotEmpty;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleCtrl.addListener(() => setState(() {}));
+  }
+
   @override
   void dispose() {
     _titleCtrl.dispose();
@@ -579,10 +588,29 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
                 ],
               ),
               const SizedBox(height: 16),
-              _buildTextField(_phoneCtrl, 'Phone (with country code)'),
+              _buildTextField(
+                _phoneCtrl,
+                'Phone (with country code)',
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  if (!RegExp(r'^\d+$').hasMatch(v.trim())) {
+                    return 'Digits only — no spaces, dashes, or +';
+                  }
+                  return null;
+                },
+              ),
               const SizedBox(height: 16),
               _buildTextField(
-                  _waCtrl, 'WhatsApp (digits only, e.g. 9613XXXXXX)'),
+                _waCtrl,
+                'WhatsApp (digits only, e.g. 9613XXXXXX)',
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  if (!RegExp(r'^\d+$').hasMatch(v.trim())) {
+                    return 'Digits only with country code (e.g. 9613XXXXXX)';
+                  }
+                  return null;
+                },
+              ),
               const SizedBox(height: 16),
               _buildTextField(
                 _sortCtrl,
@@ -607,7 +635,7 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
             backgroundColor: _kStoreColor,
             foregroundColor: Colors.white,
           ),
-          onPressed: _saving ? null : _save,
+          onPressed: _saving || !_canSave ? null : _save,
           child: _saving
               ? const SizedBox(
                   width: 16,
