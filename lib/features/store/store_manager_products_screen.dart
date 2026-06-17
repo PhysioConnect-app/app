@@ -5,7 +5,9 @@ import 'store_manager_service.dart';
 const _kStoreColor = Color(0xFF00838F);
 
 class StoreManagerProductsScreen extends StatefulWidget {
-  const StoreManagerProductsScreen({super.key});
+  const StoreManagerProductsScreen({super.key, this.onChanged});
+
+  final VoidCallback? onChanged;
 
   @override
   State<StoreManagerProductsScreen> createState() =>
@@ -43,6 +45,7 @@ class _StoreManagerProductsScreenState
         _categories = results[1];
         _loading = false;
       });
+      widget.onChanged?.call();
     } catch (e) {
       if (!mounted) return;
       setState(() {
