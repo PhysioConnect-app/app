@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/constants/breakpoints.dart';
 import 'store_service.dart';
 
 const _kStoreColor = Color(0xFF00838F);
@@ -196,6 +197,7 @@ class _DoctorStorefrontScreenState extends State<DoctorStorefrontScreen> {
     if (_rootCats.isEmpty) {
       return _buildEmpty('No products available yet.\nCheck back soon.');
     }
+    final isMobile = MediaQuery.sizeOf(context).width < kMobileBreakpoint;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -204,21 +206,80 @@ class _DoctorStorefrontScreenState extends State<DoctorStorefrontScreen> {
             title: 'Physiogate Catalog',
             subtitle: 'Browse our product categories'),
         Expanded(
-          child: GridView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-            // Auto-wraps: each card is at most 150 px wide; more categories
-            // → more columns, fills left-to-right naturally.
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 150,
-              mainAxisExtent: 108,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-            ),
-            itemCount: _rootCats.length,
-            itemBuilder: (_, i) => _buildCategoryCard(_rootCats[i]),
-          ),
+          child: isMobile
+              ? ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  itemCount: _rootCats.length,
+                  itemBuilder: (_, i) =>
+                      _buildCategoryCardMobile(_rootCats[i]),
+                )
+              : GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  gridDelegate:
+                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 150,
+                    mainAxisExtent: 108,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                  ),
+                  itemCount: _rootCats.length,
+                  itemBuilder: (_, i) => _buildCategoryCard(_rootCats[i]),
+                ),
         ),
       ],
+    );
+  }
+
+  // Full-width horizontal card used on mobile (mirrors the subcategory tile
+  // style so the category grid feels consistent with drill-down navigation).
+  Widget _buildCategoryCardMobile(Map<String, dynamic> cat) {
+    final name = (cat['name'] as String? ?? '').trim();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        elevation: 0,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => _openCategory(cat),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E7EB), width: 0.5),
+            ),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _kStoreColor.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.category_rounded,
+                      color: _kStoreColor, size: 22),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text(
+                    name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: Color(0xFF1A2332),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded,
+                    color: Color(0xFFADB5BD), size: 18),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
