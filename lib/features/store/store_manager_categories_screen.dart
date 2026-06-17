@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/breakpoints.dart';
 import 'store_manager_service.dart';
 
 const _kStoreColor = Color(0xFF00838F);
@@ -183,6 +184,82 @@ class _StoreManagerCategoriesScreenState
     Widget? expandWidget,
   }) {
     final published = cat['status'] == 'published';
+    final isMobile =
+        MediaQuery.sizeOf(context).width < kMobileBreakpoint;
+
+    final Widget actions;
+    if (isMobile) {
+      // On narrow screens a row of 3–4 buttons overflows; collapse to a menu.
+      actions = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (expandWidget != null) expandWidget,
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'toggle') _toggleStatus(cat);
+              if (v == 'edit') _openForm(context, existing: cat);
+              if (v == 'delete') _confirmDelete(cat);
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'toggle',
+                child: Row(children: [
+                  Icon(
+                    published
+                        ? Icons.visibility_off_rounded
+                        : Icons.publish_rounded,
+                    size: 18,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(published ? 'Unpublish' : 'Publish'),
+                ]),
+              ),
+              PopupMenuItem(
+                value: 'edit',
+                child: Row(children: [
+                  const Icon(Icons.edit_rounded,
+                      size: 18, color: AppColors.textSecondary),
+                  const SizedBox(width: 12),
+                  const Text('Edit'),
+                ]),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: Row(children: [
+                  const Icon(Icons.delete_rounded,
+                      size: 18, color: AppColors.error),
+                  const SizedBox(width: 12),
+                  const Text('Delete',
+                      style: TextStyle(color: AppColors.error)),
+                ]),
+              ),
+            ],
+          ),
+        ],
+      );
+    } else {
+      actions = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _publishBtn(published, () => _toggleStatus(cat)),
+          _iconBtn(
+            Icons.edit_rounded,
+            AppColors.textSecondary,
+            'Edit',
+            () => _openForm(context, existing: cat),
+          ),
+          _iconBtn(
+            Icons.delete_rounded,
+            AppColors.error,
+            'Delete',
+            () => _confirmDelete(cat),
+          ),
+          if (expandWidget != null) expandWidget,
+        ],
+      );
+    }
+
     return Padding(
       padding: EdgeInsets.only(left: depth * 16.0),
       child: ListTile(
@@ -214,25 +291,7 @@ class _StoreManagerCategoriesScreenState
             ),
           ],
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _publishBtn(published, () => _toggleStatus(cat)),
-            _iconBtn(
-              Icons.edit_rounded,
-              AppColors.textSecondary,
-              'Edit',
-              () => _openForm(context, existing: cat),
-            ),
-            _iconBtn(
-              Icons.delete_rounded,
-              AppColors.error,
-              'Delete',
-              () => _confirmDelete(cat),
-            ),
-            if (expandWidget != null) expandWidget,
-          ],
-        ),
+        trailing: actions,
       ),
     );
   }
@@ -461,65 +520,70 @@ class _CategoryFormDialogState extends State<_CategoryFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(_isEditing ? 'Edit Category' : 'Add Category'),
-      content: SizedBox(
-        width: 380,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _nameCtrl,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Name *',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Name is required' : null,
+    final isMobile =
+        MediaQuery.sizeOf(context).width < kMobileBreakpoint;
+
+    final form = Form(
+      key: _formKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextFormField(
+            controller: _nameCtrl,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Name *',
+              border: OutlineInputBorder(),
+            ),
+            validator: (v) =>
+                (v == null || v.trim().isEmpty) ? 'Name is required' : null,
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<String?>(
+            initialValue: _parentId,
+            decoration: const InputDecoration(
+              labelText: 'Parent category',
+              border: OutlineInputBorder(),
+            ),
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('None — root category'),
               ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String?>(
-                initialValue: _parentId,
-                decoration: const InputDecoration(
-                  labelText: 'Parent category',
-                  border: OutlineInputBorder(),
+              ..._parentOptions.map(
+                (c) => DropdownMenuItem<String?>(
+                  value: c['id'] as String,
+                  child: Text(c['name'] as String),
                 ),
-                items: [
-                  const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('None — root category'),
-                  ),
-                  ..._parentOptions.map(
-                    (c) => DropdownMenuItem<String?>(
-                      value: c['id'] as String,
-                      child: Text(c['name'] as String),
-                    ),
-                  ),
-                ],
-                onChanged: (v) => setState(() => _parentId = v),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _sortCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Sort order',
-                  border: OutlineInputBorder(),
-                  helperText: 'Lower numbers appear first',
-                ),
-                keyboardType: TextInputType.number,
-                validator: (v) {
-                  if (v == null || v.isEmpty) return 'Required';
-                  if (int.tryParse(v) == null) return 'Must be a whole number';
-                  return null;
-                },
               ),
             ],
+            onChanged: (v) => setState(() => _parentId = v),
           ),
-        ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _sortCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Sort order',
+              border: OutlineInputBorder(),
+              helperText: 'Lower numbers appear first',
+            ),
+            keyboardType: TextInputType.number,
+            validator: (v) {
+              if (v == null || v.isEmpty) return 'Required';
+              if (int.tryParse(v) == null) return 'Must be a whole number';
+              return null;
+            },
+          ),
+        ],
       ),
+    );
+
+    return AlertDialog(
+      insetPadding: isMobile
+          ? const EdgeInsets.symmetric(horizontal: 8, vertical: 24)
+          : const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
+      title: Text(_isEditing ? 'Edit Category' : 'Add Category'),
+      content: isMobile ? form : SizedBox(width: 380, child: form),
       actions: [
         TextButton(
           onPressed: _saving ? null : () => Navigator.pop(context),
