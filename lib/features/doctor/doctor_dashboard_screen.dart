@@ -1,5 +1,6 @@
 ﻿import 'dart:async';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -93,6 +94,9 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   SubConfig _sub = SubConfig.defaultsFor(SubTier.basic);
   StreamSubscription<List<Map<String, dynamic>>>? _subListener;
   StreamSubscription<List<Map<String, dynamic>>>? _notifListener;
+  StreamSubscription<List<Map<String, dynamic>>>? _patientsListener;
+  // null = stream not yet received; true/false = confirmed state
+  bool? _hasPatients;
   Timer? _expiryTimer;
 
   static const List<IconData> _navIcons = [
@@ -104,20 +108,29 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     Icons.receipt_rounded,            // 5 Expenses
     Icons.badge_rounded,              // 6 My Profile
     Icons.notifications_rounded,      // 7 Notifications
+    Icons.storefront_rounded,         // 8 Store (doctor only)
   ];
 
   int _doctorUnreadCount = 0;
-  Set<String> _seenNotifIds = {};
+  final Set<String> _seenNotifIds = {};
   bool _notifStreamInitialized = false;
 
-  // When the user is a polyclinic, append a 9th "My Doctors" entry.
-  List<IconData> get _allNavIcons => _userRole == 'polyclinic'
-      ? [..._navIcons, Icons.manage_accounts_rounded]
-      : _navIcons;
+  // Index 8 differs by role: doctor → Store, polyclinic → My Doctors.
+  // The base _navIcons/_tileColors already include the Store entry at [8];
+  // for polyclinic we swap icon+color for My Doctors instead.
+  List<IconData> get _allNavIcons {
+    if (_userRole == 'polyclinic') {
+      return [..._navIcons.sublist(0, 8), Icons.manage_accounts_rounded];
+    }
+    return _navIcons; // doctor: index 8 = storefront_rounded
+  }
 
-  List<Color> get _allTileColors => _userRole == 'polyclinic'
-      ? [..._tileColors, const Color(0xFF00695C)]
-      : _tileColors;
+  List<Color> get _allTileColors {
+    if (_userRole == 'polyclinic') {
+      return [..._tileColors.sublist(0, 8), const Color(0xFF00695C)];
+    }
+    return _tileColors; // doctor: index 8 = cyan store color
+  }
 
   // Calendar state
   late DateTime _calMonth;
@@ -146,6 +159,9 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
             if (!_sub.allowHomeVisit) _homeVisit = false;
           });
         }
+      });
+      _patientsListener = _service.getAssignedPatients().listen((list) {
+        if (mounted) setState(() => _hasPatients = list.isNotEmpty);
       });
       _notifListener = Supabase.instance.client
           .from('notifications').stream(primaryKey: ['id'])
@@ -182,6 +198,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   void dispose() {
     _subListener?.cancel();
     _notifListener?.cancel();
+    _patientsListener?.cancel();
     _expiryTimer?.cancel();
     _nameCtrl.dispose();
     _bioCtrl.dispose();
@@ -461,6 +478,7 @@ Future<void> _showLogout(AppStrings s) async {
       s.myProfile,
       s.notifications,
       if (_userRole == 'polyclinic') s.myDoctors,
+      if (_userRole == 'doctor') s.store,
     ];
 
     return Directionality(
@@ -516,6 +534,8 @@ Future<void> _showLogout(AppStrings s) async {
             _buildDoctorNotificationsTab(s),                                   // 7
             if (_userRole == 'polyclinic')
               _buildPolyclinicDoctorsTab(),                                    // 8
+            if (_userRole == 'doctor')
+              _buildStoreTab(),                                                // 8
           ],
         ),
       ),
@@ -535,6 +555,7 @@ Future<void> _showLogout(AppStrings s) async {
     Color(0xFF00796B), // Expenses       – teal
     Color(0xFF37474F), // My Profile     – blue-grey
     Color(0xFF6A1B9A), // Notifications  – deep purple
+    Color(0xFF00838F), // Store          – cyan (doctor only)
   ];
 
   Widget _buildHomeScreen(AppStrings s, LanguageProvider lang) {
@@ -549,6 +570,7 @@ Future<void> _showLogout(AppStrings s) async {
       s.schedule, s.documentation, s.myPatients,
       s.statistics, s.billing, s.expenses, s.myProfile,
       s.notifications,
+      if (_userRole == 'doctor') s.store,
     ];
 
     return Column(
@@ -638,6 +660,10 @@ Future<void> _showLogout(AppStrings s) async {
           ),
         ),
 
+        // ── First-time guide (doctors only, while patient list is empty) ──
+        if (_hasPatients == false && _userRole == 'doctor')
+          _buildAddPatientsGuide(),
+
         // ── Tile grid ─────────────────────────────────────────────────────
         Expanded(
           child: LayoutBuilder(
@@ -714,6 +740,106 @@ Future<void> _showLogout(AppStrings s) async {
                 ),
               ),
       ],
+    );
+  }
+
+  Widget _buildAddPatientsGuide() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFE65100).withValues(alpha: 0.35)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFE65100).withValues(alpha: 0.10),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Header row
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(7),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE65100).withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.people_alt_rounded,
+                  color: Color(0xFFE65100), size: 20),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text('Step 1 — Add patients to your list',
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: Color(0xFFE65100))),
+            ),
+          ]),
+          const SizedBox(height: 10),
+          // Explanation
+          const Text(
+            'You need at least one patient in My Patients before you can '
+            'schedule appointments or add clinical documentation.',
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
+          ),
+          const SizedBox(height: 14),
+          // Action buttons
+          Row(children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFE65100),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  elevation: 0,
+                ),
+                icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                label: const Text('Add Patient',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                onPressed: () {
+                  setState(() {
+                    _showHome     = false;
+                    _currentIndex = 2; // My Patients tab
+                  });
+                  // Small delay so the tab renders, then open the add-patient menu
+                  Future.delayed(const Duration(milliseconds: 150), () {
+                    if (mounted) {
+                      _showAddPatientMenu(
+                          AppStrings(context.read<LanguageProvider>().isArabic));
+                    }
+                  });
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFE65100),
+                side: const BorderSide(color: Color(0xFFE65100)),
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              onPressed: () => setState(() {
+                _showHome     = false;
+                _currentIndex = 2;
+              }),
+              child: const Text('My Patients',
+                  style: TextStyle(fontSize: 13)),
+            ),
+          ]),
+        ],
+      ),
     );
   }
 
@@ -3155,6 +3281,20 @@ void _showPickPatientForDoc(AppStrings s) {
                 },
               ),
               const SizedBox(height: 10),
+              const SizedBox(height: 10),
+              _addPatientTile(
+                ctx: ctx,
+                icon: Icons.person_outline_rounded,
+                color: Colors.teal,
+                bgColor: Colors.teal.shade50,
+                title: 'Add Without Account',
+                subtitle: 'Patient who doesn\'t use the app',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showAddOfflinePatientDialog(s);
+                },
+              ),
+              const SizedBox(height: 10),
               _addPatientTile(
                 ctx: ctx,
                 icon: Icons.manage_search_rounded,
@@ -3256,6 +3396,361 @@ void _showPickPatientForDoc(AppStrings s) {
     );
   }
 
+  void _showAddOfflinePatientDialog(AppStrings s) {
+    final nameCtrl      = TextEditingController();
+    final phoneCtrl     = TextEditingController();
+    final diagnosisCtrl = TextEditingController();
+    final ageCtrl       = TextEditingController();
+    bool saving = false;
+    final formKey = GlobalKey<FormState>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => Padding(
+          padding: EdgeInsets.only(
+              left: 20, right: 20, top: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Add Patient Without Account',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                const Text('Patient won\'t need to log in',
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: nameCtrl,
+                  autofocus: true,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: InputDecoration(
+                    labelText: 'Full Name *',
+                    prefixIcon: const Icon(Icons.person_outline_rounded),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    filled: true,
+                    fillColor: AppColors.background,
+                  ),
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Name is required' : null,
+                ),
+                const SizedBox(height: 12),
+                LebanonPhoneField(controller: phoneCtrl, label: 'Phone (optional)'),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: diagnosisCtrl,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: InputDecoration(
+                    labelText: 'Primary Diagnosis (optional)',
+                    prefixIcon: const Icon(Icons.medical_information_outlined),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    filled: true,
+                    fillColor: AppColors.background,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: ageCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Age (optional)',
+                    prefixIcon: const Icon(Icons.cake_outlined),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    filled: true,
+                    fillColor: AppColors.background,
+                  ),
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return null;
+                    final age = int.tryParse(v.trim());
+                    if (age == null || age < 0 || age > 150) return 'Enter a valid age';
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.teal,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: saving
+                        ? null
+                        : () async {
+                            if (!formKey.currentState!.validate()) return;
+                            setLocal(() => saving = true);
+                            final patientName = nameCtrl.text.trim();
+                            final phone      = LebanonPhoneField.toStored(phoneCtrl.text);
+                            final diagnosis  = diagnosisCtrl.text.trim();
+                            final ageVal     = int.tryParse(ageCtrl.text.trim());
+                            final messenger  = ScaffoldMessenger.of(context);
+                            try {
+                              final myUid = Supabase.instance.client.auth.currentUser!.id;
+
+                              final newRow = await Supabase.instance.client
+                                  .from('users').insert({
+                                'name':       patientName,
+                                'role':       'patient',
+                                'doctor_ids': [myUid],
+                                'created_at': DateTime.now().toIso8601String(),
+                              }).select('id').single();
+                              final patientId = newRow['id'] as String;
+
+                              // Optional fields
+                              final extras = <String, dynamic>{};
+                              if (phone.isNotEmpty) extras['phone'] = phone;
+                              if (ageVal != null) {
+                                extras['date_of_birth'] =
+                                    '${DateTime.now().year - ageVal}-01-01';
+                              }
+                              if (diagnosis.isNotEmpty) extras['primary_diagnosis'] = diagnosis;
+                              if (extras.isNotEmpty) {
+                                await Supabase.instance.client
+                                    .from('users').update(extras).eq('id', patientId);
+                              }
+
+                              // Sync doctor's assigned_patient_ids
+                              final myData = await Supabase.instance.client
+                                  .from('users').select('assigned_patient_ids')
+                                  .eq('id', myUid).maybeSingle();
+                              final myIds = List<String>.from(
+                                  (myData?['assigned_patient_ids'] as List?) ?? []);
+                              if (!myIds.contains(patientId)) {
+                                myIds.add(patientId);
+                                await Supabase.instance.client.from('users')
+                                    .update({'assigned_patient_ids': myIds}).eq('id', myUid);
+                              }
+
+                              final doctorName = await _service.getMyName();
+                              await _service.notifyPatientAdded(patientId, doctorName);
+
+                              if (!ctx.mounted) return;
+                              Navigator.pop(ctx);
+                              messenger.showSnackBar(SnackBar(
+                                content: Text('$patientName added to your patient list.'),
+                                backgroundColor: AppColors.success,
+                              ));
+                            } catch (e) {
+                              if (kDebugMode) debugPrint('addOfflinePatient error: $e');
+                              if (!ctx.mounted) return;
+                              setLocal(() => saving = false);
+                              messenger.showSnackBar(SnackBar(
+                                content: Text('Failed to add patient: $e'),
+                                backgroundColor: AppColors.error,
+                              ));
+                            }
+                          },
+                    child: saving
+                        ? const SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Text('Add Patient',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showEditPatientDialog(
+    AppStrings s,
+    String patientId,
+    String patientName, {
+    String phone = '',
+    String diagnosis = '',
+    String? dateOfBirth,
+    bool hasAccount = true,
+  }) {
+    final nameCtrl      = TextEditingController(text: hasAccount ? '' : patientName);
+    final phoneCtrl     = TextEditingController(
+        text: phone.isNotEmpty ? LebanonPhoneField.stripCountryCode(phone) : '');
+    final diagnosisCtrl = TextEditingController(text: diagnosis);
+
+    int? currentAge;
+    if (dateOfBirth != null) {
+      final dob = DateTime.tryParse(dateOfBirth);
+      if (dob != null) currentAge = DateTime.now().year - dob.year;
+    }
+    final ageCtrl = TextEditingController(text: currentAge?.toString() ?? '');
+
+    bool saving = false;
+    final formKey = GlobalKey<FormState>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => Padding(
+          padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: Form(
+            key: formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    const Icon(Icons.edit_rounded, size: 20),
+                    const SizedBox(width: 8),
+                    const Text('Edit Patient Info',
+                        style: TextStyle(
+                            fontSize: 17, fontWeight: FontWeight.bold)),
+                  ]),
+                  const SizedBox(height: 4),
+                  Text(patientName,
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 13)),
+                  const SizedBox(height: 16),
+                  // Name — editable only for offline patients
+                  if (!hasAccount) ...[
+                    TextFormField(
+                      controller: nameCtrl,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: InputDecoration(
+                        labelText: 'Full Name *',
+                        prefixIcon:
+                            const Icon(Icons.person_outline_rounded),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        filled: true,
+                        fillColor: AppColors.background,
+                      ),
+                      validator: (v) =>
+                          (v == null || v.trim().isEmpty)
+                              ? 'Name is required'
+                              : null,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  LebanonPhoneField(
+                      controller: phoneCtrl, label: 'Phone (optional)'),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: diagnosisCtrl,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: InputDecoration(
+                      labelText: 'Primary Diagnosis (optional)',
+                      prefixIcon: const Icon(
+                          Icons.medical_information_outlined),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      filled: true,
+                      fillColor: AppColors.background,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: ageCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'Age (optional)',
+                      prefixIcon:
+                          const Icon(Icons.cake_outlined),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      filled: true,
+                      fillColor: AppColors.background,
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) return null;
+                      final age = int.tryParse(v.trim());
+                      if (age == null || age < 0 || age > 150) {
+                        return 'Enter a valid age';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      onPressed: saving
+                          ? null
+                          : () async {
+                              if (!formKey.currentState!.validate()) {
+                                return;
+                              }
+                              setLocal(() => saving = true);
+                              final messenger =
+                                  ScaffoldMessenger.of(context);
+                              final ageVal =
+                                  int.tryParse(ageCtrl.text.trim());
+                              final storedPhone =
+                                  LebanonPhoneField.toStored(
+                                      phoneCtrl.text);
+                              final updates = <String, dynamic>{
+                                'phone': storedPhone,
+                                'primary_diagnosis':
+                                    diagnosisCtrl.text.trim(),
+                                'date_of_birth': ageVal != null
+                                    ? '${DateTime.now().year - ageVal}-01-01'
+                                    : null,
+                              };
+                              if (!hasAccount) {
+                                updates['name'] = nameCtrl.text.trim();
+                              }
+                              final ok = await _service
+                                  .updatePatientInfo(patientId, updates);
+                              if (!ctx.mounted) return;
+                              Navigator.pop(ctx);
+                              messenger.showSnackBar(SnackBar(
+                                content: Text(ok
+                                    ? 'Patient updated successfully.'
+                                    : 'Failed to update patient.'),
+                                backgroundColor: ok
+                                    ? AppColors.success
+                                    : AppColors.error,
+                              ));
+                            },
+                      child: saving
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white))
+                          : const Text('Save Changes',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showSearchExistingPatients(AppStrings s) {
     final searchCtrl = TextEditingController();
     List<Map<String, dynamic>> results = [];
@@ -3274,11 +3769,15 @@ void _showPickPatientForDoc(AppStrings s) {
               return;
             }
             setLocal(() => searching = true);
-            final found = await _service.searchAllPatients(q);
-            setLocal(() {
-              results  = found;
-              searching = false;
-            });
+            try {
+              final found = await _service.searchAllPatients(q);
+              setLocal(() {
+                results   = found;
+                searching = false;
+              });
+            } catch (_) {
+              setLocal(() => searching = false);
+            }
           }
 
           return Padding(
@@ -3302,7 +3801,7 @@ void _showPickPatientForDoc(AppStrings s) {
                   autofocus: true,
                   onChanged: runSearch,
                   decoration: InputDecoration(
-                    hintText: 'Type at least 2 characters…',
+                    hintText: 'Search by name, email or phone…',
                     prefixIcon: const Icon(Icons.search_rounded,
                         color: AppColors.primary),
                     suffixIcon: searching
@@ -3424,8 +3923,6 @@ void _showPickPatientForDoc(AppStrings s) {
                                             await _service.getMyName();
                                         await _service.notifyPatientAdded(
                                             results[i]['id'] as String, dName);
-                                        await _service
-                                            .notifySelfPatientAdded(name);
                                         messenger.showSnackBar(SnackBar(
                                           content: Text(
                                               '$name added to your roster!'),
@@ -3454,7 +3951,8 @@ void _showPickPatientForDoc(AppStrings s) {
 
   void _showPatientActions(
       AppStrings s, String patientId, String patientName, String photoUrl,
-      {bool hasAccount = true, String phone = ''}) {
+      {bool hasAccount = true, String phone = '',
+       String diagnosis = '', String? dateOfBirth}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -3534,6 +4032,22 @@ void _showPickPatientForDoc(AppStrings s) {
                         patientName: patientName,
                       ),
                     ),
+                  );
+                },
+              ),
+              _actionTile(
+                icon: Icons.edit_rounded,
+                color: const Color(0xFF7B61FF),
+                title: 'Edit Patient Info',
+                subtitle: 'Update phone, diagnosis, or age',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showEditPatientDialog(
+                    s, patientId, patientName,
+                    phone: phone,
+                    diagnosis: diagnosis,
+                    dateOfBirth: dateOfBirth,
+                    hasAccount: hasAccount,
                   );
                 },
               ),
@@ -3858,13 +4372,14 @@ void _showPickPatientForDoc(AppStrings s) {
       itemCount: patients.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (_, i) {
-        final data       = patients[i];
-        final patientId  = patients[i]['id'] as String;
-        final name       = (data['name'] ?? data['email'] ?? 'Patient') as String;
-        final diagnosis  = (data['primary_diagnosis'] ?? 'General') as String;
-        final photoUrl   = (data['profile_photo_url'] ?? '') as String;
-        final phone      = (data['phone'] ?? '') as String;
-        final hasAccount = (data['email'] as String? ?? '').isNotEmpty &&
+        final data        = patients[i];
+        final patientId   = patients[i]['id'] as String;
+        final name        = (data['name'] ?? data['email'] ?? 'Patient') as String;
+        final diagnosis   = (data['primary_diagnosis'] ?? '') as String;
+        final photoUrl    = (data['profile_photo_url'] ?? '') as String;
+        final phone       = (data['phone'] ?? '') as String;
+        final dateOfBirth = data['date_of_birth'] as String?;
+        final hasAccount  = (data['email'] as String? ?? '').isNotEmpty &&
             (data['hasAccount'] as bool? ?? true);
 
         return Card(
@@ -3878,7 +4393,8 @@ void _showPickPatientForDoc(AppStrings s) {
             borderRadius: BorderRadius.circular(12),
             onTap: () => _showPatientActions(
                 s, patientId, name, photoUrl,
-                hasAccount: hasAccount, phone: phone),
+                hasAccount: hasAccount, phone: phone,
+                diagnosis: diagnosis, dateOfBirth: dateOfBirth),
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Row(children: [
@@ -4010,12 +4526,13 @@ void _showPickPatientForDoc(AppStrings s) {
             separatorBuilder: (_, __) =>
                 const Divider(height: 1, color: Color(0xFFF0F4FA)),
             itemBuilder: (_, i) {
-              final data      = patients[i];
-              final patientId = patients[i]['id'] as String;
-              final name      = (data['name'] ?? data['email'] ?? 'Patient') as String;
-              final diagnosis = (data['primary_diagnosis'] ?? 'General') as String;
-              final photoUrl  = (data['profile_photo_url'] ?? '') as String;
-              final phone     = (data['phone'] ?? '') as String;
+              final data        = patients[i];
+              final patientId   = patients[i]['id'] as String;
+              final name        = (data['name'] ?? data['email'] ?? 'Patient') as String;
+              final diagnosis   = (data['primary_diagnosis'] ?? '') as String;
+              final photoUrl    = (data['profile_photo_url'] ?? '') as String;
+              final phone       = (data['phone'] ?? '') as String;
+              final dateOfBirth = data['date_of_birth'] as String?;
               // A patient has an account if they have an email and hasAccount != false
               final hasAccount = (data['email'] as String? ?? '').isNotEmpty &&
                   (data['hasAccount'] as bool? ?? true);
@@ -4031,7 +4548,8 @@ void _showPickPatientForDoc(AppStrings s) {
                     child: GestureDetector(
                       onTap: () => _showPatientActions(
                           s, patientId, name, photoUrl,
-                          hasAccount: hasAccount, phone: phone),
+                          hasAccount: hasAccount, phone: phone,
+                          diagnosis: diagnosis, dateOfBirth: dateOfBirth),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 10),
@@ -6335,7 +6853,6 @@ void _showPickPatientForDoc(AppStrings s) {
         }
         await _service.notifyPatientAdded(
             patientId, await _service.getMyName());
-        await _service.notifySelfPatientAdded(entry.name);
       }
 
       // Create one appointment per calendar day (deduplicate same-day entries)
@@ -6787,7 +7304,6 @@ void _showPickPatientForDoc(AppStrings s) {
         }
 
         await _service.notifyPatientAdded(patientId, doctorName);
-        await _service.notifySelfPatientAdded(entry.name);
 
         for (final date in entry.dates) {
           if (date == null) continue;
@@ -6906,6 +7422,26 @@ void _showPickPatientForDoc(AppStrings s) {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // 8 – Doctor: Store Tab  (replaced with DoctorStorefrontScreen in Task 3)
+  // ════════════════════════════════════════════════════════════════════════════
+
+  Widget _buildStoreTab() {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.storefront_rounded, size: 64, color: Color(0xFF00838F)),
+          SizedBox(height: 16),
+          Text('Physiogate Store',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          SizedBox(height: 8),
+          Text('Loading store…', style: TextStyle(color: Colors.grey)),
+        ],
       ),
     );
   }
