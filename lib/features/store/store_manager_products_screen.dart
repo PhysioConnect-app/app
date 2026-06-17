@@ -481,86 +481,78 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 700),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildImagePicker(),
-                      const SizedBox(height: 16),
-                      _buildCategoryDropdown(),
-                      const SizedBox(height: 16),
-                      _buildTextField(_titleCtrl, 'Title *', required: true),
-                      const SizedBox(height: 16),
-                      _buildTextField(_descCtrl, 'Description',
-                          maxLines: 3),
-                      const SizedBox(height: 16),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: _buildPriceField()),
-                          const SizedBox(width: 12),
-                          _buildCurrencyDropdown(),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      _buildTextField(
-                          _phoneCtrl, 'Phone (with country code)'),
-                      const SizedBox(height: 16),
-                      _buildTextField(
-                          _waCtrl, 'WhatsApp (digits only, e.g. 9613XXXXXX)'),
-                      const SizedBox(height: 16),
-                      _buildTextField(
-                        _sortCtrl,
-                        'Sort order',
-                        keyboardType: TextInputType.number,
-                        helperText: 'Lower numbers appear first',
-                        validator: (v) =>
-                            int.tryParse(v ?? '') == null
-                                ? 'Must be a whole number'
-                                : null,
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                  ),
+    return AlertDialog(
+      title: Text(_isEditing ? 'Edit Product' : 'Add Product'),
+      contentPadding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+      content: SizedBox(
+        width: 460,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildImagePicker(),
+                const SizedBox(height: 16),
+                _buildCategoryDropdown(),
+                const SizedBox(height: 16),
+                _buildTextField(_titleCtrl, 'Title *', required: true),
+                const SizedBox(height: 16),
+                _buildTextField(_descCtrl, 'Description', maxLines: 3),
+                const SizedBox(height: 16),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: _buildPriceField()),
+                    const SizedBox(width: 12),
+                    _buildCurrencyDropdown(),
+                  ],
                 ),
-              ),
+                const SizedBox(height: 16),
+                _buildTextField(_phoneCtrl, 'Phone (with country code)'),
+                const SizedBox(height: 16),
+                _buildTextField(
+                    _waCtrl, 'WhatsApp (digits only, e.g. 9613XXXXXX)'),
+                const SizedBox(height: 16),
+                _buildTextField(
+                  _sortCtrl,
+                  'Sort order',
+                  keyboardType: TextInputType.number,
+                  helperText: 'Lower numbers appear first',
+                  validator: (v) => int.tryParse(v ?? '') == null
+                      ? 'Must be a whole number'
+                      : null,
+                ),
+                const SizedBox(height: 8),
+              ],
             ),
-            _buildActions(),
-          ],
+          ),
         ),
       ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _kStoreColor,
+            foregroundColor: Colors.white,
+          ),
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+              : Text(_isEditing ? 'Save Changes' : 'Create Product'),
+        ),
+      ],
     );
   }
-
-  Widget _buildHeader() => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 20, 8, 8),
-        child: Row(
-          children: [
-            Text(
-              _isEditing ? 'Edit Product' : 'Add Product',
-              style: const TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const Spacer(),
-            IconButton(
-              icon: const Icon(Icons.close_rounded),
-              onPressed: () => Navigator.pop(context),
-            ),
-          ],
-        ),
-      );
 
   Widget _buildImagePicker() => GestureDetector(
         onTap: _uploadingImage ? null : _pickImage,
@@ -704,34 +696,5 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
           DropdownMenuItem(value: 'EUR', child: Text('EUR')),
         ],
         onChanged: (v) => setState(() => _currency = v!),
-      );
-
-  Widget _buildActions() => Padding(
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            TextButton(
-              onPressed: _saving ? null : () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            const SizedBox(width: 12),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _kStoreColor,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: _saving ? null : _save,
-              child: _saving
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white),
-                    )
-                  : Text(_isEditing ? 'Save Changes' : 'Create Product'),
-            ),
-          ],
-        ),
       );
 }
