@@ -43,6 +43,7 @@ This checklist covers every interactive feature and button across all four roles
    - Find a Therapist
 6. Admin Dashboard
 7. Polyclinic Dashboard
+8. Physiogate Store — Mobile / Responsive Verification
 
 ---
 ## Authentication, Onboarding & Global Features
@@ -3454,3 +3455,130 @@ This checklist covers every interactive feature and button across all four roles
   5. Verify the header (top of screen) updates to show the new clinic name (live via the outer `StreamBuilder`).
   6. Navigate away and back to Profile — verify the new name persists (re-fetched from DB).
 - **Edge Cases / Notes**: The email field uses `hintText` (not `controller`/`initialValue`) to display the email — verify this renders correctly as static display text rather than a placeholder that disappears on focus (since the field is `readOnly`, hint should persist). No validation on empty "Clinic Name" before save — verify behavior if the admin clears the name entirely and saves (does it save an empty string?).
+
+---
+
+## 8. Physiogate Store — Mobile / Responsive Verification
+
+- **Platform**: Both (layout switches at `kMobileBreakpoint = 600` — `lib/core/constants/breakpoints.dart`)
+- **How to test**: Chrome DevTools device toolbar — iPhone SE (375 px), iPhone 14 Pro Max (414 px), and drag the window to exactly 600 px for the desktop-regression check.
+- **Rule**: Desktop layout (≥ 600 px) must be unchanged after every fix.
+
+---
+
+### 8.1 Doctor Storefront — Category Grid (root)
+
+- **File**: `lib/features/store/doctor_storefront_screen.dart` — `_buildRootGrid` / `_buildCategoryCardMobile`
+- **Status**: [x] DONE (commit `d7e912d`)
+- **Test Steps**:
+  - **At 375 px and 414 px (mobile):**
+    - [ ] Categories render as a single-column vertical list (no multi-column grid)
+    - [ ] Each card is full-width: teal icon circle on the left, category name expanded in the middle, grey chevron on the right
+    - [ ] Long category names are truncated with ellipsis (single line) — no overflow
+    - [ ] Tapping a card navigates into that category (subcategories / products)
+    - [ ] Section header ("Physiogate Catalog / Browse our product categories") is visible and not clipped
+  - **At 600 px (desktop regression):**
+    - [ ] Grid layout returns — auto-wrap cards of max 150 px wide, multiple columns
+    - [ ] Cards use the compact vertical style (icon above name, no chevron)
+
+---
+
+### 8.2 Doctor Storefront — Product List (category content)
+
+- **File**: `lib/features/store/doctor_storefront_screen.dart` — `_buildProductTile` / `_buildSubcatTile`
+- **Status**: [x] VERIFIED — no layout changes needed (audit confirmed acceptable at 375 px)
+- **Test Steps**:
+  - **At 375 px and 414 px (mobile):**
+    - [ ] Each product tile: 56 px thumbnail on left, name + price pill in middle, chevron on right — all visible
+    - [ ] Long product names wrap to at most 2 lines, do not push the price pill or chevron off-screen
+    - [ ] Price pill ("USD 99.99") is fully readable beside or below the truncated name
+    - [ ] Subcategory tiles (icon + name + chevron) are readable and tappable
+    - [ ] Back navigation bar (breadcrumb + back arrow) fits within the screen width
+  - **At 600 px (desktop regression):**
+    - [ ] Layout identical to 375 px (tiles are single-column on all widths — no layout switch here)
+
+---
+
+### 8.3 Doctor Storefront — Product Detail
+
+- **File**: `lib/features/store/doctor_storefront_screen.dart` — `_buildProductDetail`
+- **Status**: [x] VERIFIED — no layout changes needed (audit confirmed acceptable at 375 px)
+- **Test Steps**:
+  - **At 375 px and 414 px (mobile):**
+    - [ ] Image carousel (240 px tall) fills the full screen width — no horizontal overflow
+    - [ ] Title + price pill row: title wraps gracefully, price pill stays on the right and is fully visible even for long price strings (e.g. "LBP 1,500,000")
+    - [ ] Description text wraps normally — no clipping
+    - [ ] Phone and WhatsApp contact buttons are full-width and reachable (no horizontal scrolling needed)
+    - [ ] Lightbox opens full-screen when the expand icon is tapped; swipe between images works; close button is reachable
+    - [ ] Dot indicators at the bottom of the carousel are visible and not clipped
+  - **At 600 px (desktop regression):**
+    - [ ] All of the above hold unchanged
+
+---
+
+### 8.4 Store Manager — Categories List
+
+- **File**: `lib/features/store/store_manager_categories_screen.dart` — `_buildCatRow`
+- **Status**: [x] DONE (commit `6b88913`)
+- **Test Steps**:
+  - **At 375 px and 414 px (mobile):**
+    - [ ] Each category row: icon circle on the left, name + status chip visible in the middle, a single ⋮ menu button on the right
+    - [ ] Tapping ⋮ opens a popup menu with "Publish/Unpublish", "Edit", "Delete"
+    - [ ] If the category has subcategories, an expand/collapse arrow appears alongside the ⋮ menu
+    - [ ] Long category names do not push the ⋮ button off-screen
+    - [ ] Expanded subcategory rows (indented 16 px) still fit within the screen — name and ⋮ both visible
+    - [ ] Status chip ("Published" / "Draft") is readable in the subtitle row (does not overflow)
+  - **At 600 px (desktop regression):**
+    - [ ] Inline buttons return: publish/unpublish text button + edit icon + delete icon (+ expand icon if applicable)
+    - [ ] No ⋮ popup menu visible on desktop
+
+---
+
+### 8.5 Store Manager — Add / Edit Category Dialog
+
+- **File**: `lib/features/store/store_manager_categories_screen.dart` — `_CategoryFormDialogState.build`
+- **Status**: [x] DONE (commit `6b88913`)
+- **Test Steps**:
+  - **At 375 px and 414 px (mobile):**
+    - [ ] Dialog fills nearly the full screen width (only 8 px inset on each side)
+    - [ ] "Name", "Parent category" dropdown, and "Sort order" fields are fully visible and editable
+    - [ ] "Cancel" and "Save"/"Create" buttons are both reachable without scrolling
+    - [ ] No horizontal overflow or clipping of any field
+  - **At 600 px (desktop regression):**
+    - [ ] Dialog reverts to 380 px fixed width, centred with 40 px horizontal inset
+    - [ ] Appearance identical to pre-change behaviour
+
+---
+
+### 8.6 Store Manager — Products List
+
+- **File**: `lib/features/store/store_manager_products_screen.dart` — `_buildProductCard`
+- **Status**: [x] DONE (commit `a8d93de`)
+- **Test Steps**:
+  - **At 375 px and 414 px (mobile):**
+    - [ ] Each product row: thumbnail on the left, title + category + price in the middle, a single ⋮ menu button on the right
+    - [ ] Tapping ⋮ opens a popup with "Publish/Unpublish", "Edit", "Delete"
+    - [ ] Orange draft-warning row ("Category is draft — hidden from doctors") wraps correctly if visible
+    - [ ] Long product names do not push the ⋮ button off-screen
+  - **At 600 px (desktop regression):**
+    - [ ] Inline buttons return: publish text button + edit icon + delete icon
+    - [ ] No ⋮ popup menu visible on desktop
+
+---
+
+### 8.7 Store Manager — Add / Edit Product Dialog
+
+- **File**: `lib/features/store/store_manager_products_screen.dart` — `_ProductFormDialogState.build`
+- **Status**: [x] DONE (commit `a8d93de`)
+- **Test Steps**:
+  - **At 375 px and 414 px (mobile):**
+    - [ ] Dialog fills nearly the full screen width (only 8 px inset on each side)
+    - [ ] All fields are visible: images, category dropdown, title, description, price, currency, phone, WhatsApp, sort order
+    - [ ] Price field and currency dropdown are stacked vertically (price above, currency below) — no side-by-side row
+    - [ ] "Cancel" and "Create Product"/"Save Changes" buttons are reachable by scrolling to the bottom
+    - [ ] Image chip picker ("Add image" / "Add another") wraps correctly — chips do not overflow horizontally
+    - [ ] No horizontal overflow or field clipping
+  - **At 600 px (desktop regression):**
+    - [ ] Dialog reverts to 440 px fixed width, centred with 40 px horizontal inset
+    - [ ] Price and currency fields are side-by-side (Expanded price + 120 px currency dropdown)
+    - [ ] Appearance identical to pre-change behaviour
