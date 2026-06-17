@@ -9,7 +9,7 @@ const _kInk   = Color(0xFF1A237E);
 
 // ── Notification list helpers ─────────────────────────────────────────────────
 
-enum _NotifType { drPrefix, nameChange }
+enum _NotifType { drPrefix, nameChange, accountRequest }
 
 class _NotifItem {
   final bool isHeader;
@@ -30,6 +30,8 @@ class _NotifItem {
       _NotifItem._(isHeader: false, type: _NotifType.drPrefix, data: d);
   factory _NotifItem.nameChange(Map<String, dynamic> d) =>
       _NotifItem._(isHeader: false, type: _NotifType.nameChange, data: d);
+  factory _NotifItem.accountRequest(Map<String, dynamic> d) =>
+      _NotifItem._(isHeader: false, type: _NotifType.accountRequest, data: d);
 }
 
 // ── Feature definitions ──────────────────────────────────────────────────────
@@ -153,6 +155,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   String _polySearchQuery = '';
   // Patients list
   String _patientSearchQuery = '';
+  final Set<String> _selectedPatientIds = {};
 
   // Notes / broadcast tab
   final _noteTitleCtrl = TextEditingController();
@@ -816,190 +819,521 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (mounted) _snack('Name change declined for $name');
   }
 
+  // ── Account-request approval ───────────────────────────────────────────────
+
+  Future<void> _approveAccountRequestDialog(Map<String, dynamic> req) async {
+    final hasDoctorate = (req['has_doctorate'] as bool?) ?? false;
+    final specCtrl = TextEditingController(
+      text: hasDoctorate ? 'Doctor of Physical Therapy' : 'Physical Therapist',
+    );
+    final passCtrl   = TextEditingController();
+    bool  passHidden = true;
+    bool  saving     = false;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Approve account request'),
+          content: SizedBox(
+            width: 380,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Creating account for ${req['therapist_name']} (${req['email']})',
+                  style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: specCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Specialty',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.medical_services_outlined),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: passCtrl,
+                  obscureText: passHidden,
+                  decoration: InputDecoration(
+                    labelText: 'Initial password *',
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock_outline_rounded),
+                    suffixIcon: IconButton(
+                      icon: Icon(passHidden
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined),
+                      onPressed: () => setLocal(() => passHidden = !passHidden),
+                    ),
+                    helperText: 'Min 6 characters — share with the therapist',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      if (passCtrl.text.length < 6) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                          content: Text('Password must be at least 6 characters'),
+                        ));
+                        return;
+                      }
+                      setLocal(() => saving = true);
+                      Navigator.pop(ctx, true);
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.success,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              child: saving
+                  ? const SizedBox(
+                      width: 16, height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Text('Create Account'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final error = await _adminService.approveAccountRequest(
+      requestId: req['id'] as String,
+      name:      req['therapist_name'] as String,
+      email:     req['email'] as String,
+      password:  passCtrl.text,
+      specialty: specCtrl.text.trim(),
+    );
+    specCtrl.dispose();
+    passCtrl.dispose();
+    if (!mounted) return;
+    _snack(
+      error == null
+          ? 'Account created for ${req['therapist_name']}'
+          : 'Error: $error',
+      color: error == null ? AppColors.success : AppColors.error,
+    );
+  }
+
+  Future<void> _declineAccountRequest(Map<String, dynamic> req) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Decline request?'),
+        content: Text(
+            'Decline the account request from "${req['therapist_name']}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Decline'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final error = await _adminService.declineAccountRequest(req['id'] as String);
+    if (!mounted) return;
+    _snack(
+      error == null
+          ? 'Request from ${req['therapist_name']} declined'
+          : 'Error: $error',
+      color: error == null ? null : AppColors.error,
+    );
+  }
+
   // ── Notifications tab ──────────────────────────────────────────────────────
 
   Widget _notificationsTab() {
+    // Outer stream: pending account requests (new therapist sign-up requests).
     return StreamBuilder<List<Map<String, dynamic>>>(
       stream: _supabase
-          .from('users')
+          .from('account_requests')
           .stream(primaryKey: ['id'])
-          .eq('role', 'doctor'),
-      builder: (context, snap) {
-        if (!snap.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final all           = snap.data!;
-        final drPending     = all.where((d) => (d['dr_prefix_request']   as String?) == 'pending').toList();
-        final namePending   = all.where((d) => (d['name_change_request'] as String?) == 'pending').toList();
+          .eq('status', 'pending')
+          .order('created_at', ascending: true),
+      builder: (context, accountSnap) {
+        // Inner stream: existing doctor prefix / name-change requests.
+        return StreamBuilder<List<Map<String, dynamic>>>(
+          stream: _supabase
+              .from('users')
+              .stream(primaryKey: ['id'])
+              .eq('role', 'doctor'),
+          builder: (context, usersSnap) {
+            if (!accountSnap.hasData && !usersSnap.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-        if (drPending.isEmpty && namePending.isEmpty) {
-          return Center(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.notifications_none_rounded,
-                    size: 40, color: AppColors.primary),
-              ),
-              const SizedBox(height: 16),
-              const Text('No pending requests',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: AppColors.textPrimary)),
-              const SizedBox(height: 6),
-              const Text('Dr. prefix and name change requests will appear here',
-                  style: TextStyle(
-                      color: AppColors.textSecondary, fontSize: 13)),
-            ]),
-          );
-        }
+            final accountRequests = accountSnap.data ?? [];
+            final allDoctors      = usersSnap.data ?? [];
+            final drPending   = allDoctors.where((d) =>
+                (d['dr_prefix_request']   as String?) == 'pending').toList();
+            final namePending = allDoctors.where((d) =>
+                (d['name_change_request'] as String?) == 'pending').toList();
 
-        // Build a flat list of items: each item is either a section header or a card
-        final items = <_NotifItem>[];
-        if (namePending.isNotEmpty) {
-          items.add(_NotifItem.header('Name Change Requests'));
-          for (final d in namePending) { items.add(_NotifItem.nameChange(d)); }
-        }
-        if (drPending.isNotEmpty) {
-          items.add(_NotifItem.header('Dr. Prefix Requests'));
-          for (final d in drPending) { items.add(_NotifItem.drPrefix(d)); }
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: items.length,
-          itemBuilder: (_, i) {
-            final item = items[i];
-            if (item.isHeader) {
-              return Padding(
-                padding: EdgeInsets.only(
-                    top: i == 0 ? 0 : 12, bottom: 10),
-                child: Text(item.headerTitle!,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
-                        color: AppColors.textSecondary)),
+            if (accountRequests.isEmpty &&
+                drPending.isEmpty &&
+                namePending.isEmpty) {
+              return Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.notifications_none_rounded,
+                        size: 40, color: AppColors.primary),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('No pending requests',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: AppColors.textPrimary)),
+                  const SizedBox(height: 6),
+                  const Text(
+                      'Account, Dr. prefix and name change requests will appear here',
+                      style: TextStyle(
+                          color: AppColors.textSecondary, fontSize: 13)),
+                ]),
               );
             }
-            final d    = item.data!;
-            final id   = d['id'] as String;
-            final name = (d['name'] as String? ?? 'Unknown');
-            final spec = (d['specialization'] ?? '') as String;
-            final ac   = _avatarColor(name);
-            final isNameChange = item.type == _NotifType.nameChange;
-            final pendingName  = isNameChange ? (d['pending_name'] as String? ?? '') : '';
 
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE8EAED)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.04),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Row(children: [
-                    Container(
-                      width: 44, height: 44,
+            // Build a flat list: account requests first, then name/prefix.
+            final items = <_NotifItem>[];
+            if (accountRequests.isNotEmpty) {
+              items.add(_NotifItem.header('Account Requests'));
+              for (final r in accountRequests) {
+                items.add(_NotifItem.accountRequest(r));
+              }
+            }
+            if (namePending.isNotEmpty) {
+              items.add(_NotifItem.header('Name Change Requests'));
+              for (final d in namePending) { items.add(_NotifItem.nameChange(d)); }
+            }
+            if (drPending.isNotEmpty) {
+              items.add(_NotifItem.header('Dr. Prefix Requests'));
+              for (final d in drPending) { items.add(_NotifItem.drPrefix(d)); }
+            }
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: items.length,
+              itemBuilder: (_, i) {
+                final item = items[i];
+
+                // ── Section header ──────────────────────────────────────────
+                if (item.isHeader) {
+                  return Padding(
+                    padding: EdgeInsets.only(top: i == 0 ? 0 : 12, bottom: 10),
+                    child: Text(item.headerTitle!,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: AppColors.textSecondary)),
+                  );
+                }
+
+                final d = item.data!;
+
+                // ── Account request card ────────────────────────────────────
+                if (item.type == _NotifType.accountRequest) {
+                  final reqName  = (d['therapist_name'] as String? ?? 'Unknown');
+                  final reqEmail = (d['email']          as String? ?? '');
+                  final reqPhone = (d['phone_number']   as String? ?? '');
+                  final hasDpt   = (d['has_doctorate']  as bool?) ?? false;
+                  final ac       = _avatarColor(reqName);
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: ac.withValues(alpha: 0.13),
-                        borderRadius: BorderRadius.circular(12),
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE8EAED)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
                       ),
-                      child: Center(
-                        child: Text(_initials(name),
-                            style: TextStyle(
-                                color: ac,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16)),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
                       child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                        Text(name,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                                color: AppColors.textPrimary)),
-                        if (spec.isNotEmpty)
-                          Text(spec,
-                              style: const TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 12)),
-                      ]),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFFF3E0),
-                        borderRadius: BorderRadius.circular(20),
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Container(
+                              width: 44, height: 44,
+                              decoration: BoxDecoration(
+                                color: ac.withValues(alpha: 0.13),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Center(
+                                child: Text(_initials(reqName),
+                                    style: TextStyle(
+                                        color: ac,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16)),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(reqName,
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 15,
+                                          color: AppColors.textPrimary)),
+                                  Text(reqEmail,
+                                      style: const TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF3E0),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: const Text('Pending',
+                                  style: TextStyle(
+                                      color: Color(0xFFF57F17),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700)),
+                            ),
+                          ]),
+                          const SizedBox(height: 8),
+                          // Details row: phone + doctorate badge
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              if (reqPhone.isNotEmpty)
+                                Row(mainAxisSize: MainAxisSize.min, children: [
+                                  const Icon(Icons.phone_outlined,
+                                      size: 13,
+                                      color: AppColors.textSecondary),
+                                  const SizedBox(width: 4),
+                                  Text(reqPhone,
+                                      style: const TextStyle(
+                                          fontSize: 12,
+                                          color: AppColors.textSecondary)),
+                                ]),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: hasDpt
+                                      ? const Color(0xFFE3F2FD)
+                                      : const Color(0xFFF5F5F5),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  hasDpt ? 'DPT' : 'No DPT',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: hasDpt
+                                        ? const Color(0xFF1565C0)
+                                        : AppColors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          Row(children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () => _declineAccountRequest(d),
+                                icon: const Icon(Icons.close_rounded, size: 16),
+                                label: const Text('Decline'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.error,
+                                  side: const BorderSide(color: AppColors.error),
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () =>
+                                    _approveAccountRequestDialog(d),
+                                icon: const Icon(Icons.person_add_rounded,
+                                    size: 16),
+                                label: const Text('Approve'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.success,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10)),
+                                ),
+                              ),
+                            ),
+                          ]),
+                        ],
                       ),
-                      child: const Text('Pending',
-                          style: TextStyle(
-                              color: Color(0xFFF57F17),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700)),
                     ),
-                  ]),
-                  const SizedBox(height: 6),
-                  Text(
-                    isNameChange
-                        ? 'Requesting name change to "$pendingName"'
-                        : 'Requesting permission to display "Dr." prefix',
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 12)),
-                  const SizedBox(height: 14),
-                  Row(children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () => isNameChange
-                            ? _declineNameChange(id, name)
-                            : _declineDrPrefix(id, name),
-                        icon: const Icon(Icons.close_rounded, size: 16),
-                        label: const Text('Decline'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.error,
-                          side: const BorderSide(color: AppColors.error),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
+                  );
+                }
+
+                // ── Dr. prefix / name-change card (existing logic) ──────────
+                final id   = d['id'] as String;
+                final name = (d['name'] as String? ?? 'Unknown');
+                final spec = (d['specialization'] ?? '') as String;
+                final ac   = _avatarColor(name);
+                final isNameChange = item.type == _NotifType.nameChange;
+                final pendingName =
+                    isNameChange ? (d['pending_name'] as String? ?? '') : '';
+
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE8EAED)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
                         ),
-                      ),
+                      ],
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => isNameChange
-                            ? _approveNameChange(id, pendingName, name)
-                            : _approveDrPrefix(id, name),
-                        icon: const Icon(Icons.check_rounded, size: 16),
-                        label: const Text('Approve'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.success,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Container(
+                            width: 44, height: 44,
+                            decoration: BoxDecoration(
+                              color: ac.withValues(alpha: 0.13),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: Text(_initials(name),
+                                  style: TextStyle(
+                                      color: ac,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16)),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(name,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                        color: AppColors.textPrimary)),
+                                if (spec.isNotEmpty)
+                                  Text(spec,
+                                      style: const TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF3E0),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Text('Pending',
+                                style: TextStyle(
+                                    color: Color(0xFFF57F17),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700)),
+                          ),
+                        ]),
+                        const SizedBox(height: 6),
+                        Text(
+                          isNameChange
+                              ? 'Requesting name change to "$pendingName"'
+                              : 'Requesting permission to display "Dr." prefix',
+                          style: const TextStyle(
+                              color: AppColors.textSecondary, fontSize: 12)),
+                        const SizedBox(height: 14),
+                        Row(children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => isNameChange
+                                  ? _declineNameChange(id, name)
+                                  : _declineDrPrefix(id, name),
+                              icon: const Icon(Icons.close_rounded, size: 16),
+                              label: const Text('Decline'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.error,
+                                side: const BorderSide(color: AppColors.error),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: () => isNameChange
+                                  ? _approveNameChange(id, pendingName, name)
+                                  : _approveDrPrefix(id, name),
+                              icon: const Icon(Icons.check_rounded, size: 16),
+                              label: const Text('Approve'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.success,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
+                          ),
+                        ]),
+                      ],
                     ),
-                  ]),
-                ]),
-              ),
+                  ),
+                );
+              },
             );
           },
         );
@@ -2752,13 +3086,42 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                   const SizedBox(height: 10),
                   if (filtered.isNotEmpty)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
+                    Row(children: [
+                      Text(
                           '${filtered.length} patient${filtered.length != 1 ? 's' : ''}',
                           style: const TextStyle(
                               color: AppColors.textSecondary, fontSize: 12)),
-                    ),
+                      const Spacer(),
+                      if (_selectedPatientIds.isNotEmpty)
+                        TextButton.icon(
+                          onPressed: () => _confirmDeleteSelectedPatients(),
+                          icon: const Icon(Icons.delete_outline_rounded,
+                              size: 16, color: AppColors.error),
+                          label: Text(
+                              'Delete (${_selectedPatientIds.length})',
+                              style: const TextStyle(color: AppColors.error, fontSize: 12)),
+                          style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 8)),
+                        ),
+                      TextButton(
+                        onPressed: () => setState(() {
+                          if (_selectedPatientIds.length == filtered.length) {
+                            _selectedPatientIds.clear();
+                          } else {
+                            _selectedPatientIds
+                              ..clear()
+                              ..addAll(filtered.map((p) => p['id'] as String));
+                          }
+                        }),
+                        style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8)),
+                        child: Text(
+                            _selectedPatientIds.length == filtered.length
+                                ? 'Deselect All'
+                                : 'Select All',
+                            style: const TextStyle(fontSize: 12)),
+                      ),
+                    ]),
                 ]),
               ),
             ),
@@ -2799,7 +3162,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 32),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (_, i) => _patientCard(filtered[i]),
+                    (_, i) {
+                      final id = filtered[i]['id'] as String;
+                      return _patientCard(
+                        filtered[i],
+                        isSelected: _selectedPatientIds.contains(id),
+                        onToggle: () => setState(() {
+                          if (_selectedPatientIds.contains(id)) {
+                            _selectedPatientIds.remove(id);
+                          } else {
+                            _selectedPatientIds.add(id);
+                          }
+                        }),
+                      );
+                    },
                     childCount: filtered.length,
                   ),
                 ),
@@ -3117,73 +3493,149 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _patientCard(Map<String, dynamic> doc) {
+  Widget _patientCard(
+    Map<String, dynamic> doc, {
+    required bool isSelected,
+    required VoidCallback onToggle,
+  }) {
     final name  = (doc['name']  ?? 'Unknown') as String;
     final email = (doc['email'] ?? '')         as String;
     final phone = (doc['phone'] ?? '')         as String;
     final ac    = _avatarColor(name);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE8EAED)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
+    return GestureDetector(
+      onTap: onToggle,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primary.withValues(alpha: 0.06)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.primary.withValues(alpha: 0.4)
+                : const Color(0xFFE8EAED),
+          ),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2)),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Checkbox(
+              value: isSelected,
+              onChanged: (_) => onToggle(),
+              activeColor: AppColors.primary,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+            ),
+            const SizedBox(width: 8),
+            Container(
+              width: 48, height: 48,
+              decoration: BoxDecoration(
+                color: ac.withValues(alpha: 0.13),
+                borderRadius: BorderRadius.circular(13),
+              ),
+              child: Center(
+                child: Text(_initials(name),
+                    style: TextStyle(
+                        color: ac, fontWeight: FontWeight.bold, fontSize: 17)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(name,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: AppColors.textPrimary)),
+                const SizedBox(height: 2),
+                Text(email,
+                    style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 12),
+                    overflow: TextOverflow.ellipsis),
+                if (phone.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Row(children: [
+                    Icon(Icons.phone_rounded, size: 12, color: AppColors.textSecondary),
+                    const SizedBox(width: 4),
+                    Text(phone,
+                        style: const TextStyle(
+                            color: AppColors.textSecondary, fontSize: 12)),
+                  ]),
+                ],
+              ]),
+            ),
+            IconButton(
+              onPressed: () => _confirmDeletePatient(doc['id'] as String, name),
+              icon: const Icon(Icons.delete_outline_rounded,
+                  color: AppColors.error, size: 20),
+              tooltip: 'Remove patient',
+            ),
+          ]),
+        ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    );
+  }
+
+  Future<void> _confirmDeleteSelectedPatients() async {
+    final count = _selectedPatientIds.length;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(children: [
           Container(
-            width: 48, height: 48,
+            width: 36, height: 36,
             decoration: BoxDecoration(
-              color: ac.withValues(alpha: 0.13),
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Center(
-              child: Text(_initials(name),
-                  style: TextStyle(
-                      color: ac, fontWeight: FontWeight.bold, fontSize: 17)),
-            ),
+                color: AppColors.error.withValues(alpha: 0.1),
+                shape: BoxShape.circle),
+            child: const Icon(Icons.delete_rounded,
+                color: AppColors.error, size: 18),
           ),
           const SizedBox(width: 12),
-          Expanded(
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(name,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      color: AppColors.textPrimary)),
-              const SizedBox(height: 2),
-              Text(email,
-                  style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 12),
-                  overflow: TextOverflow.ellipsis),
-              if (phone.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Row(children: [
-                  Icon(Icons.phone_rounded, size: 12, color: AppColors.textSecondary),
-                  const SizedBox(width: 4),
-                  Text(phone,
-                      style: const TextStyle(
-                          color: AppColors.textSecondary, fontSize: 12)),
-                ]),
-              ],
-            ]),
-          ),
-          IconButton(
-            onPressed: () => _confirmDeletePatient(doc['id'] as String, name),
-            icon: const Icon(Icons.delete_outline_rounded,
-                color: AppColors.error, size: 20),
-            tooltip: 'Remove patient',
-          ),
+          const Text('Remove Patients'),
         ]),
+        content: Text(
+            'Remove $count patient${count != 1 ? 's' : ''} from the system?\nThis action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Remove All'),
+          ),
+        ],
       ),
+    );
+    if (ok != true) return;
+    final ids = Set<String>.from(_selectedPatientIds);
+    setState(() => _selectedPatientIds.clear());
+    int failed = 0;
+    for (final id in ids) {
+      final err = await _adminService.deleteUserAccount(id);
+      if (err != null) failed++;
+    }
+    if (!mounted) return;
+    _snack(
+      failed == 0
+          ? 'Removed ${ids.length} patient${ids.length != 1 ? 's' : ''}.'
+          : '$failed deletion${failed != 1 ? 's' : ''} failed.',
+      color: failed == 0 ? null : AppColors.error,
     );
   }
 
