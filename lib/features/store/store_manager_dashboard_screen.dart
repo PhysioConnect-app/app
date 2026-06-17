@@ -1,45 +1,47 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../core/constants/app_colors.dart';
+import 'store_manager_categories_screen.dart';
 
-/// Placeholder. Full store-manager UI is built in a later task.
+// Products tab is imported and wired in the next commit.
+
+const _kStoreColor = Color(0xFF00838F);
+
 class StoreManagerDashboardScreen extends StatelessWidget {
   const StoreManagerDashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        title: const Text(
-          'Physiogate — Store Manager',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_rounded),
-            tooltip: 'Sign out',
-            onPressed: () => Supabase.instance.client.auth.signOut(),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: _kStoreColor,
+          foregroundColor: Colors.white,
+          title: const Text(
+            'Physiogate — Store Manager',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
           ),
-        ],
-      ),
-      body: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.logout_rounded),
+              tooltip: 'Sign out',
+              onPressed: () => Supabase.instance.client.auth.signOut(),
+            ),
+          ],
+          bottom: const TabBar(
+            indicatorColor: Colors.white,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
+            tabs: [
+              Tab(icon: Icon(Icons.category_rounded), text: 'Categories'),
+              Tab(icon: Icon(Icons.inventory_2_rounded), text: 'Products'),
+            ],
+          ),
+        ),
+        body: const TabBarView(
           children: [
-            Icon(Icons.storefront_rounded, size: 72, color: AppColors.primary),
-            SizedBox(height: 20),
-            Text(
-              'Physiogate Store',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Store management interface coming soon.',
-              style: TextStyle(color: Colors.grey, fontSize: 15),
-            ),
+            StoreManagerCategoriesScreen(),
+            Center(child: Text('Products — coming next')),
           ],
         ),
       ),
