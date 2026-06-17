@@ -204,21 +204,18 @@ class _DoctorStorefrontScreenState extends State<DoctorStorefrontScreen> {
             title: 'Physiogate Catalog',
             subtitle: 'Browse our product categories'),
         Expanded(
-          child: LayoutBuilder(
-            builder: (ctx, constraints) {
-              final cols = constraints.maxWidth > 500 ? 3 : 2;
-              return GridView.builder(
-                padding: const EdgeInsets.all(16),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: cols,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.1,
-                ),
-                itemCount: _rootCats.length,
-                itemBuilder: (_, i) => _buildCategoryCard(_rootCats[i]),
-              );
-            },
+          child: GridView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            // Auto-wraps: each card is at most 150 px wide; more categories
+            // → more columns, fills left-to-right naturally.
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 150,
+              mainAxisExtent: 108,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+            ),
+            itemCount: _rootCats.length,
+            itemBuilder: (_, i) => _buildCategoryCard(_rootCats[i]),
           ),
         ),
       ],
@@ -229,43 +226,41 @@ class _DoctorStorefrontScreenState extends State<DoctorStorefrontScreen> {
     final name = (cat['name'] as String? ?? '').trim();
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(14),
-      elevation: 1,
+      borderRadius: BorderRadius.circular(12),
+      elevation: 0,
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         onTap: () => _openCategory(cat),
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: _kStoreColor.withValues(alpha: 0.2)),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E7EB), width: 0.5),
           ),
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: _kStoreColor.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.category_rounded,
-                    color: _kStoreColor, size: 28),
+                    color: _kStoreColor, size: 22),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               Text(
                 name,
                 style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    color: Color(0xFF1A2332)),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11,
+                  color: Color(0xFF1A2332),
+                ),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 4),
-              const Icon(Icons.chevron_right_rounded,
-                  color: _kStoreColor, size: 18),
             ],
           ),
         ),
@@ -566,23 +561,34 @@ class _DoctorStorefrontScreenState extends State<DoctorStorefrontScreen> {
       required String subtitle}) {
     return Container(
       width: double.infinity,
-      color: _kStoreColor,
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFE5E7EB), width: 0.5),
+        ),
+      ),
       child: Row(
         children: [
-          Icon(icon, color: Colors.white, size: 28),
-          const SizedBox(width: 14),
+          Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: _kStoreColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: _kStoreColor, size: 18),
+          ),
+          const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title,
                   style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold)),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: Color(0xFF1A2332))),
               Text(subtitle,
-                  style: const TextStyle(
-                      color: Colors.white70, fontSize: 12)),
+                  style: const TextStyle(fontSize: 11, color: Colors.grey)),
             ],
           ),
         ],
