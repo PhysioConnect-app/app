@@ -195,14 +195,7 @@ class _StoreManagerProductsScreenState
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _iconBtn(
-              published
-                  ? Icons.visibility_off_rounded
-                  : Icons.publish_rounded,
-              published ? AppColors.textSecondary : _kStoreColor,
-              published ? 'Unpublish' : 'Publish',
-              () => _toggleStatus(product),
-            ),
+            _publishBtn(published, () => _toggleStatus(product)),
             _iconBtn(
               Icons.edit_rounded,
               AppColors.textSecondary,
@@ -246,6 +239,44 @@ class _StoreManagerProductsScreenState
           onPressed: onPressed,
         ),
       );
+
+  Widget _publishBtn(bool published, VoidCallback onTap) {
+    if (published) {
+      return Tooltip(
+        message: 'Tap to unpublish',
+        child: TextButton(
+          style: TextButton.styleFrom(
+            foregroundColor: const Color(0xFF2E7D32),
+            backgroundColor: const Color(0xFFE8F5E9),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16)),
+            textStyle:
+                const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+          onPressed: onTap,
+          child: const Text('Published'),
+        ),
+      );
+    }
+    return OutlinedButton(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: _kStoreColor,
+        side: const BorderSide(color: _kStoreColor),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        textStyle:
+            const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+      onPressed: onTap,
+      child: const Text('Publish'),
+    );
+  }
 
   Widget _statusChip(bool published) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
