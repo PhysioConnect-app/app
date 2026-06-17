@@ -561,6 +561,7 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
   Widget _buildImagePicker() => GestureDetector(
         onTap: _uploadingImage ? null : _pickImage,
         child: Container(
+          width: double.infinity,
           height: 140,
           decoration: BoxDecoration(
             color: Colors.grey.shade50,
@@ -582,7 +583,6 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
                           borderRadius: BorderRadius.circular(12),
                           child: Image.network(
                             _imageUrl,
-                            width: double.infinity,
                             height: 140,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => const Icon(
