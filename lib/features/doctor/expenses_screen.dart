@@ -7,6 +7,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:excel/excel.dart' as xl;
 import 'package:file_picker/file_picker.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/breakpoints.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
 import '../../core/utils/file_saver.dart';
@@ -59,8 +60,7 @@ class ExpensesScreen extends StatefulWidget {
 }
 
 class _ExpensesScreenState extends State<ExpensesScreen> {
-  static const _primary = Color(0xFF1A3A5C);
-  static const _teal = Color(0xFF00897B);
+  static const _kAccent = Color(0xFF993C1D); // expenses coral
 
   final _supabase = Supabase.instance.client;
   final _uid = Supabase.instance.client.auth.currentUser!.id;
@@ -203,11 +203,11 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: _teal.withValues(alpha: 0.1),
+                      color: _kAccent.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.receipt_long_rounded,
-                        color: _teal, size: 22),
+                        color: _kAccent, size: 22),
                   ),
                   const SizedBox(width: 10),
                   const Text('Add Expense',
@@ -234,7 +234,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     decoration: InputDecoration(
                       labelText: 'Expense Date',
                       prefixIcon: const Icon(Icons.calendar_today_rounded,
-                          color: _teal, size: 20),
+                          color: _kAccent, size: 20),
                       border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10)),
                       filled: true,
@@ -255,7 +255,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                   decoration: InputDecoration(
                     labelText: 'Status',
                     prefixIcon: const Icon(Icons.info_outline_rounded,
-                        color: _teal, size: 20),
+                        color: _kAccent, size: 20),
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10)),
                     filled: true,
@@ -322,7 +322,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                   height: 50,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _teal,
+                      backgroundColor: _kAccent,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12)),
@@ -396,7 +396,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       onChanged: onChanged,
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon, color: _teal, size: 20),
+        prefixIcon: Icon(icon, color: _kAccent, size: 20),
         border:
             OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
         filled: true,
@@ -662,6 +662,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   @override
   Widget build(BuildContext context) {
     final s = AppStrings(context.watch<LanguageProvider>().isArabic);
+    final isDesktop = MediaQuery.sizeOf(context).width >= kMobileBreakpoint;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF2F5F9),
@@ -683,13 +684,26 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           final all = snap.data ?? [];
           final filtered = _inPeriod(all);
 
-          final totalAmt = filtered.fold<double>(
-              0, (acc, d) => acc + ((d['amount'] as num?) ?? 0));
-          final paidAmt = filtered
-              .where((d) => d['status'] == 'paid')
-              .fold<double>(
-                  0, (acc, d) => acc + ((d['amount'] as num?) ?? 0));
-          final pendingAmt = totalAmt - paidAmt;
+          // ── KPI calculations ───────────────────────────────────────────
+          double paidTotal    = 0;
+          double pendingTotal = 0;
+          double totalAmt     = 0;
+
+          for (final d in filtered) {
+            final amt = (d['amount'] as num?)?.toDouble() ?? 0;
+            final st  = _ExpStatusX.fromString(d['status'] as String?);
+            totalAmt += amt;
+            switch (st) {
+              case _ExpStatus.paid:
+                paidTotal += amt;
+              case _ExpStatus.partiallyPaid:
+                final pAmt = (d['paid_amount'] as num?)?.toDouble() ?? 0;
+                paidTotal    += pAmt;
+                pendingTotal += (amt - pAmt).clamp(0, double.infinity);
+              case _ExpStatus.pending:
+                pendingTotal += amt;
+            }
+          }
 
           final categoryTotals = <String, double>{};
           for (final d in filtered) {
@@ -698,9 +712,28 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             categoryTotals[cat] = (categoryTotals[cat] ?? 0) + amt;
           }
 
+          String topCatName = '—';
+          double topCatAmt  = 0;
+          if (categoryTotals.isNotEmpty) {
+            final top = categoryTotals.entries
+                .reduce((a, b) => a.value > b.value ? a : b);
+            topCatName = top.key;
+            topCatAmt  = top.value;
+          }
+
           return Column(
             children: [
-              _header(s, totalAmt, paidAmt, pendingAmt, filtered.length),
+              if (isDesktop)
+                _expSummaryBand(
+                  paidTotal: paidTotal,
+                  pendingTotal: pendingTotal,
+                  total: totalAmt,
+                  topCatName: topCatName,
+                  topCatAmt: topCatAmt,
+                  isDesktop: isDesktop,
+                )
+              else
+                _header(s, totalAmt, paidTotal, pendingTotal, filtered.length),
               _filterRow(s),
               Expanded(
                 child: SingleChildScrollView(
@@ -867,7 +900,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
               padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: sel ? _primary : const Color(0xFFF2F5F9),
+                color: sel ? _kAccent : const Color(0xFFF2F5F9),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
@@ -979,13 +1012,13 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           children: [
             const Row(children: [
               Icon(Icons.pie_chart_rounded,
-                  size: 16, color: _primary),
+                  size: 16, color: _kAccent),
               SizedBox(width: 6),
               Text('By Category',
                   style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: _primary)),
+                      color: _kAccent)),
             ]),
             const SizedBox(height: 14),
             ...sorted.take(6).toList().asMap().entries.map((entry) {
@@ -1011,7 +1044,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500))),
                       Text(
-                          '\$${e.value.toStringAsFixed(2)}  ${(pct * 100).toStringAsFixed(0)}%',
+                          '${_fmtAmt(e.value)}  ${(pct * 100).toStringAsFixed(0)}%',
                           style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey.shade600,
@@ -1058,13 +1091,13 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Row(children: [
-              Icon(Icons.pie_chart_rounded, size: 16, color: _primary),
+              Icon(Icons.pie_chart_rounded, size: 16, color: _kAccent),
               SizedBox(width: 6),
               Text('Expenses by Category',
                   style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: _primary)),
+                      color: _kAccent)),
             ]),
             const SizedBox(height: 16),
             Row(
@@ -1119,7 +1152,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                               style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,
-                                  color: _primary)),
+                                  color: _kAccent)),
                         ]),
                       );
                     }).toList(),
@@ -1152,13 +1185,13 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
               children: [
                 Row(children: [
                   const Icon(Icons.receipt_long_rounded,
-                      size: 16, color: _primary),
+                      size: 16, color: _kAccent),
                   const SizedBox(width: 6),
                   const Text('Expense Records',
                       style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: _primary)),
+                          color: _kAccent)),
                   const Spacer(),
                   SizedBox(
                     width: 150,
@@ -1189,8 +1222,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: _primary,
-                      side: const BorderSide(color: _primary),
+                      foregroundColor: _kAccent,
+                      side: const BorderSide(color: _kAccent),
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
@@ -1285,13 +1318,13 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
         ),
         const SizedBox(width: 10),
         Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-          Text('\$${amt.toStringAsFixed(2)}',
+          Text(_fmtAmt(amt),
               style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 15,
-                  color: _primary)),
+                  color: _kAccent)),
           if (st == _ExpStatus.partiallyPaid && paidAmt != null)
-            Text('Paid: \$${paidAmt.toStringAsFixed(2)}',
+            Text('Paid: ${_fmtAmt(paidAmt)}',
                 style: const TextStyle(
                     fontSize: 11, color: Color(0xFFE65100))),
           const SizedBox(height: 4),
@@ -1352,6 +1385,89 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
         ]),
       );
 
+  // ── Expenses summary band ─────────────────────────────────────────────────
+
+  Widget _expSummaryBand({
+    required double paidTotal,
+    required double pendingTotal,
+    required double total,
+    required String topCatName,
+    required double topCatAmt,
+    required bool isDesktop,
+  }) {
+    const successColor = Color(0xFF2E7D32);
+    const warningColor = Color(0xFFF57F17);
+
+    final cardA = Expanded(child: _kpiCard(title: 'Paid', amount: paidTotal,
+        tint: const Color(0xFFE8F5E9), accent: successColor));
+    final cardB = Expanded(child: _kpiCard(title: 'Pending', amount: pendingTotal,
+        tint: const Color(0xFFFFF8E1), accent: warningColor));
+    final cardC = Expanded(child: _kpiCard(title: 'Total', amount: total,
+        tint: const Color(0xFFF8F0EE), accent: _kAccent));
+    final cardD = Expanded(child: _kpiCard(title: 'Top Category', amount: topCatAmt,
+        tint: const Color(0xFFF8F0EE), accent: _kAccent,
+        sublabel: topCatName));
+    const gap = SizedBox(width: 8);
+
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+      child: isDesktop
+          ? Row(children: [cardA, gap, cardB, gap, cardC, gap, cardD])
+          : Column(children: [
+              Row(children: [cardA, gap, cardB]),
+              const SizedBox(height: 8),
+              Row(children: [cardC, gap, cardD]),
+            ]),
+    );
+  }
+
+  Widget _kpiCard({
+    required String title,
+    required double amount,
+    required Color tint,
+    required Color accent,
+    String? sublabel,
+  }) =>
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: tint,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(title,
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: accent.withValues(alpha: 0.8))),
+            const SizedBox(height: 6),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _fmtAmt(amount),
+                style: TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold, color: accent),
+              ),
+            ),
+            if (sublabel != null) ...[
+              const SizedBox(height: 2),
+              Text(sublabel,
+                  style: TextStyle(
+                      fontSize: 11, color: accent.withValues(alpha: 0.65)),
+                  overflow: TextOverflow.ellipsis),
+            ],
+          ],
+        ),
+      );
+
+  String _fmtAmt(double amt) =>
+      'USD ${NumberFormat('#,##0.00', 'en_US').format(amt)}';
+
   // ── FAB ───────────────────────────────────────────────────────────────────
 
   Widget _buildFab(AppStrings s) => Column(
@@ -1391,7 +1507,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             const SizedBox(width: 8),
             FloatingActionButton.small(
               heroTag: 'fab_import_expenses',
-              backgroundColor: const Color(0xFF1A3A5C),
+              backgroundColor: _kAccent,
               foregroundColor: Colors.white,
               onPressed: _importExpensesFromExcel,
               tooltip: 'Import from Excel',
@@ -1401,7 +1517,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           const SizedBox(height: 10),
           FloatingActionButton.extended(
             heroTag: 'fab_add_expenses',
-            backgroundColor: _teal,
+            backgroundColor: _kAccent,
             foregroundColor: Colors.white,
             icon: const Icon(Icons.add_rounded),
             label: const Text('Add Expense',
