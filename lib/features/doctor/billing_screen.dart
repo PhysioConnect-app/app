@@ -778,8 +778,20 @@ class _BillingScreenState extends State<BillingScreen> {
   Widget build(BuildContext context) {
     final s = AppStrings(context.watch<LanguageProvider>().isArabic);
 
+    final isDesktop = MediaQuery.sizeOf(context).width >= kMobileBreakpoint;
+
     return Scaffold(
       backgroundColor: const Color(0xFFEBF2FB),
+      floatingActionButton: isDesktop
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _showAddInvoice(s),
+              backgroundColor: _kAccent,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('New Invoice',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: _supabase
             .from('invoices')
@@ -808,7 +820,6 @@ class _BillingScreenState extends State<BillingScreen> {
           double overdueAmt   = 0; // pending invoices > 30 days old
           double insuranceTotal = 0;
           int    invoiceCount = 0;
-          int    completedCount = 0;
           final  pendingDocs  = <Map<String, dynamic>>[];
           final  overdueThreshold =
               DateTime.now().subtract(const Duration(days: 30));
@@ -821,7 +832,6 @@ class _BillingScreenState extends State<BillingScreen> {
             switch (st) {
               case _InvStatus.paid:
                 collected += amt;
-                completedCount++;
               case _InvStatus.partiallyPaid:
                 final paidAmt = (d['paid_amount'] as num?)?.toDouble() ?? 0;
                 collected   += paidAmt;
@@ -850,27 +860,24 @@ class _BillingScreenState extends State<BillingScreen> {
 
           return LayoutBuilder(
             builder: (ctx, constraints) {
-              final isDesktop = constraints.maxWidth >= kMobileBreakpoint;
               return Column(
                 children: [
-                  if (isDesktop)
-                    _summaryBand(
-                      s,
-                      collected: collected,
-                      pending: pendingTotal,
-                      overdue: overdueAmt,
-                      invoiced: invoiced,
-                      invoiceCount: invoiceCount,
-                    ),
+                  _summaryBand(
+                    s,
+                    collected: collected,
+                    pending: pendingTotal,
+                    overdue: overdueAmt,
+                    invoiced: invoiced,
+                    invoiceCount: invoiceCount,
+                    isDesktop: isDesktop,
+                  ),
                   _filterBar(s),
                   Expanded(
                     child: isDesktop
                       ? _desktopTable(filtered, s)
-                      : _narrowLayout(s, filtered, pendingDocs,
-                            collected, pendingTotal, insuranceTotal,
-                            completedCount, _currency),
+                      : _narrowLayout(s, filtered),
                   ),
-                  _bottomBar(s, filtered, pendingDocs),
+                  _bottomBar(s, filtered, pendingDocs, isDesktop: isDesktop),
                 ],
               );
             },
@@ -1026,37 +1033,25 @@ class _BillingScreenState extends State<BillingScreen> {
         child: _invoiceTable(filtered, s, scrollable: true),
       );
 
-  // ── Narrow layout ─────────────────────────────────────────────────────────
+  // ── Narrow layout (mobile compact cards) ─────────────────────────────────
 
-  Widget _narrowLayout(AppStrings s,
-      List<Map<String, dynamic>> filtered,
-      List<Map<String, dynamic>> pendingDocs,
-      double totalRevenue, double pendingTotal,
-      double insuranceTotal, int completedCount, String currency) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(14),
-      child: Column(children: [
-        Row(children: [
-          Expanded(child: _summaryCard('Total Revenue',
-              '$currency ${totalRevenue.toStringAsFixed(2)}',
-              'This Period', const Color(0xFF2E7D32))),
-          const SizedBox(width: 10),
-          Expanded(child: _summaryCard('Pending',
-              '$currency ${pendingTotal.toStringAsFixed(2)}',
-              'Awaiting', const Color(0xFFF57F17))),
+  Widget _narrowLayout(AppStrings s, List<Map<String, dynamic>> filtered) {
+    if (filtered.isEmpty) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(Icons.receipt_long_outlined,
+              size: 50, color: Colors.grey.shade300),
+          const SizedBox(height: 10),
+          Text(s.noData,
+              style: const TextStyle(color: AppColors.textSecondary)),
         ]),
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(child: _summaryCard('Insurance',
-              '$currency ${insuranceTotal.toStringAsFixed(2)}',
-              'Processing', const Color(0xFF546E7A))),
-          const SizedBox(width: 10),
-          Expanded(child: _summaryCard('Completed',
-              '$completedCount', 'Transactions', _kAccent)),
-        ]),
-        const SizedBox(height: 14),
-        _invoiceTable(filtered, s),
-      ]),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 96),
+      itemCount: filtered.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 8),
+      itemBuilder: (_, i) => _compactInvoiceCard(filtered[i], s),
     );
   }
 
@@ -1233,42 +1228,101 @@ class _BillingScreenState extends State<BillingScreen> {
                 fontWeight: FontWeight.bold)),
       );
 
-  // ── Summary card ──────────────────────────────────────────────────────────
+  // ── Compact invoice card (mobile) ─────────────────────────────────────────
 
-  Widget _summaryCard(String title, String value,
-      String subtitle, Color color) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(title,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 13)),
-          const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(value,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 22)),
-          ),
-          const SizedBox(height: 2),
-          Text(subtitle,
-              style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.7),
-                  fontSize: 11)),
-        ],
+  Widget _compactInvoiceCard(Map<String, dynamic> d, AppStrings s) {
+    final name   = (d['patient_name'] as String?) ?? 'Patient';
+    final tsStr  = d['invoice_date'] as String? ?? d['created_at'] as String?;
+    final date   = tsStr != null
+        ? DateFormat('MMM d, yyyy').format(DateTime.parse(tsStr))
+        : '—';
+    final svc    = (d['service'] as String?) ?? 'Physical Therapy';
+    final amt    = (d['amount'] as num?)?.toDouble() ?? 0;
+    final cur    = (d['currency'] as String?) ?? 'USD';
+    final st     = _InvStatusX.fromString(d['status'] as String?);
+    final docId  = d['id'] as String;
+
+    return Card(
+      elevation: 1,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Expanded(
+                child: Text(name,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold, fontSize: 15),
+                    overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: 8),
+              Text('$cur ${amt.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 15)),
+              PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert_rounded,
+                    color: Colors.grey.shade400, size: 18),
+                onSelected: (v) async {
+                  if (v == '__partial__') {
+                    _showMarkPartialSheet(docId, amt, cur);
+                    return;
+                  }
+                  await _updateStatus(docId, _InvStatusX.fromString(v));
+                },
+                itemBuilder: (_) => [
+                  if (st != _InvStatus.paid)
+                    PopupMenuItem(value: _InvStatus.paid.key,
+                        child: Row(children: [
+                          const Icon(Icons.check_circle_rounded,
+                              color: Color(0xFF2E7D32), size: 18),
+                          const SizedBox(width: 8),
+                          Text(s.markAsPaid),
+                        ])),
+                  if (st != _InvStatus.partiallyPaid)
+                    const PopupMenuItem(value: '__partial__',
+                        child: Row(children: [
+                          Icon(Icons.payments_rounded,
+                              color: Color(0xFFE65100), size: 18),
+                          SizedBox(width: 8),
+                          Text('Mark Partially Paid'),
+                        ])),
+                  if (st != _InvStatus.insuranceClaim)
+                    const PopupMenuItem(value: 'insurance_claim',
+                        child: Row(children: [
+                          Icon(Icons.shield_rounded,
+                              color: Color(0xFF546E7A), size: 18),
+                          SizedBox(width: 8),
+                          Text('Insurance Claim'),
+                        ])),
+                  if (st != _InvStatus.cancelled)
+                    PopupMenuItem(value: _InvStatus.cancelled.key,
+                        child: Row(children: [
+                          const Icon(Icons.cancel_rounded,
+                              color: AppColors.error, size: 18),
+                          const SizedBox(width: 8),
+                          Text(s.statusCancelled,
+                              style: const TextStyle(
+                                  color: AppColors.error)),
+                        ])),
+                ],
+              ),
+            ]),
+            const SizedBox(height: 6),
+            Row(children: [
+              Expanded(
+                child: Text('$svc · $date',
+                    style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 13),
+                    overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: 8),
+              _statusBadge(st, s),
+            ]),
+          ],
+        ),
       ),
     );
   }
@@ -1277,33 +1331,36 @@ class _BillingScreenState extends State<BillingScreen> {
 
   Widget _bottomBar(AppStrings s,
       List<Map<String, dynamic>> filtered,
-      List<Map<String, dynamic>> pendingDocs) {
+      List<Map<String, dynamic>> pendingDocs,
+      {bool isDesktop = true}) {
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _kAccent,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                  elevation: 3,
-                  shadowColor: _kAccent.withValues(alpha: 0.35),
+            if (isDesktop) ...[
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _kAccent,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    elevation: 3,
+                    shadowColor: _kAccent.withValues(alpha: 0.35),
+                  ),
+                  icon: const Icon(Icons.add_circle_rounded, size: 24),
+                  label: const Text('+ Add Income',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 17)),
+                  onPressed: () => _showAddInvoice(s),
                 ),
-                icon: const Icon(Icons.add_circle_rounded, size: 24),
-                label: const Text('+ Add Income',
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 17)),
-                onPressed: () => _showAddInvoice(s),
               ),
-            ),
-            const SizedBox(height: 8),
+              const SizedBox(height: 8),
+            ],
             Row(children: [
               if (FormFactorFeatures.of(context)
                   .showBillingImportExport) ...[
@@ -1417,6 +1474,7 @@ class _BillingScreenState extends State<BillingScreen> {
     required double overdue,
     required double invoiced,
     required int invoiceCount,
+    required bool isDesktop,
   }) {
     final total = collected + pending + overdue;
     final collectedPct = total > 0 ? collected / total : 0.0;
@@ -1441,36 +1499,40 @@ class _BillingScreenState extends State<BillingScreen> {
             _currencyChip('LBP'),
           ]),
           const SizedBox(height: 12),
-          Row(children: [
-            Expanded(child: _kpiCard(
-              title: 'Collected',
-              amount: collected,
-              tint: const Color(0xFFE8F5E9),
-              accent: _kSuccess,
-            )),
-            const SizedBox(width: 8),
-            Expanded(child: _kpiCard(
-              title: 'Pending',
-              amount: pending,
-              tint: const Color(0xFFFFF8E1),
-              accent: _kWarning,
-            )),
-            const SizedBox(width: 8),
-            Expanded(child: _kpiCard(
-              title: 'Overdue 30d+',
-              amount: overdue,
-              tint: const Color(0xFFFFEBEE),
-              accent: _kDanger,
-            )),
-            const SizedBox(width: 8),
-            Expanded(child: _kpiCard(
-              title: 'Invoiced',
-              amount: invoiced,
-              tint: const Color(0xFFF0FBF9),
-              accent: _kAccent,
-              sublabel: '$invoiceCount invoice${invoiceCount == 1 ? '' : 's'}',
-            )),
-          ]),
+          if (isDesktop)
+            Row(children: [
+              Expanded(child: _kpiCard(title: 'Collected', amount: collected,
+                  tint: const Color(0xFFE8F5E9), accent: _kSuccess)),
+              const SizedBox(width: 8),
+              Expanded(child: _kpiCard(title: 'Pending', amount: pending,
+                  tint: const Color(0xFFFFF8E1), accent: _kWarning)),
+              const SizedBox(width: 8),
+              Expanded(child: _kpiCard(title: 'Overdue 30d+', amount: overdue,
+                  tint: const Color(0xFFFFEBEE), accent: _kDanger)),
+              const SizedBox(width: 8),
+              Expanded(child: _kpiCard(title: 'Invoiced', amount: invoiced,
+                  tint: const Color(0xFFF0FBF9), accent: _kAccent,
+                  sublabel: '$invoiceCount invoice${invoiceCount == 1 ? '' : 's'}')),
+            ])
+          else
+            Column(children: [
+              Row(children: [
+                Expanded(child: _kpiCard(title: 'Collected', amount: collected,
+                    tint: const Color(0xFFE8F5E9), accent: _kSuccess)),
+                const SizedBox(width: 8),
+                Expanded(child: _kpiCard(title: 'Pending', amount: pending,
+                    tint: const Color(0xFFFFF8E1), accent: _kWarning)),
+              ]),
+              const SizedBox(height: 8),
+              Row(children: [
+                Expanded(child: _kpiCard(title: 'Overdue 30d+', amount: overdue,
+                    tint: const Color(0xFFFFEBEE), accent: _kDanger)),
+                const SizedBox(width: 8),
+                Expanded(child: _kpiCard(title: 'Invoiced', amount: invoiced,
+                    tint: const Color(0xFFF0FBF9), accent: _kAccent,
+                    sublabel: '$invoiceCount invoice${invoiceCount == 1 ? '' : 's'}')),
+              ]),
+            ]),
           const SizedBox(height: 12),
           _collectionBar(collectedPct, pendingPct, overduePct),
         ],
