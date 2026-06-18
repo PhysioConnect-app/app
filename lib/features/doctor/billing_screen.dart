@@ -564,92 +564,101 @@ class _BillingScreenState extends State<BillingScreen> {
 
     if (mounted) _showLoading('Importing income records…');
 
-    final excel = xl.Excel.decodeBytes(bytes);
-    final sheet = excel.tables[excel.tables.keys.first];
-    if (sheet == null) return;
-
-    int imported = 0;
-    final rows = sheet.rows.skip(1);
-    for (final row in rows) {
-      if (row.length < 5) continue;
-      final name    = row[0]?.value?.toString().trim() ?? '';
-      final service = row[1]?.value?.toString().trim() ?? '';
-      final dateStr = row[2]?.value?.toString().trim() ?? '';
-      final amtStr  = row[3]?.value?.toString().trim() ?? '';
-
-      // Detect whether exported format (includes Currency column at index 4)
-      final col4 = row[4]?.value?.toString().trim().toLowerCase() ?? '';
-      final hasCurrencyCol = row.length >= 6 &&
-          ['usd', 'eur', 'gbp', 'jod', 'ils', 'sar', 'aed'].contains(col4);
-      final statusRaw = hasCurrencyCol
-          ? (row[5]?.value?.toString().trim().toLowerCase() ?? 'pending')
-          : col4;
-      final note = hasCurrencyCol
-          ? (row.length > 6 ? (row[6]?.value?.toString().trim() ?? '') : '')
-          : (row.length > 5 ? (row[5]?.value?.toString().trim() ?? '') : '');
-
-      if (name.isEmpty || amtStr.isEmpty) continue;
-      final amt = double.tryParse(amtStr);
-      if (amt == null) continue;
-
-      DateTime invoiceDate;
-      try {
-        invoiceDate = DateFormat('dd/MM/yyyy').parse(dateStr);
-      } catch (_) {
-        try {
-          invoiceDate = DateFormat('yyyy-MM-dd').parse(dateStr);
-        } catch (_) {
-          invoiceDate = DateTime.now();
-        }
+    try {
+      final excel = xl.Excel.decodeBytes(bytes);
+      final sheet = excel.tables[excel.tables.keys.first];
+      if (sheet == null) {
+        _hideLoading();
+        return;
       }
 
-      final String statusKey;
-      if (statusRaw == 'paid') {
-        statusKey = 'paid';
-      } else if (statusRaw.startsWith('partially_paid') ||
-          statusRaw == 'partially paid') {
-        statusKey = 'partially_paid';
-      } else if (statusRaw.startsWith('cancelled')) {
-        statusKey = 'cancelled';
-      } else {
-        statusKey = 'pending';
-      }
-
-      // Find patient by name
-      final patSnap = await _supabase
-          .from('users')
-          .select()
-          .eq('role', 'patient');
+      // Fetch all patients once — avoids one Supabase call per row
+      final patSnap = await _supabase.from('users').select().eq('role', 'patient');
       final patList = (patSnap as List).cast<Map<String, dynamic>>();
-      final patDoc = patList.cast<Map<String, dynamic>?>().firstWhere(
-        (p) => (p?['name'] as String? ?? '')
-                .toLowerCase()
-                .contains(name.toLowerCase()),
-        orElse: () => null,
-      );
 
-      await _supabase.from('invoices').insert({
-        'doctor_id':    _uid,
-        'patient_id':   patDoc?['id'] ?? '',
-        'patient_name': name,
-        'service':     service.isEmpty ? 'Physical Therapy' : service,
-        'amount':      amt,
-        'currency':    _currency,
-        'status':      statusKey,
-        'note':        note,
-        'invoice_date': invoiceDate.toIso8601String(),
-        'created_at':   DateTime.now().toIso8601String(),
-      });
-      imported++;
+      int imported = 0;
+      for (final row in sheet.rows.skip(1)) {
+        if (row.length < 5) continue;
+        final name    = row[0]?.value?.toString().trim() ?? '';
+        final service = row[1]?.value?.toString().trim() ?? '';
+        final dateStr = row[2]?.value?.toString().trim() ?? '';
+        final amtStr  = row[3]?.value?.toString().trim() ?? '';
+
+        // Detect whether exported format (includes Currency column at index 4)
+        final col4 = row[4]?.value?.toString().trim().toLowerCase() ?? '';
+        final hasCurrencyCol = row.length >= 6 &&
+            ['usd', 'eur', 'gbp', 'jod', 'ils', 'sar', 'aed'].contains(col4);
+        final statusRaw = hasCurrencyCol
+            ? (row[5]?.value?.toString().trim().toLowerCase() ?? 'pending')
+            : col4;
+        final note = hasCurrencyCol
+            ? (row.length > 6 ? (row[6]?.value?.toString().trim() ?? '') : '')
+            : (row.length > 5 ? (row[5]?.value?.toString().trim() ?? '') : '');
+
+        if (name.isEmpty || amtStr.isEmpty) continue;
+        final amt = double.tryParse(amtStr);
+        if (amt == null) continue;
+
+        DateTime invoiceDate;
+        try {
+          invoiceDate = DateFormat('dd/MM/yyyy').parse(dateStr);
+        } catch (_) {
+          try {
+            invoiceDate = DateFormat('yyyy-MM-dd').parse(dateStr);
+          } catch (_) {
+            invoiceDate = DateTime.now();
+          }
+        }
+
+        final String statusKey;
+        if (statusRaw == 'paid') {
+          statusKey = 'paid';
+        } else if (statusRaw.startsWith('partially_paid') ||
+            statusRaw == 'partially paid') {
+          statusKey = 'partially_paid';
+        } else if (statusRaw.startsWith('cancelled')) {
+          statusKey = 'cancelled';
+        } else {
+          statusKey = 'pending';
+        }
+
+        final patDoc = patList.cast<Map<String, dynamic>?>().firstWhere(
+          (p) => (p?['name'] as String? ?? '')
+                  .toLowerCase()
+                  .contains(name.toLowerCase()),
+          orElse: () => null,
+        );
+
+        await _supabase.from('invoices').insert({
+          'doctor_id':    _uid,
+          'patient_id':   patDoc?['id'] ?? '',
+          'patient_name': name,
+          'service':     service.isEmpty ? 'Physical Therapy' : service,
+          'amount':      amt,
+          'currency':    _currency,
+          'status':      statusKey,
+          'note':        note,
+          'invoice_date': invoiceDate.toIso8601String(),
+          'created_at':   DateTime.now().toIso8601String(),
+        });
+        imported++;
+      }
+
+      _hideLoading();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Imported $imported invoice(s) successfully.'),
+        backgroundColor: AppColors.success,
+      ));
+      setState(() {});
+    } catch (e) {
+      _hideLoading();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Import failed: $e'),
+        backgroundColor: AppColors.error,
+      ));
     }
-
-    _hideLoading();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('Imported $imported invoice(s) successfully.'),
-      backgroundColor: AppColors.success,
-    ));
-    setState(() {});
   }
 
   // ── Export to Excel ──────────────────────────────────────────────────────
@@ -1533,8 +1542,10 @@ class _BillingScreenState extends State<BillingScreen> {
                     sublabel: '$invoiceCount invoice${invoiceCount == 1 ? '' : 's'}')),
               ]),
             ]),
-          const SizedBox(height: 12),
-          _collectionBar(collectedPct, pendingPct, overduePct),
+          if (isDesktop) ...[
+            const SizedBox(height: 12),
+            _collectionBar(collectedPct, pendingPct, overduePct),
+          ],
         ],
       ),
     );
