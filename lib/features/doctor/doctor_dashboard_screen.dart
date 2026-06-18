@@ -101,15 +101,15 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   Timer? _expiryTimer;
 
   static const List<IconData> _navIcons = [
-    Icons.calendar_today_rounded,     // 0 Schedule
-    Icons.description_rounded,        // 1 Documentation
-    Icons.people_alt_rounded,         // 2 My Patients
-    Icons.bar_chart_rounded,          // 3 Statistics
-    Icons.receipt_long_rounded,       // 4 Billing
-    Icons.receipt_rounded,            // 5 Expenses
-    Icons.badge_rounded,              // 6 My Profile
-    Icons.notifications_rounded,      // 7 Notifications
-    Icons.storefront_rounded,         // 8 Store (doctor only)
+    Icons.calendar_today_rounded,         // 0 Schedule
+    Icons.description_rounded,            // 1 Documentation
+    Icons.people_alt_rounded,             // 2 My Patients
+    Icons.bar_chart_rounded,              // 3 Statistics
+    Icons.receipt_long_rounded,           // 4 Revenues
+    Icons.receipt_rounded,                // 5 Expenses
+    Icons.badge_rounded,                  // 6 My Profile
+    Icons.notifications_rounded,          // 7 Notifications
+    Icons.workspace_premium_rounded,      // 8 PhysioGate (doctor only)
   ];
 
   int _doctorUnreadCount = 0;
@@ -552,11 +552,11 @@ Future<void> _showLogout(AppStrings s) async {
     Color(0xFF2E7D32), // Documentation  – green
     Color(0xFFE65100), // My Patients    – orange
     Color(0xFF00695C), // Statistics     – teal
-    Color(0xFFF57F17), // Billing        – amber
-    Color(0xFF00796B), // Expenses       – teal
+    Color(0xFF0E8378), // Revenues       – teal accent
+    Color(0xFF993C1D), // Expenses       – coral
     Color(0xFF37474F), // My Profile     – blue-grey
     Color(0xFF6A1B9A), // Notifications  – deep purple
-    Color(0xFF00838F), // Store          – cyan (doctor only)
+    Color(0xFF4527A0), // PhysioGate     – deep indigo (premium)
   ];
 
   Widget _buildHomeScreen(AppStrings s, LanguageProvider lang) {
@@ -672,10 +672,16 @@ Future<void> _showLogout(AppStrings s) async {
               final cols = constraints.maxWidth > 600 ? 4 : 2;
               final showStats = FormFactorFeatures.of(context).showStatistics;
               final showDocs = FormFactorFeatures.of(context).showDocumentation;
-              final visibleIndices = [
-                for (var i = 0; i < sections.length; i++)
-                  if ((i != 3 || showStats) && (i != 1 || showDocs)) i,
-              ];
+              // Row 1: My Patients, Schedule, Documentation, Notifications
+              // Row 2: Revenues, Expenses, Statistics, PhysioGate
+              // Row 3: My Profile
+              const displayOrder = [2, 0, 1, 7, 4, 5, 3, 8, 6];
+              final visibleIndices = displayOrder.where((i) {
+                if (i >= sections.length) return false;
+                if (i == 3 && !showStats) return false;
+                if (i == 1 && !showDocs) return false;
+                return true;
+              }).toList();
               return GridView.builder(
                 padding: const EdgeInsets.all(16),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(

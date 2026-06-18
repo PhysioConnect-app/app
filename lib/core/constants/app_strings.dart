@@ -66,7 +66,7 @@ class AppStrings {
   String get soapNotes => _t('SOAP Notes', 'ملاحظات SOAP');
   String get statistics => _t('Statistics', 'الإحصائيات');
   String get messages => _t('Messages', 'الرسائل');
-  String get billing => _t('Income', 'الدخل');
+  String get billing => _t('Revenues', 'الإيرادات');
   String get inventory => _t('Inventory', 'المخزون');
   String get expenses => _t('Expenses', 'المصروفات');
   String get myProfile => _t('My Profile', 'ملفي');
@@ -259,7 +259,8 @@ class AppStrings {
   String get notifPermNotNow => _t('Not Now', 'ليس الآن');
 
   // Physiogate Store
-  String get store => _t('Store', 'المتجر');
+  String get store => _t('PhysioGate', 'فيزيو جيت');
+  String get storeUpgradeTagline => _t('Upgrade your clinic', 'طوّر عيادتك');
 
   // Privacy policy — replace URL with your real hosted page before Store submission
   static const String privacyPolicyUrl = 'https://jihadzhour-dot.github.io/physioconnect-privacy/';
