@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -25,6 +26,34 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
   String   _period         = 'monthly';
   DateTime _refDate        = DateTime.now();
   bool     _showComparison = false;
+
+  late final StreamSubscription<List<Map<String, dynamic>>> _patientsSub;
+  List<Map<String, dynamic>> _allPatients = [];
+
+  @override
+  void initState() {
+    super.initState();
+    final uid = Supabase.instance.client.auth.currentUser?.id ?? '';
+    _patientsSub = Supabase.instance.client
+        .from('users')
+        .stream(primaryKey: ['id'])
+        .eq('role', 'patient')
+        .listen((rows) {
+          if (!mounted) return;
+          setState(() {
+            _allPatients = rows
+                .where((u) =>
+                    (u['doctor_ids'] as List<dynamic>?)?.contains(uid) == true)
+                .toList();
+          });
+        });
+  }
+
+  @override
+  void dispose() {
+    _patientsSub.cancel();
+    super.dispose();
+  }
 
   // ── Period helpers ──────────────────────────────────────────────────────
 
@@ -271,6 +300,62 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 }
               }
 
+              // ── Patient insight KPIs ─────────────────────────────────
+              final newPatients = _allPatients.where((u) {
+                final t = u['created_at'] as String?;
+                return t != null && _inRange(DateTime.parse(t));
+              }).length;
+
+              final avgSessionValue =
+                  sessions > 0 ? totalIncome / sessions : null;
+
+              // Returning patients: had an appointment in the period AND
+              // at least one appointment before _start.
+              final periodPids = appts
+                  .map((a) => a['patient_id'] as String?)
+                  .whereType<String>()
+                  .toSet();
+              final allAppts = apptSnap.data ?? [];
+              final retainedCount = periodPids
+                  .where((pid) => allAppts.any((a) =>
+                      a['patient_id'] == pid &&
+                      DateTime.parse(a['appointment_time'] as String)
+                          .isBefore(_start)))
+                  .length;
+              final retentionRate = periodPids.isEmpty
+                  ? 0.0
+                  : retainedCount / periodPids.length * 100;
+
+              final cancelledCount =
+                  appts.where((a) => a['status'] == 'cancelled').length;
+              final cancellationRate =
+                  sessions > 0 ? cancelledCount / sessions * 100 : 0.0;
+
+              // ── Top services by revenue ───────────────────────────────
+              final svcRevenue = <String, double>{};
+              for (final inv in invoices) {
+                final svc = (inv['service'] as String?)?.trim();
+                if (svc == null || svc.isEmpty) continue;
+                svcRevenue[svc] = (svcRevenue[svc] ?? 0) +
+                    ((inv['amount'] as num?)?.toDouble() ?? 0);
+              }
+              final topServices = (svcRevenue.entries.toList()
+                    ..sort((a, b) => b.value.compareTo(a.value)))
+                  .take(5)
+                  .toList();
+
+              // ── Top diagnoses from doctor's patients ──────────────────
+              final diagCounts = <String, int>{};
+              for (final u in _allPatients) {
+                final dx = (u['primary_diagnosis'] as String?)?.trim();
+                if (dx == null || dx.isEmpty) continue;
+                diagCounts[dx] = (diagCounts[dx] ?? 0) + 1;
+              }
+              final topDiagnoses = (diagCounts.entries.toList()
+                    ..sort((a, b) => b.value.compareTo(a.value)))
+                  .take(5)
+                  .toList();
+
               return _buildBody(
                 sessions:          sessions,
                 paidIncome:        paidIncome,
@@ -289,6 +374,12 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 prevNetProfit:     prevNetProfit,
                 incomeSpkl:        incomeSpkl,
                 expensesSpkl:      expensesSpkl,
+                newPatients:       newPatients,
+                avgSessionValue:   avgSessionValue,
+                retentionRate:     retentionRate,
+                cancellationRate:  cancellationRate,
+                topServices:       topServices,
+                topDiagnoses:      topDiagnoses,
               );
             },
           ),
@@ -315,6 +406,12 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
     required double  prevNetProfit,
     required List<double> incomeSpkl,
     required List<double> expensesSpkl,
+    required int     newPatients,
+    required double? avgSessionValue,
+    required double  retentionRate,
+    required double  cancellationRate,
+    required List<MapEntry<String, double>> topServices,
+    required List<MapEntry<String, int>>    topDiagnoses,
   }) {
     final s        = AppStrings(context.watch<LanguageProvider>().isArabic);
     final sessSpkl = sessionsByDay.map((v) => v.toDouble()).toList();
@@ -419,6 +516,62 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                     currency:      currency,
                   ),
                 ),
+              ],
+            ),
+          ),
+          // ── Section 4: Patient Insight row ───────────────────────────
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(children: [
+              Expanded(child: _insightCard(
+                icon:    Icons.person_add_rounded,
+                iconBg:  const Color(0xFFE3F2FD),
+                iconClr: const Color(0xFF1565C0),
+                label:   'New Patients',
+                value:   '$newPatients',
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: _insightCard(
+                icon:    Icons.attach_money_rounded,
+                iconBg:  const Color(0xFFE8F5E9),
+                iconClr: _green,
+                label:   'Avg Session',
+                value:   avgSessionValue != null
+                             ? '$currency ${avgSessionValue.toStringAsFixed(0)}'
+                             : '—',
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: _insightCard(
+                icon:    Icons.repeat_rounded,
+                iconBg:  const Color(0xFFE0F2F1),
+                iconClr: const Color(0xFF00897B),
+                label:   'Retention',
+                value:   '${retentionRate.toStringAsFixed(0)}%',
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: _insightCard(
+                icon:    Icons.cancel_outlined,
+                iconBg:  const Color(0xFFFFEBEE),
+                iconClr: _red,
+                label:   'Cancellation',
+                value:   '${cancellationRate.toStringAsFixed(0)}%',
+              )),
+            ]),
+          ),
+          // ── Section 5: Top Services + Top Diagnoses ───────────────────
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _topServicesCard(
+                  entries:  topServices,
+                  currency: currency,
+                )),
+                const SizedBox(width: 12),
+                Expanded(child: _topDiagnosesCard(entries: topDiagnoses)),
               ],
             ),
           ),
@@ -661,6 +814,216 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
               color: isPos ? _green : _red),
         ),
       ]),
+    );
+  }
+
+  // ── Section 4 helpers ─────────────────────────────────────────────────────
+
+  Widget _insightCard({
+    required IconData icon,
+    required Color    iconBg,
+    required Color    iconClr,
+    required String   label,
+    required String   value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+                color: iconBg, borderRadius: BorderRadius.circular(8)),
+            child: Icon(icon, color: iconClr, size: 14),
+          ),
+          const SizedBox(height: 8),
+          Text(value,
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: _navy)),
+          const SizedBox(height: 2),
+          Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  fontSize: 10, color: AppColors.textSecondary)),
+        ],
+      ),
+    );
+  }
+
+  // ── Section 5 helpers ─────────────────────────────────────────────────────
+
+  Widget _topServicesCard({
+    required List<MapEntry<String, double>> entries,
+    required String currency,
+  }) {
+    final maxVal = entries.isEmpty ? 1.0 : entries.first.value;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(children: [
+            Icon(Icons.star_rounded, size: 16, color: _navy),
+            SizedBox(width: 6),
+            Text('Top Services',
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: _navy)),
+          ]),
+          const SizedBox(height: 14),
+          if (entries.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Text('No service data in this period',
+                    style: TextStyle(color: AppColors.textSecondary)),
+              ),
+            )
+          else
+            ...entries.map((e) {
+              final pct = maxVal > 0 ? e.value / maxVal : 0.0;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Expanded(
+                        child: Text(e.key,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500)),
+                      ),
+                      Text('$currency ${e.value.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _navy)),
+                    ]),
+                    const SizedBox(height: 4),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: pct,
+                        minHeight: 6,
+                        backgroundColor: Colors.grey.shade100,
+                        valueColor:
+                            const AlwaysStoppedAnimation(_green),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _topDiagnosesCard({
+    required List<MapEntry<String, int>> entries,
+  }) {
+    final maxVal = entries.isEmpty ? 1 : entries.first.value;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(children: [
+            Icon(Icons.medical_information_rounded, size: 16, color: _navy),
+            SizedBox(width: 6),
+            Text('Top Diagnoses',
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: _navy)),
+          ]),
+          const SizedBox(height: 14),
+          if (entries.isEmpty)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Text('No diagnosis data',
+                    style: TextStyle(color: AppColors.textSecondary)),
+              ),
+            )
+          else
+            ...entries.map((e) {
+              final pct = maxVal > 0 ? e.value / maxVal : 0.0;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Expanded(
+                        child: Text(e.key,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500)),
+                      ),
+                      Text('${e.value} pt${e.value == 1 ? '' : 's'}',
+                          style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _navy)),
+                    ]),
+                    const SizedBox(height: 4),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: pct,
+                        minHeight: 6,
+                        backgroundColor: Colors.grey.shade100,
+                        valueColor: const AlwaysStoppedAnimation(
+                            Color(0xFF7B1FA2)),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
     );
   }
 
