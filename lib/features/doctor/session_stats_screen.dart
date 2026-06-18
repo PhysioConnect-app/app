@@ -213,9 +213,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 else                         { pendingExpenses += amt; }
               }
 
-              final totalIncome   = paidIncome + pendingIncome;
-              final totalExpenses = paidExpenses + pendingExpenses;
-              final netProfit     = paidIncome - paidExpenses;
+              final netProfit = paidIncome - paidExpenses;
 
               // ── Payment collection: overdue = pending invoices > 30 d ──
               final overdueThreshold =
@@ -262,26 +260,23 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
               }).toList();
 
               final prevSessions = prevAppts.length;
-              double prevPaidInc = 0, prevPendInc = 0;
+              double prevPaidInc = 0;
               for (final inv in prevInvList) {
                 final amt = (inv['amount'] as num?)?.toDouble() ?? 0;
-                if (inv['status'] == 'paid') { prevPaidInc += amt; }
-                else                         { prevPendInc += amt; }
+                if (inv['status'] == 'paid') prevPaidInc += amt;
               }
-              final prevTotalIncome = prevPaidInc + prevPendInc;
-              double prevPaidExp = 0, prevPendExp = 0;
+              double prevPaidExp = 0;
               for (final exp in prevExpList) {
                 final amt = (exp['amount'] as num?)?.toDouble() ?? 0;
-                if (exp['status'] == 'paid') { prevPaidExp += amt; }
-                else                         { prevPendExp += amt; }
+                if (exp['status'] == 'paid') prevPaidExp += amt;
               }
-              final prevTotalExpenses = prevPaidExp + prevPendExp;
-              final prevNetProfit     = prevPaidInc - prevPaidExp;
+              final prevNetProfit = prevPaidInc - prevPaidExp;
 
-              // ── Sparkline buckets (per day in current period) ─────────
+              // ── Sparkline buckets — paid-only, consistent with KPI cards ──
               final incomeSpkl   = List<double>.filled(days, 0);
               final expensesSpkl = List<double>.filled(days, 0);
               for (final inv in invoices) {
+                if (inv['status'] != 'paid') continue;
                 final t = inv['invoice_date'] as String?
                     ?? inv['created_at'] as String?;
                 if (t == null) continue;
@@ -291,6 +286,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 }
               }
               for (final exp in expenses) {
+                if (exp['status'] != 'paid') continue;
                 final t = exp['expense_date'] as String?
                     ?? exp['created_at'] as String?;
                 if (t == null) continue;
@@ -317,7 +313,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
               }).length;
 
               final avgSessionValue =
-                  sessions > 0 ? totalIncome / sessions : null;
+                  sessions > 0 ? paidIncome / sessions : null;
 
               // Returning patients: had an appointment in the period AND
               // at least one appointment before _start.
@@ -367,30 +363,28 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                   .toList();
 
               return _buildBody(
-                sessions:          sessions,
-                paidIncome:        paidIncome,
-                pendingIncome:     pendingIncome,
-                totalIncome:       totalIncome,
-                paidExpenses:      paidExpenses,
-                pendingExpenses:   pendingExpenses,
-                totalExpenses:     totalExpenses,
-                netProfit:         netProfit,
-                sessionsByDay:     sessionsByDay,
-                currency:          currency,
-                overdueIncome:     overdueIncome,
-                prevSessions:      prevSessions,
-                prevTotalIncome:   prevTotalIncome,
-                prevTotalExpenses: prevTotalExpenses,
-                prevNetProfit:     prevNetProfit,
-                incomeSpkl:        incomeSpkl,
-                expensesSpkl:      expensesSpkl,
-                newPatients:       newPatients,
-                avgSessionValue:   avgSessionValue,
-                retentionRate:     retentionRate,
-                cancellationRate:  cancellationRate,
-                topServices:       topServices,
-                topDiagnoses:      topDiagnoses,
-                heatmap:           heatmap,
+                sessions:         sessions,
+                paidIncome:       paidIncome,
+                pendingIncome:    pendingIncome,
+                paidExpenses:     paidExpenses,
+                pendingExpenses:  pendingExpenses,
+                netProfit:        netProfit,
+                sessionsByDay:    sessionsByDay,
+                currency:         currency,
+                overdueIncome:    overdueIncome,
+                prevSessions:     prevSessions,
+                prevPaidIncome:   prevPaidInc,
+                prevPaidExpenses: prevPaidExp,
+                prevNetProfit:    prevNetProfit,
+                incomeSpkl:       incomeSpkl,
+                expensesSpkl:     expensesSpkl,
+                newPatients:      newPatients,
+                avgSessionValue:  avgSessionValue,
+                retentionRate:    retentionRate,
+                cancellationRate: cancellationRate,
+                topServices:      topServices,
+                topDiagnoses:     topDiagnoses,
+                heatmap:          heatmap,
               );
             },
           ),
@@ -403,17 +397,15 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
     required int     sessions,
     required double  paidIncome,
     required double  pendingIncome,
-    required double  totalIncome,
     required double  paidExpenses,
     required double  pendingExpenses,
-    required double  totalExpenses,
     required double  netProfit,
     required List<int> sessionsByDay,
     required String  currency,
     required double  overdueIncome,
     required int     prevSessions,
-    required double  prevTotalIncome,
-    required double  prevTotalExpenses,
+    required double  prevPaidIncome,
+    required double  prevPaidExpenses,
     required double  prevNetProfit,
     required List<double> incomeSpkl,
     required List<double> expensesSpkl,
@@ -455,13 +447,12 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
               const SizedBox(width: 10),
               Expanded(child: _kpi(
                 label:          s.statsIncome,
-                value:          '$currency ${totalIncome.toStringAsFixed(0)}',
+                value:          '$currency ${paidIncome.toStringAsFixed(0)}',
                 icon:           Icons.trending_up_rounded,
                 iconBg:         const Color(0xFFE8F5E9),
                 iconClr:        _green,
-                sub:            '$currency ${paidIncome.toStringAsFixed(0)} ${s.statsPaidSub}',
                 deltaPercent:   _showComparison
-                                    ? _delta(totalIncome, prevTotalIncome)
+                                    ? _delta(paidIncome, prevPaidIncome)
                                     : null,
                 sparklineData:  incomeSpkl,
                 sparklineColor: _green,
@@ -469,13 +460,12 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
               const SizedBox(width: 10),
               Expanded(child: _kpi(
                 label:          s.statsExpenses,
-                value:          '$currency ${totalExpenses.toStringAsFixed(0)}',
+                value:          '$currency ${paidExpenses.toStringAsFixed(0)}',
                 icon:           Icons.trending_down_rounded,
                 iconBg:         const Color(0xFFFFEBEE),
                 iconClr:        _red,
-                sub:            '$currency ${paidExpenses.toStringAsFixed(0)} ${s.statsPaidSub}',
                 deltaPercent:   _showComparison
-                                    ? _delta(totalExpenses, prevTotalExpenses)
+                                    ? _delta(paidExpenses, prevPaidExpenses)
                                     : null,
                 sparklineData:  expensesSpkl,
                 sparklineColor: _red,
