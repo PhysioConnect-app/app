@@ -9,6 +9,7 @@ import 'package:excel/excel.dart' as xl;
 import 'package:file_picker/file_picker.dart';
 import '../../core/config/form_factor_features.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/breakpoints.dart';
 import '../../core/widgets/patient_search_field.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
@@ -60,7 +61,10 @@ class BillingScreen extends StatefulWidget {
 }
 
 class _BillingScreenState extends State<BillingScreen> {
-  static const _navy = Color(0xFF1A3A5C);
+  static const _kAccent  = Color(0xFF0E8378); // income teal
+  static const _kSuccess = Color(0xFF2E7D32);
+  static const _kWarning = Color(0xFFF57F17);
+  static const _kDanger  = Color(0xFFC62828);
 
   final _supabase = Supabase.instance.client;
   final _uid = Supabase.instance.client.auth.currentUser!.id;
@@ -69,6 +73,7 @@ class _BillingScreenState extends State<BillingScreen> {
   DateTime _refDate = DateTime.now();
   String   _patientFilter = '';
   String?  _statusFilter;
+  String   _currency = 'USD'; // drives KPI totals and table filter
 
   // ── Period helpers ──────────────────────────────────────────────────────
 
@@ -135,6 +140,9 @@ class _BillingScreenState extends State<BillingScreen> {
     final s = _start;
     final e = _end;
     return docs.where((d) {
+      // Currency filter — totals and table always single-currency
+      if ((d['currency'] as String? ?? 'USD') != _currency) return false;
+
       final tsStr = d['invoice_date'] as String? ?? d['created_at'] as String?;
       if (tsStr == null) return false;
       final dt = DateTime.parse(tsStr);
@@ -375,7 +383,7 @@ class _BillingScreenState extends State<BillingScreen> {
                 width: double.infinity, height: 48,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _navy,
+                    backgroundColor: _kAccent,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10)),
@@ -626,7 +634,7 @@ class _BillingScreenState extends State<BillingScreen> {
         'patient_name': name,
         'service':     service.isEmpty ? 'Physical Therapy' : service,
         'amount':      amt,
-        'currency':    'USD',
+        'currency':    _currency,
         'status':      statusKey,
         'note':        note,
         'invoice_date': invoiceDate.toIso8601String(),
@@ -713,7 +721,7 @@ class _BillingScreenState extends State<BillingScreen> {
           Padding(
             padding: const EdgeInsets.all(16),
             child: Row(children: [
-              const Icon(Icons.shield_rounded, color: _navy),
+              const Icon(Icons.shield_rounded, color: _kAccent),
               const SizedBox(width: 10),
               const Text('Submit Insurance Claim',
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
@@ -727,7 +735,7 @@ class _BillingScreenState extends State<BillingScreen> {
               itemBuilder: (_, i) {
                 final d = pending[i];
                 return ListTile(
-                  leading: const Icon(Icons.receipt_outlined, color: _navy),
+                  leading: const Icon(Icons.receipt_outlined, color: _kAccent),
                   title: Text(d['patient_name'] ?? 'Patient',
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(
@@ -794,25 +802,42 @@ class _BillingScreenState extends State<BillingScreen> {
           final all      = snap.data ?? [];
           final filtered = _inPeriod(all);
 
-          // Summary calculations
-          double totalRevenue = 0, pendingTotal = 0, insuranceTotal = 0;
-          int completedCount = 0;
-          final pendingDocs = <Map<String, dynamic>>[];
+          // ── KPI calculations ────────────────────────────────────────────
+          double collected    = 0; // paid amounts + partial-paid portions
+          double pendingOnly  = 0; // pending (non-overdue) + remaining partial
+          double overdueAmt   = 0; // pending invoices > 30 days old
+          double insuranceTotal = 0;
+          int    invoiceCount = 0;
+          int    completedCount = 0;
+          final  pendingDocs  = <Map<String, dynamic>>[];
+          final  overdueThreshold =
+              DateTime.now().subtract(const Duration(days: 30));
 
           for (final d in filtered) {
-            final amt    = (d['amount'] as num?)?.toDouble() ?? 0;
-            final st     = _InvStatusX.fromString(d['status'] as String?);
+            final amt = (d['amount'] as num?)?.toDouble() ?? 0;
+            final st  = _InvStatusX.fromString(d['status'] as String?);
+            if (st == _InvStatus.cancelled) continue;
+            invoiceCount++;
             switch (st) {
               case _InvStatus.paid:
-                totalRevenue += amt;
+                collected += amt;
                 completedCount++;
               case _InvStatus.partiallyPaid:
                 final paidAmt = (d['paid_amount'] as num?)?.toDouble() ?? 0;
-                totalRevenue += paidAmt;
-                pendingTotal += (amt - paidAmt).clamp(0, double.infinity);
+                collected   += paidAmt;
+                pendingOnly += (amt - paidAmt).clamp(0, double.infinity);
               case _InvStatus.pending:
-                pendingTotal += amt;
                 pendingDocs.add(d);
+                final dateStr = d['invoice_date'] as String? ??
+                    d['created_at'] as String?;
+                final dt = dateStr != null
+                    ? DateTime.parse(dateStr)
+                    : DateTime.now();
+                if (dt.isBefore(overdueThreshold)) {
+                  overdueAmt += amt;
+                } else {
+                  pendingOnly += amt;
+                }
               case _InvStatus.insuranceClaim:
                 insuranceTotal += amt;
               case _InvStatus.cancelled:
@@ -820,23 +845,30 @@ class _BillingScreenState extends State<BillingScreen> {
             }
           }
 
-          final currency = filtered.isEmpty ? 'USD' :
-              filtered.first['currency'] ?? 'USD';
+          final pendingTotal = pendingOnly + insuranceTotal;
+          final invoiced     = collected + pendingTotal + overdueAmt;
 
           return LayoutBuilder(
             builder: (ctx, constraints) {
-              final isWide = constraints.maxWidth > 700;
+              final isDesktop = constraints.maxWidth >= kMobileBreakpoint;
               return Column(
                 children: [
+                  if (isDesktop)
+                    _summaryBand(
+                      s,
+                      collected: collected,
+                      pending: pendingTotal,
+                      overdue: overdueAmt,
+                      invoiced: invoiced,
+                      invoiceCount: invoiceCount,
+                    ),
                   _filterBar(s),
                   Expanded(
-                    child: isWide
-                      ? _wideLayout(s, filtered, pendingDocs,
-                            totalRevenue, pendingTotal, insuranceTotal,
-                            completedCount, currency)
+                    child: isDesktop
+                      ? _desktopTable(filtered, s)
                       : _narrowLayout(s, filtered, pendingDocs,
-                            totalRevenue, pendingTotal, insuranceTotal,
-                            completedCount, currency),
+                            collected, pendingTotal, insuranceTotal,
+                            completedCount, _currency),
                   ),
                   _bottomBar(s, filtered, pendingDocs),
                 ],
@@ -852,7 +884,7 @@ class _BillingScreenState extends State<BillingScreen> {
 
   Widget _filterBar(AppStrings s) {
     return Container(
-      color: const Color(0xFF1A3A5C),
+      color: _kAccent,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Column(
         children: [
@@ -866,7 +898,7 @@ class _BillingScreenState extends State<BillingScreen> {
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   value: _period,
-                  dropdownColor: _navy,
+                  dropdownColor: _kAccent,
                   icon: const Icon(Icons.arrow_drop_down_rounded,
                       color: Colors.white),
                   items: ['daily', 'weekly', 'monthly', 'yearly'].map((p) =>
@@ -895,7 +927,7 @@ class _BillingScreenState extends State<BillingScreen> {
                 GestureDetector(
                   onTap: _prev,
                   child: const Icon(Icons.chevron_left_rounded,
-                      color: _navy, size: 20)),
+                      color: _kAccent, size: 20)),
                 const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () async {
@@ -912,11 +944,11 @@ class _BillingScreenState extends State<BillingScreen> {
                   },
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
                     const Icon(Icons.calendar_month_rounded,
-                        color: _navy, size: 15),
+                        color: _kAccent, size: 15),
                     const SizedBox(width: 4),
                     Text(_rangeLabel,
                         style: const TextStyle(
-                            color: _navy,
+                            color: _kAccent,
                             fontWeight: FontWeight.w600,
                             fontSize: 13)),
                   ]),
@@ -925,7 +957,7 @@ class _BillingScreenState extends State<BillingScreen> {
                 GestureDetector(
                   onTap: _next,
                   child: const Icon(Icons.chevron_right_rounded,
-                      color: _navy, size: 20)),
+                      color: _kAccent, size: 20)),
               ]),
             ),
           ]),
@@ -961,7 +993,7 @@ class _BillingScreenState extends State<BillingScreen> {
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String?>(
                   value: _statusFilter,
-                  dropdownColor: _navy,
+                  dropdownColor: _kAccent,
                   icon: const Icon(Icons.arrow_drop_down_rounded,
                       color: Colors.white),
                   items: [null, 'pending', 'paid', 'partially_paid',
@@ -986,44 +1018,13 @@ class _BillingScreenState extends State<BillingScreen> {
     );
   }
 
-  // ── Wide layout ───────────────────────────────────────────────────────────
+  // ── Desktop table (full-width, no sidebar) ───────────────────────────────
 
-  Widget _wideLayout(AppStrings s,
-      List<Map<String, dynamic>> filtered,
-      List<Map<String, dynamic>> pendingDocs,
-      double totalRevenue, double pendingTotal,
-      double insuranceTotal, int completedCount, String currency) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(flex: 3, child: _invoiceTable(filtered, s, scrollable: true)),
-          const SizedBox(width: 16),
-          SizedBox(
-            width: 280,
-            child: Column(children: [
-              _summaryCard('Total Revenue',
-                  '$currency ${totalRevenue.toStringAsFixed(2)}',
-                  'This Month', const Color(0xFF2E7D32)),
-              const SizedBox(height: 10),
-              _summaryCard('Pending Payments',
-                  '$currency ${pendingTotal.toStringAsFixed(2)}',
-                  'Awaiting', const Color(0xFFF57F17)),
-              const SizedBox(height: 10),
-              _summaryCard('Insurance Claims',
-                  '$currency ${insuranceTotal.toStringAsFixed(2)}',
-                  'Processing', const Color(0xFF546E7A)),
-              const SizedBox(height: 10),
-              _summaryCard('Transactions Completed',
-                  '$completedCount',
-                  'This Period', _navy),
-            ]),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _desktopTable(List<Map<String, dynamic>> filtered, AppStrings s) =>
+      Padding(
+        padding: const EdgeInsets.all(16),
+        child: _invoiceTable(filtered, s, scrollable: true),
+      );
 
   // ── Narrow layout ─────────────────────────────────────────────────────────
 
@@ -1051,7 +1052,7 @@ class _BillingScreenState extends State<BillingScreen> {
               'Processing', const Color(0xFF546E7A))),
           const SizedBox(width: 10),
           Expanded(child: _summaryCard('Completed',
-              '$completedCount', 'Transactions', _navy)),
+              '$completedCount', 'Transactions', _kAccent)),
         ]),
         const SizedBox(height: 14),
         _invoiceTable(filtered, s),
@@ -1065,7 +1066,7 @@ class _BillingScreenState extends State<BillingScreen> {
       {bool scrollable = false}) {
     final header = Container(
       decoration: const BoxDecoration(
-        color: Color(0xFF1A3A5C),
+        color: _kAccent,
         borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -1288,12 +1289,12 @@ class _BillingScreenState extends State<BillingScreen> {
               height: 56,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _navy,
+                  backgroundColor: _kAccent,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14)),
                   elevation: 3,
-                  shadowColor: _navy.withValues(alpha: 0.35),
+                  shadowColor: _kAccent.withValues(alpha: 0.35),
                 ),
                 icon: const Icon(Icons.add_circle_rounded, size: 24),
                 label: const Text('+ Add Income',
@@ -1380,7 +1381,7 @@ class _BillingScreenState extends State<BillingScreen> {
   }) =>
       OutlinedButton(
         style: OutlinedButton.styleFrom(
-          foregroundColor: _navy,
+          foregroundColor: _kAccent,
           side: const BorderSide(color: Color(0xFFBBD1EA)),
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
           shape: RoundedRectangleBorder(
@@ -1406,4 +1407,223 @@ class _BillingScreenState extends State<BillingScreen> {
           ],
         ),
       );
+
+  // ── Summary band (desktop) ─────────────────────────────────────────────────
+
+  Widget _summaryBand(
+    AppStrings s, {
+    required double collected,
+    required double pending,
+    required double overdue,
+    required double invoiced,
+    required int invoiceCount,
+  }) {
+    final total = collected + pending + overdue;
+    final collectedPct = total > 0 ? collected / total : 0.0;
+    final pendingPct   = total > 0 ? pending   / total : 0.0;
+    final overduePct   = total > 0 ? overdue   / total : 0.0;
+
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Text('Currency',
+                style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w500)),
+            const SizedBox(width: 10),
+            _currencyChip('USD'),
+            const SizedBox(width: 6),
+            _currencyChip('LBP'),
+          ]),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: _kpiCard(
+              title: 'Collected',
+              amount: collected,
+              tint: const Color(0xFFE8F5E9),
+              accent: _kSuccess,
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: _kpiCard(
+              title: 'Pending',
+              amount: pending,
+              tint: const Color(0xFFFFF8E1),
+              accent: _kWarning,
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: _kpiCard(
+              title: 'Overdue 30d+',
+              amount: overdue,
+              tint: const Color(0xFFFFEBEE),
+              accent: _kDanger,
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: _kpiCard(
+              title: 'Invoiced',
+              amount: invoiced,
+              tint: const Color(0xFFF0FBF9),
+              accent: _kAccent,
+              sublabel: '$invoiceCount invoice${invoiceCount == 1 ? '' : 's'}',
+            )),
+          ]),
+          const SizedBox(height: 12),
+          _collectionBar(collectedPct, pendingPct, overduePct),
+        ],
+      ),
+    );
+  }
+
+  Widget _kpiCard({
+    required String title,
+    required double amount,
+    required Color tint,
+    required Color accent,
+    String? sublabel,
+  }) =>
+      Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: tint,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(title,
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: accent.withValues(alpha: 0.8))),
+            const SizedBox(height: 6),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _fmtAmt(amount),
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: accent),
+              ),
+            ),
+            if (sublabel != null) ...[
+              const SizedBox(height: 2),
+              Text(sublabel,
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: accent.withValues(alpha: 0.65))),
+            ],
+          ],
+        ),
+      );
+
+  Widget _collectionBar(
+      double collectedPct, double pendingPct, double overduePct) {
+    const barH         = 8.0;
+    const successColor = Color(0xFF4CAF50);
+    const warningColor = Color(0xFFFFC107);
+    const dangerColor  = Color(0xFFF44336);
+    final hasData = collectedPct + pendingPct + overduePct > 0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(children: [
+          const Text('Collection rate',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+          const Spacer(),
+          Text(
+            '${(collectedPct * 100).toStringAsFixed(1)}% collected',
+            style: const TextStyle(
+                fontSize: 12,
+                color: _kSuccess,
+                fontWeight: FontWeight.w600),
+          ),
+        ]),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: hasData
+              ? Row(children: [
+                  if (collectedPct > 0)
+                    Expanded(
+                      flex: (collectedPct * 1000).round(),
+                      child: Container(height: barH, color: successColor),
+                    ),
+                  if (pendingPct > 0)
+                    Expanded(
+                      flex: (pendingPct * 1000).round(),
+                      child: Container(height: barH, color: warningColor),
+                    ),
+                  if (overduePct > 0)
+                    Expanded(
+                      flex: (overduePct * 1000).round(),
+                      child: Container(height: barH, color: dangerColor),
+                    ),
+                ])
+              : Container(height: barH, color: Colors.grey.shade200),
+        ),
+        const SizedBox(height: 6),
+        Row(children: [
+          _barLegend('Collected', successColor),
+          const SizedBox(width: 14),
+          _barLegend('Pending', warningColor),
+          const SizedBox(width: 14),
+          _barLegend('Overdue', dangerColor),
+        ]),
+      ],
+    );
+  }
+
+  Widget _barLegend(String label, Color color) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 4),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 11, color: AppColors.textSecondary)),
+        ],
+      );
+
+  Widget _currencyChip(String cur) {
+    final selected = _currency == cur;
+    return GestureDetector(
+      onTap: () => setState(() => _currency = cur),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected ? _kAccent : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? _kAccent : Colors.grey.shade300,
+          ),
+        ),
+        child: Text(cur,
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: selected ? Colors.white : AppColors.textSecondary)),
+      ),
+    );
+  }
+
+  String _fmtAmt(double amt) {
+    if (_currency == 'LBP') {
+      return 'LBP ${NumberFormat('#,###', 'en_US').format(amt.round())}';
+    }
+    return 'USD ${NumberFormat('#,##0.00', 'en_US').format(amt)}';
+  }
 }
