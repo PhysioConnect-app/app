@@ -300,6 +300,16 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 }
               }
 
+              // ── Busiest-times heatmap [weekday 0=Mon..6=Sun][hour 0..23] ──
+              final heatmap =
+                  List.generate(7, (_) => List<int>.filled(24, 0));
+              for (final appt in appts) {
+                final tsStr = appt['appointment_time'] as String?;
+                if (tsStr == null) continue;
+                final dt = DateTime.parse(tsStr).toLocal();
+                heatmap[dt.weekday - 1][dt.hour]++;
+              }
+
               // ── Patient insight KPIs ─────────────────────────────────
               final newPatients = _allPatients.where((u) {
                 final t = u['created_at'] as String?;
@@ -380,6 +390,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 cancellationRate:  cancellationRate,
                 topServices:       topServices,
                 topDiagnoses:      topDiagnoses,
+                heatmap:           heatmap,
               );
             },
           ),
@@ -412,6 +423,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
     required double  cancellationRate,
     required List<MapEntry<String, double>> topServices,
     required List<MapEntry<String, int>>    topDiagnoses,
+    required List<List<int>>                heatmap,
   }) {
     final s        = AppStrings(context.watch<LanguageProvider>().isArabic);
     final sessSpkl = sessionsByDay.map((v) => v.toDouble()).toList();
@@ -574,6 +586,12 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 Expanded(child: _topDiagnosesCard(entries: topDiagnoses)),
               ],
             ),
+          ),
+          // ── Section 6: Busiest-times heatmap ─────────────────────────
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: _heatmapCard(heatmap: heatmap),
           ),
           const SizedBox(height: 24),
         ],
@@ -814,6 +832,133 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
               color: isPos ? _green : _red),
         ),
       ]),
+    );
+  }
+
+  // ── Section 6: Busiest-times heatmap ─────────────────────────────────────
+
+  Widget _heatmapCard({required List<List<int>> heatmap}) {
+    const days      = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const startHour = 7;
+    const endHour   = 21; // inclusive
+    const numHours  = endHour - startHour + 1;
+
+    final allCounts = heatmap
+        .expand((row) => row.sublist(startHour, endHour + 1))
+        .toList();
+    final hasData  = allCounts.any((v) => v > 0);
+    final maxCount = hasData
+        ? allCounts.reduce(math.max).clamp(1, 9999)
+        : 1;
+
+    Color cellColor(int count) => Color.lerp(
+      const Color(0xFFE3F2FD),
+      const Color(0xFF1565C0),
+      count == 0 ? 0.0 : (count / maxCount).clamp(0.05, 1.0),
+    )!;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(children: [
+            Icon(Icons.grid_view_rounded, size: 16, color: _navy),
+            SizedBox(width: 6),
+            Text('Busiest Times',
+                style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: _navy)),
+          ]),
+          const SizedBox(height: 14),
+          if (!hasData)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Text('No appointment data in this period',
+                    style: TextStyle(color: AppColors.textSecondary)),
+              ),
+            )
+          else ...[
+            // Hour labels row
+            Row(children: [
+              const SizedBox(width: 36),
+              ...List.generate(numHours, (i) {
+                final hour = startHour + i;
+                return Expanded(
+                  child: Center(
+                    child: Text(
+                      hour % 3 == 0 ? '$hour' : '',
+                      style: const TextStyle(
+                          fontSize: 8,
+                          color: AppColors.textSecondary),
+                    ),
+                  ),
+                );
+              }),
+            ]),
+            const SizedBox(height: 4),
+            // Grid rows (one per weekday)
+            ...List.generate(7, (dayIdx) => Padding(
+              padding: const EdgeInsets.only(bottom: 3),
+              child: Row(children: [
+                SizedBox(
+                  width: 32,
+                  child: Text(days[dayIdx],
+                      style: const TextStyle(
+                          fontSize: 10,
+                          color: AppColors.textSecondary)),
+                ),
+                ...List.generate(numHours, (hIdx) {
+                  final count = heatmap[dayIdx][startHour + hIdx];
+                  return Expanded(
+                    child: Container(
+                      height: 18,
+                      margin: const EdgeInsets.all(1),
+                      decoration: BoxDecoration(
+                        color: cellColor(count),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  );
+                }),
+              ]),
+            )),
+            const SizedBox(height: 10),
+            // Legend: Fewer → More
+            Row(children: [
+              const Text('Fewer',
+                  style: TextStyle(
+                      fontSize: 9, color: AppColors.textSecondary)),
+              const SizedBox(width: 6),
+              ...List.generate(5, (i) => Container(
+                width: 14,
+                height: 14,
+                margin: const EdgeInsets.only(right: 2),
+                decoration: BoxDecoration(
+                  color: cellColor(i == 0 ? 0 : (maxCount * i / 4).round()),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              )),
+              const SizedBox(width: 6),
+              const Text('More',
+                  style: TextStyle(
+                      fontSize: 9, color: AppColors.textSecondary)),
+            ]),
+          ],
+        ],
+      ),
     );
   }
 
