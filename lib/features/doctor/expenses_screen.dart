@@ -8,6 +8,7 @@ import 'package:excel/excel.dart' as xl;
 import 'package:file_picker/file_picker.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/breakpoints.dart';
+import '../../core/config/form_factor_features.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
 import '../../core/utils/file_saver.dart';
@@ -104,28 +105,27 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     final s = _start;
     final e = _end;
     return switch (_period) {
-      'daily' => DateFormat('MMMM d, yyyy').format(s),
+      'daily'  => DateFormat('MMMM d, yyyy').format(s),
       'yearly' => '${s.year}',
-      _ =>
-        '${DateFormat('MMM d').format(s)} – ${DateFormat('MMM d, yyyy').format(e)}',
+      _        => '${DateFormat('MMM d').format(s)} – ${DateFormat('MMM d, yyyy').format(e)}',
     };
   }
 
   void _prev() => setState(() {
         _refDate = switch (_period) {
-          'daily' => _refDate.subtract(const Duration(days: 1)),
+          'daily'  => _refDate.subtract(const Duration(days: 1)),
           'weekly' => _refDate.subtract(const Duration(days: 7)),
           'yearly' => DateTime(_refDate.year - 1),
-          _ => DateTime(_refDate.year, _refDate.month - 1),
+          _        => DateTime(_refDate.year, _refDate.month - 1),
         };
       });
 
   void _next() => setState(() {
         _refDate = switch (_period) {
-          'daily' => _refDate.add(const Duration(days: 1)),
+          'daily'  => _refDate.add(const Duration(days: 1)),
           'weekly' => _refDate.add(const Duration(days: 7)),
           'yearly' => DateTime(_refDate.year + 1),
-          _ => DateTime(_refDate.year, _refDate.month + 1),
+          _        => DateTime(_refDate.year, _refDate.month + 1),
         };
       });
 
@@ -723,17 +723,14 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
           return Column(
             children: [
-              if (isDesktop)
-                _expSummaryBand(
-                  paidTotal: paidTotal,
-                  pendingTotal: pendingTotal,
-                  total: totalAmt,
-                  topCatName: topCatName,
-                  topCatAmt: topCatAmt,
-                  isDesktop: isDesktop,
-                )
-              else
-                _header(s, totalAmt, paidTotal, pendingTotal, filtered.length),
+              _expSummaryBand(
+                paidTotal: paidTotal,
+                pendingTotal: pendingTotal,
+                total: totalAmt,
+                topCatName: topCatName,
+                topCatAmt: topCatAmt,
+                isDesktop: isDesktop,
+              ),
               _filterRow(s),
               Expanded(
                 child: SingleChildScrollView(
@@ -746,7 +743,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                         _chartSection(categoryTotals, filtered),
                         const SizedBox(height: 16),
                       ],
-                      _expenseList(filtered, s),
+                      _expenseList(filtered, s, isDesktop: isDesktop),
                       const SizedBox(height: 80),
                     ],
                   ),
@@ -761,136 +758,14 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     );
   }
 
-  // ── Header ────────────────────────────────────────────────────────────────
-
-  Widget _header(
-      AppStrings s, double total, double paid, double pending, int count) {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF1A3A5C), Color(0xFF00695C)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      padding: const EdgeInsets.fromLTRB(20, 24, 20, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(children: [
-            const Icon(Icons.account_balance_wallet_rounded,
-                color: Colors.white70, size: 18),
-            const SizedBox(width: 6),
-            Text(s.expenses,
-                style: const TextStyle(
-                    color: Colors.white70, fontSize: 13)),
-            const Spacer(),
-            GestureDetector(
-              onTap: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: _refDate,
-                  firstDate: DateTime(2020),
-                  lastDate: DateTime.now()
-                      .add(const Duration(days: 365)),
-                );
-                if (picked != null) setState(() => _refDate = picked);
-              },
-              child: Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.calendar_month_rounded,
-                    color: Colors.white, size: 18),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                GestureDetector(
-                    onTap: _prev,
-                    child: const Icon(Icons.chevron_left_rounded,
-                        color: Colors.white, size: 20)),
-                const SizedBox(width: 4),
-                Text(_rangeLabel,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12)),
-                const SizedBox(width: 4),
-                GestureDetector(
-                    onTap: _next,
-                    child: const Icon(Icons.chevron_right_rounded,
-                        color: Colors.white, size: 20)),
-              ]),
-            ),
-          ]),
-          const SizedBox(height: 12),
-          Text('\$${total.toStringAsFixed(2)}',
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: -1)),
-          const Text('Total Expenses',
-              style: TextStyle(color: Colors.white60, fontSize: 13)),
-          const SizedBox(height: 16),
-          Row(children: [
-            Expanded(child: _kpiChip('Paid', paid, const Color(0xFF81C784))),
-            const SizedBox(width: 10),
-            Expanded(
-                child: _kpiChip('Pending', pending, const Color(0xFFFFB74D))),
-            const SizedBox(width: 10),
-            Expanded(
-                child: _kpiChip(
-                    'Entries', count.toDouble(), Colors.white54,
-                    isCount: true)),
-          ]),
-        ],
-      ),
-    );
-  }
-
-  Widget _kpiChip(String label, double value, Color color,
-      {bool isCount = false}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(
-          isCount
-              ? value.toInt().toString()
-              : '\$${value.toStringAsFixed(2)}',
-          style: TextStyle(
-              color: color,
-              fontWeight: FontWeight.bold,
-              fontSize: 15),
-        ),
-        Text(label,
-            style:
-                const TextStyle(color: Colors.white54, fontSize: 11)),
-      ]),
-    );
-  }
-
   // ── Filter row ────────────────────────────────────────────────────────────
 
   Widget _filterRow(AppStrings s) {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      child: Row(children: [
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
         ...['daily', 'weekly', 'monthly', 'yearly'].map((p) {
           final sel = _period == p;
           return GestureDetector(
@@ -981,6 +856,36 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             ]),
           ),
         ),
+        ]),
+        const SizedBox(height: 4),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          IconButton(
+            onPressed: _prev,
+            icon: const Icon(Icons.chevron_left_rounded, size: 20),
+            visualDensity: VisualDensity.compact,
+            color: AppColors.textSecondary,
+          ),
+          GestureDetector(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: _refDate,
+                firstDate: DateTime(2020),
+                lastDate: DateTime.now().add(const Duration(days: 365)),
+              );
+              if (picked != null) setState(() => _refDate = picked);
+            },
+            child: Text(_rangeLabel,
+                style: const TextStyle(
+                    fontSize: 13, fontWeight: FontWeight.w600)),
+          ),
+          IconButton(
+            onPressed: _next,
+            icon: const Icon(Icons.chevron_right_rounded, size: 20),
+            visualDensity: VisualDensity.compact,
+            color: AppColors.textSecondary,
+          ),
+        ]),
       ]),
     );
   }
@@ -1168,7 +1073,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
   // ── Expense list ──────────────────────────────────────────────────────────
 
-  Widget _expenseList(List<Map<String, dynamic>> docs, AppStrings s) {
+  Widget _expenseList(List<Map<String, dynamic>> docs, AppStrings s,
+      {bool isDesktop = true}) {
     return Card(
       elevation: 0,
       shape:
@@ -1217,23 +1123,25 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     ),
                   ),
                 ]),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: _kAccent,
-                      side: const BorderSide(color: _kAccent),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                if (isDesktop) ...[
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _kAccent,
+                        side: const BorderSide(color: _kAccent),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                      icon: const Icon(Icons.download_rounded, size: 16),
+                      label: const Text('Export Report',
+                          style: TextStyle(fontSize: 13)),
+                      onPressed: () => _showExport(docs, s),
                     ),
-                    icon: const Icon(Icons.download_rounded, size: 16),
-                    label: const Text('Export Report',
-                        style: TextStyle(fontSize: 13)),
-                    onPressed: () => _showExport(docs, s),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -1470,10 +1378,14 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
   // ── FAB ───────────────────────────────────────────────────────────────────
 
-  Widget _buildFab(AppStrings s) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
+  Widget _buildFab(AppStrings s) {
+    final showImport =
+        FormFactorFeatures.of(context).showBillingImportExport;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (showImport) ...[
           Row(mainAxisSize: MainAxisSize.min, children: [
             FloatingActionButton.small(
               heroTag: 'fab_help_expenses',
@@ -1515,15 +1427,17 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             ),
           ]),
           const SizedBox(height: 10),
-          FloatingActionButton.extended(
-            heroTag: 'fab_add_expenses',
-            backgroundColor: _kAccent,
-            foregroundColor: Colors.white,
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Add Expense',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-            onPressed: () => _showAddExpense(s),
-          ),
         ],
-      );
+        FloatingActionButton.extended(
+          heroTag: 'fab_add_expenses',
+          backgroundColor: _kAccent,
+          foregroundColor: Colors.white,
+          icon: const Icon(Icons.add_rounded),
+          label: const Text('Add Expense',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+          onPressed: () => _showAddExpense(s),
+        ),
+      ],
+    );
+  }
 }
