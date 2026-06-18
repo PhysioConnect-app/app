@@ -279,6 +279,62 @@ class AppStrings {
   String get netProfitSublabel =>
       _t('Based on collected payments', 'بناءً على المدفوعات المحصّلة');
 
+  // KPI cards
+  String get statsSessions        => _t('Sessions',    'الجلسات');
+  String get statsIncome          => _t('Income',      'الإيرادات');
+  String get statsExpenses        => _t('Expenses',    'المصاريف');
+  String get statsNetProfit       => _t('Net Profit',  'صافي الربح');
+  String get statsPaidSub         => _t('paid',        'مدفوع');
+
+  // Patient Insight row
+  String get statsNewPatients     => _t('New Patients',  'مرضى جدد');
+  String get statsAvgSession      => _t('Avg Session',   'متوسط الجلسة');
+  String get statsRetention       => _t('Retention',     'الاحتفاظ');
+  String get statsCancellation    => _t('Cancellation',  'الإلغاء');
+
+  // Section card titles
+  String get statsRevenueExpenses => _t('Revenue & Expenses',  'الإيرادات والمصاريف');
+  String get statsCollection      => _t('Collection',          'التحصيل');
+  String get statsCollected       => _t('collected',           'محصّل');
+  String get statsTopServices     => _t('Top Services',        'أبرز الخدمات');
+  String get statsTopDiagnoses    => _t('Top Diagnoses',       'أبرز التشخيصات');
+  String get statsBusiestTimes    => _t('Busiest Times',       'أوقات الذروة');
+
+  // Collection legend
+  String get statsOverdue         => _t('Overdue 30d+',   'متأخر +30 يومًا');
+
+  // Header
+  String get statsVsPrev          => _t('vs prev',      'مقابل السابق');
+
+  // Period chip labels (order: daily, weekly, monthly, yearly)
+  List<String> get statsPeriodLabels => [
+    _t('Daily',   'يومي'),
+    _t('Weekly',  'أسبوعي'),
+    _t('Monthly', 'شهري'),
+    _t('Yearly',  'سنوي'),
+  ];
+
+  // Heatmap weekday abbreviations (Mon-Sun)
+  List<String> get statsWeekdayAbbr => isArabic
+      ? ['إث', 'ثل', 'أر', 'خم', 'جم', 'سب', 'أح']
+      : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  String get statsHeatmapFewer    => _t('Fewer', 'أقل');
+  String get statsHeatmapMore     => _t('More',  'أكثر');
+
+  // Patient count suffix
+  String statsPatientCount(int n) =>
+      isArabic ? 'مريض $n' : '$n pt${n == 1 ? '' : 's'}';
+
+  // Empty states
+  String get statsNoFinancialData   =>
+      _t('No financial data in this period',  'لا توجد بيانات مالية في هذه الفترة');
+  String get statsNoAppointmentData =>
+      _t('No appointment data in this period', 'لا توجد بيانات مواعيد في هذه الفترة');
+  String get statsNoInvoices        => _t('No invoices yet',    'لا توجد فواتير بعد');
+  String get statsNoServiceData     =>
+      _t('No service data in this period',    'لا توجد بيانات خدمات في هذه الفترة');
+  String get statsNoDiagnosisData   => _t('No diagnosis data',  'لا توجد بيانات تشخيص');
+
   // Notifications
   String get newSessionAlert => _t('New session scheduled', 'تمت جدولة جلسة جديدة');
   String get newNoteAlert => _t('New clinical note added', 'تمت إضافة ملاحظة سريرية جديدة');

@@ -434,13 +434,13 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(),
+          _buildHeader(s),
           // ── Section 2: KPI row ────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Row(children: [
               Expanded(child: _kpi(
-                label:          'Sessions',
+                label:          s.statsSessions,
                 value:          sessions.toString(),
                 icon:           Icons.event_note_rounded,
                 iconBg:         const Color(0xFFE3F2FD),
@@ -454,12 +454,12 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
               )),
               const SizedBox(width: 10),
               Expanded(child: _kpi(
-                label:          'Income',
+                label:          s.statsIncome,
                 value:          '$currency ${totalIncome.toStringAsFixed(0)}',
                 icon:           Icons.trending_up_rounded,
                 iconBg:         const Color(0xFFE8F5E9),
                 iconClr:        _green,
-                sub:            '$currency ${paidIncome.toStringAsFixed(0)} paid',
+                sub:            '$currency ${paidIncome.toStringAsFixed(0)} ${s.statsPaidSub}',
                 deltaPercent:   _showComparison
                                     ? _delta(totalIncome, prevTotalIncome)
                                     : null,
@@ -468,12 +468,12 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
               )),
               const SizedBox(width: 10),
               Expanded(child: _kpi(
-                label:          'Expenses',
+                label:          s.statsExpenses,
                 value:          '$currency ${totalExpenses.toStringAsFixed(0)}',
                 icon:           Icons.trending_down_rounded,
                 iconBg:         const Color(0xFFFFEBEE),
                 iconClr:        _red,
-                sub:            '$currency ${paidExpenses.toStringAsFixed(0)} paid',
+                sub:            '$currency ${paidExpenses.toStringAsFixed(0)} ${s.statsPaidSub}',
                 deltaPercent:   _showComparison
                                     ? _delta(totalExpenses, prevTotalExpenses)
                                     : null,
@@ -482,7 +482,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
               )),
               const SizedBox(width: 10),
               Expanded(child: _kpi(
-                label:          'Net Profit',
+                label:          s.statsNetProfit,
                 value:          '$currency ${netProfit.toStringAsFixed(0)}',
                 icon:           netProfit >= 0
                                     ? Icons.account_balance_wallet_rounded
@@ -516,6 +516,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                     incomeData:   incomeSpkl,
                     expensesData: expensesSpkl,
                     currency:     currency,
+                    s:            s,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -526,6 +527,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                     pendingIncome: pendingIncome,
                     overdueIncome: overdueIncome,
                     currency:      currency,
+                    s:             s,
                   ),
                 ),
               ],
@@ -540,7 +542,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 icon:    Icons.person_add_rounded,
                 iconBg:  const Color(0xFFE3F2FD),
                 iconClr: const Color(0xFF1565C0),
-                label:   'New Patients',
+                label:   s.statsNewPatients,
                 value:   '$newPatients',
               )),
               const SizedBox(width: 10),
@@ -548,7 +550,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 icon:    Icons.attach_money_rounded,
                 iconBg:  const Color(0xFFE8F5E9),
                 iconClr: _green,
-                label:   'Avg Session',
+                label:   s.statsAvgSession,
                 value:   avgSessionValue != null
                              ? '$currency ${avgSessionValue.toStringAsFixed(0)}'
                              : '—',
@@ -558,7 +560,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 icon:    Icons.repeat_rounded,
                 iconBg:  const Color(0xFFE0F2F1),
                 iconClr: const Color(0xFF00897B),
-                label:   'Retention',
+                label:   s.statsRetention,
                 value:   '${retentionRate.toStringAsFixed(0)}%',
               )),
               const SizedBox(width: 10),
@@ -566,7 +568,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 icon:    Icons.cancel_outlined,
                 iconBg:  const Color(0xFFFFEBEE),
                 iconClr: _red,
-                label:   'Cancellation',
+                label:   s.statsCancellation,
                 value:   '${cancellationRate.toStringAsFixed(0)}%',
               )),
             ]),
@@ -581,9 +583,13 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 Expanded(child: _topServicesCard(
                   entries:  topServices,
                   currency: currency,
+                  s:        s,
                 )),
                 const SizedBox(width: 12),
-                Expanded(child: _topDiagnosesCard(entries: topDiagnoses)),
+                Expanded(child: _topDiagnosesCard(
+                  entries: topDiagnoses,
+                  s:       s,
+                )),
               ],
             ),
           ),
@@ -591,7 +597,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
           const SizedBox(height: 16),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _heatmapCard(heatmap: heatmap),
+            child: _heatmapCard(heatmap: heatmap, s: s),
           ),
           const SizedBox(height: 24),
         ],
@@ -601,7 +607,8 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
 
   // ── Header with period selector ──────────────────────────────────────────
 
-  Widget _buildHeader() {
+  Widget _buildHeader(AppStrings s) {
+    final periods = ['daily', 'weekly', 'monthly', 'yearly'];
     return Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -618,8 +625,8 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
             const Icon(Icons.bar_chart_rounded,
                 color: Colors.white70, size: 18),
             const SizedBox(width: 6),
-            const Text('Statistics',
-                style: TextStyle(color: Colors.white70, fontSize: 13)),
+            Text(s.statistics,
+                style: const TextStyle(color: Colors.white70, fontSize: 13)),
             const Spacer(),
             GestureDetector(
               onTap: () async {
@@ -642,7 +649,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            _comparisonToggle(),
+            _comparisonToggle(s),
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(
@@ -671,8 +678,9 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
             ),
           ]),
           const SizedBox(height: 14),
-          Row(children: ['daily', 'weekly', 'monthly', 'yearly']
-              .map((p) {
+          Row(children: periods.asMap().entries.map((entry) {
+            final p   = entry.value;
+            final lbl = s.statsPeriodLabels[entry.key];
             final sel = _period == p;
             return GestureDetector(
               onTap: () => setState(() {
@@ -690,7 +698,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  p[0].toUpperCase() + p.substring(1),
+                  lbl,
                   style: TextStyle(
                       color: sel ? _navy : Colors.white,
                       fontSize: 12,
@@ -706,7 +714,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
 
   // ── vs-previous-period toggle chip ───────────────────────────────────────
 
-  Widget _comparisonToggle() {
+  Widget _comparisonToggle(AppStrings s) {
     return GestureDetector(
       onTap: () => setState(() => _showComparison = !_showComparison),
       child: Container(
@@ -722,7 +730,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
               color: _showComparison ? _navy : Colors.white,
               size: 14),
           const SizedBox(width: 4),
-          Text('vs prev',
+          Text(s.statsVsPrev,
               style: TextStyle(
                   color: _showComparison ? _navy : Colors.white,
                   fontSize: 11,
@@ -837,8 +845,8 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
 
   // ── Section 6: Busiest-times heatmap ─────────────────────────────────────
 
-  Widget _heatmapCard({required List<List<int>> heatmap}) {
-    const days      = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  Widget _heatmapCard({required List<List<int>> heatmap, required AppStrings s}) {
+    final days      = s.statsWeekdayAbbr;
     const startHour = 7;
     const endHour   = 21; // inclusive
     const numHours  = endHour - startHour + 1;
@@ -872,22 +880,22 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(children: [
-            Icon(Icons.grid_view_rounded, size: 16, color: _navy),
-            SizedBox(width: 6),
-            Text('Busiest Times',
-                style: TextStyle(
+          Row(children: [
+            const Icon(Icons.grid_view_rounded, size: 16, color: _navy),
+            const SizedBox(width: 6),
+            Text(s.statsBusiestTimes,
+                style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: _navy)),
           ]),
           const SizedBox(height: 14),
           if (!hasData)
-            const Center(
+            Center(
               child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Text('No appointment data in this period',
-                    style: TextStyle(color: AppColors.textSecondary)),
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text(s.statsNoAppointmentData,
+                    style: const TextStyle(color: AppColors.textSecondary)),
               ),
             )
           else ...[
@@ -938,8 +946,8 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
             const SizedBox(height: 10),
             // Legend: Fewer → More
             Row(children: [
-              const Text('Fewer',
-                  style: TextStyle(
+              Text(s.statsHeatmapFewer,
+                  style: const TextStyle(
                       fontSize: 9, color: AppColors.textSecondary)),
               const SizedBox(width: 6),
               ...List.generate(5, (i) => Container(
@@ -952,8 +960,8 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 ),
               )),
               const SizedBox(width: 6),
-              const Text('More',
-                  style: TextStyle(
+              Text(s.statsHeatmapMore,
+                  style: const TextStyle(
                       fontSize: 9, color: AppColors.textSecondary)),
             ]),
           ],
@@ -1014,6 +1022,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
   Widget _topServicesCard({
     required List<MapEntry<String, double>> entries,
     required String currency,
+    required AppStrings s,
   }) {
     final maxVal = entries.isEmpty ? 1.0 : entries.first.value;
     return Container(
@@ -1031,22 +1040,22 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(children: [
-            Icon(Icons.star_rounded, size: 16, color: _navy),
-            SizedBox(width: 6),
-            Text('Top Services',
-                style: TextStyle(
+          Row(children: [
+            const Icon(Icons.star_rounded, size: 16, color: _navy),
+            const SizedBox(width: 6),
+            Text(s.statsTopServices,
+                style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: _navy)),
           ]),
           const SizedBox(height: 14),
           if (entries.isEmpty)
-            const Center(
+            Center(
               child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Text('No service data in this period',
-                    style: TextStyle(color: AppColors.textSecondary)),
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text(s.statsNoServiceData,
+                    style: const TextStyle(color: AppColors.textSecondary)),
               ),
             )
           else
@@ -1094,6 +1103,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
 
   Widget _topDiagnosesCard({
     required List<MapEntry<String, int>> entries,
+    required AppStrings s,
   }) {
     final maxVal = entries.isEmpty ? 1 : entries.first.value;
     return Container(
@@ -1111,22 +1121,22 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(children: [
-            Icon(Icons.medical_information_rounded, size: 16, color: _navy),
-            SizedBox(width: 6),
-            Text('Top Diagnoses',
-                style: TextStyle(
+          Row(children: [
+            const Icon(Icons.medical_information_rounded, size: 16, color: _navy),
+            const SizedBox(width: 6),
+            Text(s.statsTopDiagnoses,
+                style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: _navy)),
           ]),
           const SizedBox(height: 14),
           if (entries.isEmpty)
-            const Center(
+            Center(
               child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Text('No diagnosis data',
-                    style: TextStyle(color: AppColors.textSecondary)),
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text(s.statsNoDiagnosisData,
+                    style: const TextStyle(color: AppColors.textSecondary)),
               ),
             )
           else
@@ -1146,7 +1156,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500)),
                       ),
-                      Text('${e.value} pt${e.value == 1 ? '' : 's'}',
+                      Text(s.statsPatientCount(e.value),
                           style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
@@ -1178,6 +1188,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
     required List<double> incomeData,
     required List<double> expensesData,
     required String currency,
+    required AppStrings s,
   }) {
     final hasData = incomeData.any((v) => v > 0) ||
         expensesData.any((v) => v > 0);
@@ -1204,23 +1215,23 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
           Row(children: [
             const Icon(Icons.show_chart_rounded, size: 16, color: _navy),
             const SizedBox(width: 6),
-            const Text('Revenue & Expenses',
-                style: TextStyle(
+            Text(s.statsRevenueExpenses,
+                style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: _navy)),
             const Spacer(),
-            _legendDot(_green, 'Income'),
+            _legendDot(_green, s.statsIncome),
             const SizedBox(width: 10),
-            _legendDot(_red, 'Expenses'),
+            _legendDot(_red, s.statsExpenses),
           ]),
           const SizedBox(height: 16),
           if (!hasData)
-            const Center(
+            Center(
               child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Text('No financial data in this period',
-                    style: TextStyle(color: AppColors.textSecondary)),
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Text(s.statsNoFinancialData,
+                    style: const TextStyle(color: AppColors.textSecondary)),
               ),
             )
           else
@@ -1332,6 +1343,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
     required double pendingIncome,
     required double overdueIncome,
     required String currency,
+    required AppStrings s,
   }) {
     final pendingCurrent =
         (pendingIncome - overdueIncome).clamp(0.0, double.infinity);
@@ -1357,22 +1369,22 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(children: [
-            Icon(Icons.donut_large_rounded, size: 16, color: _navy),
-            SizedBox(width: 6),
-            Text('Collection',
-                style: TextStyle(
+          Row(children: [
+            const Icon(Icons.donut_large_rounded, size: 16, color: _navy),
+            const SizedBox(width: 6),
+            Text(s.statsCollection,
+                style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: _navy)),
           ]),
           const SizedBox(height: 16),
           if (!hasData)
-            const Center(
+            Center(
               child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 32),
-                child: Text('No invoices yet',
-                    style: TextStyle(color: AppColors.textSecondary)),
+                padding: const EdgeInsets.symmetric(vertical: 32),
+                child: Text(s.statsNoInvoices,
+                    style: const TextStyle(color: AppColors.textSecondary)),
               ),
             )
           else ...[
@@ -1409,19 +1421,19 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: _navy)),
-                  const Text('collected',
-                      style: TextStyle(
+                  Text(s.statsCollected,
+                      style: const TextStyle(
                           fontSize: 9,
                           color: AppColors.textSecondary)),
                 ]),
               ]),
             ),
             const SizedBox(height: 12),
-            _collectionRow(_green, 'Paid',         fmt(paidIncome)),
+            _collectionRow(_green, s.statusPaid,    fmt(paidIncome)),
             const SizedBox(height: 6),
-            _collectionRow(_amber, 'Pending',      fmt(pendingCurrent)),
+            _collectionRow(_amber, s.statusPending, fmt(pendingCurrent)),
             const SizedBox(height: 6),
-            _collectionRow(_red,   'Overdue 30d+', fmt(overdueIncome)),
+            _collectionRow(_red,   s.statsOverdue,  fmt(overdueIncome)),
           ],
         ],
       ),
