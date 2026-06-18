@@ -275,6 +275,10 @@ class AppStrings {
   String get therapistLinked => _t('Therapist linked to your care team!', 'تم ربط المعالج بفريق رعايتك!');
   String get homeVisitAvailable => _t('Home Visit Available', 'الزيارة المنزلية متاحة');
 
+  // Doctor - Statistics
+  String get netProfitSublabel =>
+      _t('Based on collected payments', 'بناءً على المدفوعات المحصّلة');
+
   // Notifications
   String get newSessionAlert => _t('New session scheduled', 'تمت جدولة جلسة جديدة');
   String get newNoteAlert => _t('New clinical note added', 'تمت إضافة ملاحظة سريرية جديدة');

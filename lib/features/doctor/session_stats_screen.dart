@@ -1,7 +1,11 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/app_strings.dart';
+import '../../core/providers/language_provider.dart';
 
 class SessionStatsScreen extends StatefulWidget {
   final VoidCallback? onAddAppointment;
@@ -97,6 +101,22 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
   bool _inRange(DateTime dt) =>
       !dt.isBefore(_start) && !dt.isAfter(_end);
 
+  // Delta % between current and previous period value; null when prev is 0.
+  double? _delta(double current, double previous) =>
+      previous == 0 ? null : (current - previous) / previous * 100;
+
+  // Most-common currency across all loaded invoices.
+  // TODO: multi-currency — group by currency rather than summing across all.
+  String _dominantCurrency(List<Map<String, dynamic>> allInvoices) {
+    if (allInvoices.isEmpty) return 'USD';
+    final counts = <String, int>{};
+    for (final inv in allInvoices) {
+      final c = (inv['currency'] as String?) ?? 'USD';
+      counts[c] = (counts[c] ?? 0) + 1;
+    }
+    return counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -167,7 +187,8 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
               final totalExpenses = paidExpenses + pendingExpenses;
               final netProfit     = paidIncome - paidExpenses;
 
-              // ── Payment methods breakdown ─────────────────────────────
+              // ── Payment methods breakdown (BUG 1: payment_method column
+              // does not exist — kept until removed in the next commit)
               final methods = <String, int>{};
               for (final inv in invoices) {
                 final pm = (inv['payment_method'] as String?)
@@ -176,7 +197,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 methods[pm] = (methods[pm] ?? 0) + 1;
               }
 
-              // ── Sessions by day (for bar chart) ───────────────────────
+              // ── Sessions by day ───────────────────────────────────────
               final days = _end.difference(_start).inDays + 1;
               final sessionsByDay = List<int>.filled(days, 0);
               for (final appt in appts) {
@@ -186,17 +207,82 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 if (idx >= 0 && idx < days) sessionsByDay[idx]++;
               }
 
+              // ── Display currency ──────────────────────────────────────
+              final currency = _dominantCurrency(invSnap.data ?? []);
+
+              // ── Previous-period KPIs (for delta badges) ───────────────
+              final prevAppts = (apptSnap.data ?? []).where((d) {
+                final t = d['appointment_time'] as String?;
+                return t != null && _inPrevRange(DateTime.parse(t));
+              }).toList();
+              final prevInvList = (invSnap.data ?? []).where((d) {
+                final t = d['invoice_date'] as String?
+                    ?? d['created_at'] as String?;
+                return t != null && _inPrevRange(DateTime.parse(t));
+              }).toList();
+              final prevExpList = (expSnap.data ?? []).where((d) {
+                final t = d['expense_date'] as String?
+                    ?? d['created_at'] as String?;
+                return t != null && _inPrevRange(DateTime.parse(t));
+              }).toList();
+
+              final prevSessions = prevAppts.length;
+              double prevPaidInc = 0, prevPendInc = 0;
+              for (final inv in prevInvList) {
+                final amt = (inv['amount'] as num?)?.toDouble() ?? 0;
+                if (inv['status'] == 'paid') { prevPaidInc += amt; }
+                else                         { prevPendInc += amt; }
+              }
+              final prevTotalIncome = prevPaidInc + prevPendInc;
+              double prevPaidExp = 0, prevPendExp = 0;
+              for (final exp in prevExpList) {
+                final amt = (exp['amount'] as num?)?.toDouble() ?? 0;
+                if (exp['status'] == 'paid') { prevPaidExp += amt; }
+                else                         { prevPendExp += amt; }
+              }
+              final prevTotalExpenses = prevPaidExp + prevPendExp;
+              final prevNetProfit     = prevPaidInc - prevPaidExp;
+
+              // ── Sparkline buckets (per day in current period) ─────────
+              final incomeSpkl   = List<double>.filled(days, 0);
+              final expensesSpkl = List<double>.filled(days, 0);
+              for (final inv in invoices) {
+                final t = inv['invoice_date'] as String?
+                    ?? inv['created_at'] as String?;
+                if (t == null) continue;
+                final i = DateTime.parse(t).difference(_start).inDays;
+                if (i >= 0 && i < days) {
+                  incomeSpkl[i] += (inv['amount'] as num?)?.toDouble() ?? 0;
+                }
+              }
+              for (final exp in expenses) {
+                final t = exp['expense_date'] as String?
+                    ?? exp['created_at'] as String?;
+                if (t == null) continue;
+                final i = DateTime.parse(t).difference(_start).inDays;
+                if (i >= 0 && i < days) {
+                  expensesSpkl[i] += (exp['amount'] as num?)?.toDouble() ?? 0;
+                }
+              }
+
               return _buildBody(
-                sessions:        sessions,
-                paidIncome:      paidIncome,
-                pendingIncome:   pendingIncome,
-                totalIncome:     totalIncome,
-                paidExpenses:    paidExpenses,
-                pendingExpenses: pendingExpenses,
-                totalExpenses:   totalExpenses,
-                netProfit:       netProfit,
-                methods:         methods,
-                sessionsByDay:   sessionsByDay,
+                sessions:          sessions,
+                paidIncome:        paidIncome,
+                pendingIncome:     pendingIncome,
+                totalIncome:       totalIncome,
+                paidExpenses:      paidExpenses,
+                pendingExpenses:   pendingExpenses,
+                totalExpenses:     totalExpenses,
+                netProfit:         netProfit,
+                methods:           methods,
+                sessionsByDay:     sessionsByDay,
+                currency:          currency,
+                prevSessions:      prevSessions,
+                prevTotalIncome:   prevTotalIncome,
+                prevTotalExpenses: prevTotalExpenses,
+                prevNetProfit:     prevNetProfit,
+                incomeSpkl:        incomeSpkl,
+                expensesSpkl:      expensesSpkl,
               );
             },
           ),
@@ -206,17 +292,32 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
   }
 
   Widget _buildBody({
-    required int sessions,
-    required double paidIncome,
-    required double pendingIncome,
-    required double totalIncome,
-    required double paidExpenses,
-    required double pendingExpenses,
-    required double totalExpenses,
-    required double netProfit,
+    required int     sessions,
+    required double  paidIncome,
+    required double  pendingIncome,
+    required double  totalIncome,
+    required double  paidExpenses,
+    required double  pendingExpenses,
+    required double  totalExpenses,
+    required double  netProfit,
     required Map<String, int> methods,
     required List<int> sessionsByDay,
+    // display currency
+    required String  currency,
+    // previous-period values for delta badges
+    required int     prevSessions,
+    required double  prevTotalIncome,
+    required double  prevTotalExpenses,
+    required double  prevNetProfit,
+    // per-day sparkline data (length == days in period)
+    required List<double> incomeSpkl,
+    required List<double> expensesSpkl,
   }) {
+    final s        = AppStrings(context.watch<LanguageProvider>().isArabic);
+    final sessSpkl = sessionsByDay.map((v) => v.toDouble()).toList();
+    final netSpkl  = List.generate(
+        incomeSpkl.length, (i) => incomeSpkl[i] - expensesSpkl[i]);
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -226,42 +327,66 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Row(children: [
               Expanded(child: _kpi(
-                label:   'Sessions',
-                value:   sessions.toString(),
-                icon:    Icons.event_note_rounded,
-                iconBg:  const Color(0xFFE3F2FD),
-                iconClr: const Color(0xFF1565C0),
+                label:          'Sessions',
+                value:          sessions.toString(),
+                icon:           Icons.event_note_rounded,
+                iconBg:         const Color(0xFFE3F2FD),
+                iconClr:        const Color(0xFF1565C0),
+                deltaPercent:   _showComparison
+                                    ? _delta(sessions.toDouble(),
+                                             prevSessions.toDouble())
+                                    : null,
+                sparklineData:  sessSpkl,
+                sparklineColor: const Color(0xFF1565C0),
               )),
               const SizedBox(width: 10),
               Expanded(child: _kpi(
-                label:   'Income',
-                value:   '\$${totalIncome.toStringAsFixed(0)}',
-                icon:    Icons.trending_up_rounded,
-                iconBg:  const Color(0xFFE8F5E9),
-                iconClr: _green,
-                sub:     '\$${paidIncome.toStringAsFixed(0)} paid',
+                label:          'Income',
+                value:          '$currency ${totalIncome.toStringAsFixed(0)}',
+                icon:           Icons.trending_up_rounded,
+                iconBg:         const Color(0xFFE8F5E9),
+                iconClr:        _green,
+                sub:            '$currency ${paidIncome.toStringAsFixed(0)} paid',
+                deltaPercent:   _showComparison
+                                    ? _delta(totalIncome, prevTotalIncome)
+                                    : null,
+                sparklineData:  incomeSpkl,
+                sparklineColor: _green,
               )),
               const SizedBox(width: 10),
               Expanded(child: _kpi(
-                label:   'Expenses',
-                value:   '\$${totalExpenses.toStringAsFixed(0)}',
-                icon:    Icons.trending_down_rounded,
-                iconBg:  const Color(0xFFFFEBEE),
-                iconClr: _red,
-                sub:     '\$${paidExpenses.toStringAsFixed(0)} paid',
+                label:          'Expenses',
+                value:          '$currency ${totalExpenses.toStringAsFixed(0)}',
+                icon:           Icons.trending_down_rounded,
+                iconBg:         const Color(0xFFFFEBEE),
+                iconClr:        _red,
+                sub:            '$currency ${paidExpenses.toStringAsFixed(0)} paid',
+                deltaPercent:   _showComparison
+                                    ? _delta(totalExpenses, prevTotalExpenses)
+                                    : null,
+                sparklineData:  expensesSpkl,
+                sparklineColor: _red,
               )),
               const SizedBox(width: 10),
               Expanded(child: _kpi(
-                label:   'Net Profit',
-                value:   '\$${netProfit.toStringAsFixed(0)}',
-                icon:    netProfit >= 0
-                             ? Icons.account_balance_wallet_rounded
-                             : Icons.warning_amber_rounded,
-                iconBg:  netProfit >= 0
-                             ? const Color(0xFFE0F2F1)
-                             : const Color(0xFFFFF3E0),
-                iconClr: netProfit >= 0 ? const Color(0xFF00695C) : _amber,
-                valueClr: netProfit >= 0 ? _green : _red,
+                label:          'Net Profit',
+                value:          '$currency ${netProfit.toStringAsFixed(0)}',
+                icon:           netProfit >= 0
+                                    ? Icons.account_balance_wallet_rounded
+                                    : Icons.warning_amber_rounded,
+                iconBg:         netProfit >= 0
+                                    ? const Color(0xFFE0F2F1)
+                                    : const Color(0xFFFFF3E0),
+                iconClr:        netProfit >= 0
+                                    ? const Color(0xFF00695C)
+                                    : _amber,
+                valueClr:       netProfit >= 0 ? _green : _red,
+                sub:            s.netProfitSublabel,
+                deltaPercent:   _showComparison
+                                    ? _delta(netProfit, prevNetProfit)
+                                    : null,
+                sparklineData:  netSpkl,
+                sparklineColor: netProfit >= 0 ? _green : _red,
               )),
             ]),
           ),
@@ -285,7 +410,9 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
           if (methods.isNotEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _paymentMethodsCard(methods, invoiceCount: methods.values.fold(0, (a, b) => a + b)),
+              child: _paymentMethodsCard(
+                  methods,
+                  invoiceCount: methods.values.fold(0, (a, b) => a + b)),
             ),
           const SizedBox(height: 24),
         ],
@@ -429,14 +556,20 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
   // ── KPI card ──────────────────────────────────────────────────────────────
 
   Widget _kpi({
-    required String  label,
-    required String  value,
+    required String   label,
+    required String   value,
     required IconData icon,
-    required Color   iconBg,
-    required Color   iconClr,
-    String?          sub,
-    Color?           valueClr,
+    required Color    iconBg,
+    required Color    iconClr,
+    String?           sub,
+    Color?            valueClr,
+    double?           deltaPercent,
+    List<double>?     sparklineData,
+    Color?            sparklineColor,
   }) {
+    final hasSparkline = sparklineData != null &&
+        sparklineData.length > 1 &&
+        sparklineData.any((v) => v != 0);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -452,13 +585,17 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-                color: iconBg,
-                borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: iconClr, size: 18),
-          ),
+          Row(children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(10)),
+              child: Icon(icon, color: iconClr, size: 18),
+            ),
+            const Spacer(),
+            if (deltaPercent != null) _deltaChip(deltaPercent),
+          ]),
           const SizedBox(height: 10),
           Text(value,
               style: TextStyle(
@@ -475,8 +612,47 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 style: const TextStyle(
                     fontSize: 10, color: AppColors.textSecondary)),
           ],
+          if (hasSparkline) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 28,
+              width: double.infinity,
+              child: CustomPaint(
+                painter: _SparklinePainter(
+                  data:  sparklineData,
+                  color: sparklineColor ?? iconClr,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _deltaChip(double percent) {
+    final isPos = percent >= 0;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: (isPos ? _green : _red).withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(
+          isPos ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+          size: 10,
+          color: isPos ? _green : _red,
+        ),
+        const SizedBox(width: 2),
+        Text(
+          '${isPos ? '+' : ''}${percent.toStringAsFixed(0)}%',
+          style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: isPos ? _green : _red),
+        ),
+      ]),
     );
   }
 
@@ -796,4 +972,50 @@ extension _StringExt on String {
     if (isEmpty) return this;
     return this[0].toUpperCase() + substring(1);
   }
+}
+
+class _SparklinePainter extends CustomPainter {
+  final List<double> data;
+  final Color color;
+  const _SparklinePainter({required this.data, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (data.length < 2) return;
+    final maxVal = data.reduce(math.max);
+    if (maxVal == 0) return;
+
+    // Fill area under the line.
+    final fillPaint = Paint()
+      ..color = color.withValues(alpha: 0.12)
+      ..style = PaintingStyle.fill;
+    // Stroke the line.
+    final linePaint = Paint()
+      ..color = color.withValues(alpha: 0.75)
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    Offset point(int i) {
+      final x = i / (data.length - 1) * size.width;
+      final y = size.height - (data[i] / maxVal) * size.height;
+      return Offset(x, y);
+    }
+
+    final linePath = Path()..moveTo(point(0).dx, point(0).dy);
+    for (int i = 1; i < data.length; i++) {
+      linePath.lineTo(point(i).dx, point(i).dy);
+    }
+    final fillPath = Path.from(linePath)
+      ..lineTo(size.width, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+
+    canvas.drawPath(fillPath, fillPaint);
+    canvas.drawPath(linePath, linePaint);
+  }
+
+  @override
+  bool shouldRepaint(_SparklinePainter old) =>
+      old.data != data || old.color != color;
 }
