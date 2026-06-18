@@ -2051,7 +2051,11 @@ Future<void> _showLogout(AppStrings s) async {
                 icon: Icon(Icons.more_vert_rounded,
                     color: Colors.grey.shade400, size: 20),
                 onSelected: (v) async {
-                  if (v == 'edit') {
+                  if (v == 'attend') {
+                    final patientId = (data['patient_id'] as String?) ?? '';
+                    _showMarkAttendedSheet(
+                        s, apptId, patName, patientId, dt, notes);
+                  } else if (v == 'edit') {
                     _showEditAppointmentSheet(s, apptId, dt, notes);
                   } else if (v == 'cancel') {
                     final ok = await _service.cancelAppointment(apptId);
@@ -2074,6 +2078,18 @@ Future<void> _showLogout(AppStrings s) async {
                   }
                 },
                 itemBuilder: (_) => [
+                  if (!isCompleted)
+                    const PopupMenuItem(
+                        value: 'attend',
+                        child: Row(children: [
+                          Icon(Icons.how_to_reg_rounded,
+                              size: 18, color: Color(0xFF0E8378)),
+                          SizedBox(width: 8),
+                          Text('Mark as Attended',
+                              style: TextStyle(
+                                  color: Color(0xFF0E8378),
+                                  fontWeight: FontWeight.bold)),
+                        ])),
                   PopupMenuItem(
                       value: 'edit',
                       child: Row(children: [
@@ -2456,6 +2472,194 @@ Future<void> _showLogout(AppStrings s) async {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Mark Attended → create awaiting-review invoice ──────────────────────
+
+  void _showMarkAttendedSheet(AppStrings s, String apptId, String patName,
+      String patientId, DateTime dt, String notes) {
+    final svcCtrl = TextEditingController(
+        text: notes.isNotEmpty ? notes : 'Physical Therapy');
+    final amtCtrl = TextEditingController();
+    String currency = 'USD';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => Padding(
+          padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 8,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0E8378).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.how_to_reg_rounded,
+                        color: Color(0xFF0E8378), size: 22),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Mark as Attended',
+                            style: TextStyle(
+                                fontSize: 17, fontWeight: FontWeight.bold)),
+                        Text(patName,
+                            style: const TextStyle(
+                                fontSize: 13, color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 16),
+                // Service
+                TextField(
+                  controller: svcCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Service / Session type',
+                    prefixIcon: const Icon(Icons.medical_services_rounded,
+                        color: Color(0xFF0E8378), size: 20),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFB),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Amount
+                TextField(
+                  controller: amtCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true),
+                  decoration: InputDecoration(
+                    labelText: 'Amount',
+                    prefixIcon: const Icon(Icons.payments_rounded,
+                        color: Color(0xFF0E8378), size: 20),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFB),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Currency
+                Row(children: [
+                  const Text('Currency',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textSecondary)),
+                  const SizedBox(width: 12),
+                  for (final c in ['USD', 'LBP']) ...[
+                    GestureDetector(
+                      onTap: () => set(() => currency = c),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: currency == c
+                              ? const Color(0xFF0E8378)
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                              color: currency == c
+                                  ? const Color(0xFF0E8378)
+                                  : Colors.grey.shade300),
+                        ),
+                        child: Text(c,
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                                color: currency == c
+                                    ? Colors.white
+                                    : AppColors.textSecondary)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ]),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0E8378),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () async {
+                      final amt =
+                          double.tryParse(amtCtrl.text.trim());
+                      if (amt == null || amt <= 0) return;
+                      final supabase = Supabase.instance.client;
+                      final uid = supabase.auth.currentUser?.id ?? '';
+                      await supabase.from('invoices').insert({
+                        'doctor_id':    uid,
+                        'patient_id':   patientId,
+                        'patient_name': patName,
+                        'service':      svcCtrl.text.trim().isNotEmpty
+                            ? svcCtrl.text.trim()
+                            : 'Physical Therapy',
+                        'amount':       amt,
+                        'currency':     currency,
+                        'status':       'awaiting_review',
+                        'appointment_id': apptId,
+                        'invoice_date': dt.toIso8601String(),
+                        'created_at':  DateTime.now().toIso8601String(),
+                      });
+                      await supabase
+                          .from('appointments')
+                          .update({'status': 'completed'})
+                          .eq('id', apptId);
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                              'Session recorded — review it in Revenues'),
+                          backgroundColor: Color(0xFF0E8378),
+                        ),
+                      );
+                    },
+                    child: const Text('Record Session',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

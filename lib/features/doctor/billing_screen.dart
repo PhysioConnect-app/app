@@ -18,7 +18,7 @@ import 'import_help_sheet.dart';
 
 // ── Status helpers ─────────────────────────────────────────────────────────
 
-enum _InvStatus { pending, paid, partiallyPaid, insuranceClaim, cancelled }
+enum _InvStatus { pending, paid, partiallyPaid, insuranceClaim, cancelled, awaitingReview }
 
 extension _InvStatusX on _InvStatus {
   String get key => switch (this) {
@@ -27,6 +27,7 @@ extension _InvStatusX on _InvStatus {
     _InvStatus.partiallyPaid  => 'partially_paid',
     _InvStatus.insuranceClaim => 'insurance_claim',
     _InvStatus.cancelled      => 'cancelled',
+    _InvStatus.awaitingReview => 'awaiting_review',
   };
   String label(AppStrings s) => switch (this) {
     _InvStatus.pending        => s.statusPending,
@@ -34,6 +35,7 @@ extension _InvStatusX on _InvStatus {
     _InvStatus.partiallyPaid  => 'Partially\nPaid',
     _InvStatus.insuranceClaim => 'Insurance\nClaim',
     _InvStatus.cancelled      => s.statusCancelled,
+    _InvStatus.awaitingReview => 'Awaiting\nReview',
   };
   Color get color => switch (this) {
     _InvStatus.pending        => const Color(0xFFF57F17),
@@ -41,14 +43,16 @@ extension _InvStatusX on _InvStatus {
     _InvStatus.partiallyPaid  => const Color(0xFFE65100),
     _InvStatus.insuranceClaim => const Color(0xFF546E7A),
     _InvStatus.cancelled      => const Color(0xFFC62828),
+    _InvStatus.awaitingReview => const Color(0xFF1565C0),
   };
 
   static _InvStatus fromString(String? raw) => switch (raw) {
-    'paid'            => _InvStatus.paid,
-    'partially_paid'  => _InvStatus.partiallyPaid,
-    'insurance_claim' => _InvStatus.insuranceClaim,
-    'cancelled'       => _InvStatus.cancelled,
-    _                 => _InvStatus.pending,
+    'paid'             => _InvStatus.paid,
+    'partially_paid'   => _InvStatus.partiallyPaid,
+    'insurance_claim'  => _InvStatus.insuranceClaim,
+    'cancelled'        => _InvStatus.cancelled,
+    'awaiting_review'  => _InvStatus.awaitingReview,
+    _                  => _InvStatus.pending,
   };
 }
 
@@ -524,6 +528,187 @@ class _BillingScreenState extends State<BillingScreen> {
     );
   }
 
+  // ── Doctor review sheet ───────────────────────────────────────────────────
+
+  void _showReviewSheet(
+      String docId, String patName, String service, double amt, String cur) {
+    _InvStatus selectedStatus = _InvStatus.pending;
+    final paidCtrl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => Padding(
+          padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 8,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1565C0).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.rate_review_rounded,
+                        color: Color(0xFF1565C0), size: 22),
+                  ),
+                  const SizedBox(width: 10),
+                  const Text('Review Session',
+                      style: TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold)),
+                ]),
+                const SizedBox(height: 16),
+                // Session summary
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFB),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _reviewRow(Icons.person_rounded, patName),
+                      const SizedBox(height: 6),
+                      _reviewRow(Icons.medical_services_rounded, service),
+                      const SizedBox(height: 6),
+                      _reviewRow(Icons.payments_rounded,
+                          '$cur ${amt.toStringAsFixed(2)}'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text('Set payment status',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary)),
+                const SizedBox(height: 8),
+                // Status chips
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final st in [
+                    _InvStatus.paid,
+                    _InvStatus.partiallyPaid,
+                    _InvStatus.pending,
+                  ])
+                    GestureDetector(
+                      onTap: () => set(() => selectedStatus = st),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: selectedStatus == st
+                              ? st.color
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: selectedStatus == st
+                                  ? st.color
+                                  : Colors.grey.shade300),
+                        ),
+                        child: Text(
+                          st.label(AppStrings(false)).replaceAll('\n', ' '),
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              color: selectedStatus == st
+                                  ? Colors.white
+                                  : st.color),
+                        ),
+                      ),
+                    ),
+                ]),
+                if (selectedStatus == _InvStatus.partiallyPaid) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: paidCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Amount Paid',
+                      prefixIcon: const Icon(Icons.payments_rounded,
+                          color: Color(0xFFE65100), size: 20),
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      filled: true,
+                      fillColor: const Color(0xFFF8FAFB),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1565C0),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () async {
+                      final Map<String, dynamic> update = {
+                        'status': selectedStatus.key,
+                      };
+                      if (selectedStatus == _InvStatus.partiallyPaid) {
+                        final paidAmt = double.tryParse(paidCtrl.text.trim());
+                        if (paidAmt != null && paidAmt > 0) {
+                          update['paid_amount'] = paidAmt;
+                        }
+                      }
+                      await _supabase
+                          .from('invoices')
+                          .update(update)
+                          .eq('id', docId);
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text('Confirm & Save',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _reviewRow(IconData icon, String text) => Row(children: [
+        Icon(icon, size: 15, color: AppColors.textSecondary),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(text,
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w500)),
+        ),
+      ]);
+
   // ── Import from Excel ─────────────────────────────────────────────────────
 
   void _showLoading(String msg) {
@@ -833,10 +1018,17 @@ class _BillingScreenState extends State<BillingScreen> {
           final  overdueThreshold =
               DateTime.now().subtract(const Duration(days: 30));
 
+          // Count awaiting-review separately so we can show a badge
+          final awaitingCount = filtered
+              .where((d) => (d['status'] as String?) == 'awaiting_review')
+              .length;
+
           for (final d in filtered) {
             final amt = (d['amount'] as num?)?.toDouble() ?? 0;
             final st  = _InvStatusX.fromString(d['status'] as String?);
-            if (st == _InvStatus.cancelled) continue;
+            // Awaiting review and cancelled are excluded from financial stats
+            if (st == _InvStatus.cancelled ||
+                st == _InvStatus.awaitingReview) continue;
             invoiceCount++;
             switch (st) {
               case _InvStatus.paid:
@@ -878,6 +1070,7 @@ class _BillingScreenState extends State<BillingScreen> {
                     overdue: overdueAmt,
                     invoiced: invoiced,
                     invoiceCount: invoiceCount,
+                    awaitingCount: awaitingCount,
                     isDesktop: isDesktop,
                   ),
                   _filterBar(s),
@@ -1012,8 +1205,8 @@ class _BillingScreenState extends State<BillingScreen> {
                   dropdownColor: _kAccent,
                   icon: const Icon(Icons.arrow_drop_down_rounded,
                       color: Colors.white),
-                  items: [null, 'pending', 'paid', 'partially_paid',
-                          'insurance_claim', 'cancelled']
+                  items: [null, 'awaiting_review', 'pending', 'paid',
+                          'partially_paid', 'insurance_claim', 'cancelled']
                       .map((st) => DropdownMenuItem(
                         value: st,
                         child: Row(children: [
@@ -1176,6 +1369,10 @@ class _BillingScreenState extends State<BillingScreen> {
           icon: Icon(Icons.more_vert_rounded,
               color: Colors.grey.shade400, size: 18),
           onSelected: (v) async {
+            if (v == '__review__') {
+              _showReviewSheet(docId, name, svc, amt, cur);
+              return;
+            }
             if (v == '__partial__') {
               _showMarkPartialSheet(docId, amt, cur);
               return;
@@ -1184,6 +1381,17 @@ class _BillingScreenState extends State<BillingScreen> {
             await _updateStatus(docId, newSt);
           },
           itemBuilder: (_) => [
+            if (st == _InvStatus.awaitingReview)
+              const PopupMenuItem(value: '__review__',
+                  child: Row(children: [
+                    Icon(Icons.rate_review_rounded,
+                        color: Color(0xFF1565C0), size: 18),
+                    SizedBox(width: 8),
+                    Text('Review Session',
+                        style: TextStyle(
+                            color: Color(0xFF1565C0),
+                            fontWeight: FontWeight.bold)),
+                  ])),
             if (st != _InvStatus.paid)
               PopupMenuItem(value: _InvStatus.paid.key,
                   child: Row(children: [
@@ -1275,6 +1483,10 @@ class _BillingScreenState extends State<BillingScreen> {
                 icon: Icon(Icons.more_vert_rounded,
                     color: Colors.grey.shade400, size: 18),
                 onSelected: (v) async {
+                  if (v == '__review__') {
+                    _showReviewSheet(docId, name, svc, amt, cur);
+                    return;
+                  }
                   if (v == '__partial__') {
                     _showMarkPartialSheet(docId, amt, cur);
                     return;
@@ -1282,6 +1494,17 @@ class _BillingScreenState extends State<BillingScreen> {
                   await _updateStatus(docId, _InvStatusX.fromString(v));
                 },
                 itemBuilder: (_) => [
+                  if (st == _InvStatus.awaitingReview)
+                    const PopupMenuItem(value: '__review__',
+                        child: Row(children: [
+                          Icon(Icons.rate_review_rounded,
+                              color: Color(0xFF1565C0), size: 18),
+                          SizedBox(width: 8),
+                          Text('Review Session',
+                              style: TextStyle(
+                                  color: Color(0xFF1565C0),
+                                  fontWeight: FontWeight.bold)),
+                        ])),
                   if (st != _InvStatus.paid)
                     PopupMenuItem(value: _InvStatus.paid.key,
                         child: Row(children: [
@@ -1483,6 +1706,7 @@ class _BillingScreenState extends State<BillingScreen> {
     required double overdue,
     required double invoiced,
     required int invoiceCount,
+    required int awaitingCount,
     required bool isDesktop,
   }) {
     final total = collected + pending + overdue;
@@ -1496,6 +1720,37 @@ class _BillingScreenState extends State<BillingScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (awaitingCount > 0) ...[
+            GestureDetector(
+              onTap: () => setState(() => _statusFilter = 'awaiting_review'),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE3F2FD),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF1565C0).withValues(alpha: 0.3)),
+                ),
+                child: Row(children: [
+                  const Icon(Icons.rate_review_rounded,
+                      color: Color(0xFF1565C0), size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '$awaitingCount session${awaitingCount == 1 ? '' : 's'} awaiting your review',
+                      style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1565C0)),
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_ios_rounded,
+                      color: Color(0xFF1565C0), size: 12),
+                ]),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           Row(children: [
             const Text('Currency',
                 style: TextStyle(
