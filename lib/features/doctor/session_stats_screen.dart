@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -187,14 +188,19 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
               final totalExpenses = paidExpenses + pendingExpenses;
               final netProfit     = paidIncome - paidExpenses;
 
-              // ── Payment methods breakdown (BUG 1: payment_method column
-              // does not exist — kept until removed in the next commit)
-              final methods = <String, int>{};
+              // ── Payment collection: overdue = pending invoices > 30 d ──
+              final overdueThreshold =
+                  DateTime.now().subtract(const Duration(days: 30));
+              double overdueIncome = 0;
               for (final inv in invoices) {
-                final pm = (inv['payment_method'] as String?)
-                               ?.replaceAll('_', ' ')
-                               .toTitleCase() ?? 'Cash';
-                methods[pm] = (methods[pm] ?? 0) + 1;
+                if (inv['status'] != 'pending') continue;
+                final t = inv['invoice_date'] as String?
+                    ?? inv['created_at'] as String?;
+                if (t != null &&
+                    DateTime.parse(t).isBefore(overdueThreshold)) {
+                  overdueIncome +=
+                      (inv['amount'] as num?)?.toDouble() ?? 0;
+                }
               }
 
               // ── Sessions by day ───────────────────────────────────────
@@ -274,9 +280,9 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
                 pendingExpenses:   pendingExpenses,
                 totalExpenses:     totalExpenses,
                 netProfit:         netProfit,
-                methods:           methods,
                 sessionsByDay:     sessionsByDay,
                 currency:          currency,
+                overdueIncome:     overdueIncome,
                 prevSessions:      prevSessions,
                 prevTotalIncome:   prevTotalIncome,
                 prevTotalExpenses: prevTotalExpenses,
@@ -300,16 +306,13 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
     required double  pendingExpenses,
     required double  totalExpenses,
     required double  netProfit,
-    required Map<String, int> methods,
     required List<int> sessionsByDay,
-    // display currency
     required String  currency,
-    // previous-period values for delta badges
+    required double  overdueIncome,
     required int     prevSessions,
     required double  prevTotalIncome,
     required double  prevTotalExpenses,
     required double  prevNetProfit,
-    // per-day sparkline data (length == days in period)
     required List<double> incomeSpkl,
     required List<double> expensesSpkl,
   }) {
@@ -323,6 +326,7 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildHeader(),
+          // ── Section 2: KPI row ────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Row(children: [
@@ -390,30 +394,34 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
               )),
             ]),
           ),
+          // ── Section 3: Revenue trend + Payment collection ─────────────
           const SizedBox(height: 16),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _sessionsChart(sessionsByDay),
-          ),
-          const SizedBox(height: 16),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _incomeExpensesCard(
-              paidIncome:      paidIncome,
-              pendingIncome:   pendingIncome,
-              paidExpenses:    paidExpenses,
-              pendingExpenses: pendingExpenses,
-              netProfit:       netProfit,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: _revenueTrendCard(
+                    incomeData:   incomeSpkl,
+                    expensesData: expensesSpkl,
+                    currency:     currency,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: _paymentCollectionCard(
+                    paidIncome:    paidIncome,
+                    pendingIncome: pendingIncome,
+                    overdueIncome: overdueIncome,
+                    currency:      currency,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          if (methods.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _paymentMethodsCard(
-                  methods,
-                  invoiceCount: methods.values.fold(0, (a, b) => a + b)),
-            ),
           const SizedBox(height: 24),
         ],
       ),
@@ -656,12 +664,19 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
     );
   }
 
-  // ── Sessions bar chart ────────────────────────────────────────────────────
+  // ── Section 3a: Revenue & Expenses trend chart ───────────────────────────
 
-  Widget _sessionsChart(List<int> sessionsByDay) {
-    final activeDays = sessionsByDay.asMap().entries
-        .where((e) => e.value > 0)
-        .toList();
+  Widget _revenueTrendCard({
+    required List<double> incomeData,
+    required List<double> expensesData,
+    required String currency,
+  }) {
+    final hasData = incomeData.any((v) => v > 0) ||
+        expensesData.any((v) => v > 0);
+    final allVals = [...incomeData, ...expensesData];
+    final maxVal  = allVals.isEmpty
+        ? 1.0
+        : allVals.reduce(math.max).clamp(1.0, double.infinity);
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -678,75 +693,146 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(children: [
-            Icon(Icons.event_note_rounded, size: 16, color: _navy),
-            SizedBox(width: 6),
-            Text('Sessions per Day',
+          Row(children: [
+            const Icon(Icons.show_chart_rounded, size: 16, color: _navy),
+            const SizedBox(width: 6),
+            const Text('Revenue & Expenses',
                 style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: _navy)),
+            const Spacer(),
+            _legendDot(_green, 'Income'),
+            const SizedBox(width: 10),
+            _legendDot(_red, 'Expenses'),
           ]),
           const SizedBox(height: 16),
-          activeDays.isEmpty
-              ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Text('No sessions in this period',
-                        style: TextStyle(color: AppColors.textSecondary)),
-                  ))
-              : Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: activeDays.map((e) {
-                    final date = _start.add(Duration(days: e.key));
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE3F2FD),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                            color: const Color(0xFF1565C0).withValues(alpha: 0.25)),
+          if (!hasData)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Text('No financial data in this period',
+                    style: TextStyle(color: AppColors.textSecondary)),
+              ),
+            )
+          else
+            SizedBox(
+              height: 160,
+              child: LineChart(
+                LineChartData(
+                  minY: 0,
+                  maxY: maxVal * 1.15,
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    getDrawingHorizontalLine: (_) => FlLine(
+                      color: const Color(0xFFF0F4FA),
+                      strokeWidth: 1,
+                    ),
+                  ),
+                  titlesData: FlTitlesData(
+                    rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false)),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 46,
+                        interval: maxVal / 3,
+                        getTitlesWidget: (val, _) => Text(
+                          '$currency ${val.toInt()}',
+                          style: const TextStyle(
+                              fontSize: 9,
+                              color: AppColors.textSecondary),
+                        ),
                       ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${e.value}',
-                            style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1565C0)),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            DateFormat('d MMM').format(date),
-                            style: const TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textSecondary),
-                          ),
-                        ],
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 22,
+                        getTitlesWidget: (val, _) {
+                          final n   = incomeData.length;
+                          final idx = val.toInt();
+                          if (n == 0) return const SizedBox.shrink();
+                          if (idx != 0 &&
+                              idx != n ~/ 2 &&
+                              idx != n - 1) {
+                            return const SizedBox.shrink();
+                          }
+                          final date =
+                              _start.add(Duration(days: idx));
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              DateFormat('d MMM').format(date),
+                              style: const TextStyle(
+                                  fontSize: 9,
+                                  color: AppColors.textSecondary),
+                            ),
+                          );
+                        },
                       ),
-                    );
-                  }).toList(),
+                    ),
+                  ),
+                  borderData: FlBorderData(show: false),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: incomeData.asMap().entries
+                          .map((e) =>
+                              FlSpot(e.key.toDouble(), e.value))
+                          .toList(),
+                      isCurved: true,
+                      color: _green,
+                      barWidth: 2,
+                      isStrokeCapRound: true,
+                      dotData: const FlDotData(show: false),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: _green.withValues(alpha: 0.08),
+                      ),
+                    ),
+                    LineChartBarData(
+                      spots: expensesData.asMap().entries
+                          .map((e) =>
+                              FlSpot(e.key.toDouble(), e.value))
+                          .toList(),
+                      isCurved: true,
+                      color: _red,
+                      barWidth: 2,
+                      isStrokeCapRound: true,
+                      dotData: const FlDotData(show: false),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: _red.withValues(alpha: 0.08),
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  // ── Income vs Expenses card ───────────────────────────────────────────────
+  // ── Section 3b: Payment collection donut ─────────────────────────────────
 
-  Widget _incomeExpensesCard({
+  Widget _paymentCollectionCard({
     required double paidIncome,
     required double pendingIncome,
-    required double paidExpenses,
-    required double pendingExpenses,
-    required double netProfit,
+    required double overdueIncome,
+    required String currency,
   }) {
-    final totalIncome   = paidIncome + pendingIncome;
-    final totalExpenses = paidExpenses + pendingExpenses;
+    final pendingCurrent =
+        (pendingIncome - overdueIncome).clamp(0.0, double.infinity);
+    final total      = paidIncome + pendingIncome;
+    final hasData    = total > 0;
+    final pctLabel   = total > 0
+        ? '${(paidIncome / total * 100).toStringAsFixed(0)}%'
+        : '0%';
+    String fmt(double v) => '$currency ${v.toStringAsFixed(0)}';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -764,213 +850,107 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(children: [
-            Icon(Icons.account_balance_rounded, size: 16, color: _navy),
+            Icon(Icons.donut_large_rounded, size: 16, color: _navy),
             SizedBox(width: 6),
-            Text('Financial Breakdown',
+            Text('Collection',
                 style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: _navy)),
           ]),
           const SizedBox(height: 16),
-          _financeRow(
-            label:   'Income',
-            total:   totalIncome,
-            paid:    paidIncome,
-            pending: pendingIncome,
-            color:   _green,
-            bgColor: const Color(0xFFE8F5E9),
-            icon:    Icons.arrow_upward_rounded,
-          ),
-          const SizedBox(height: 12),
-          _financeRow(
-            label:   'Expenses',
-            total:   totalExpenses,
-            paid:    paidExpenses,
-            pending: pendingExpenses,
-            color:   _red,
-            bgColor: const Color(0xFFFFEBEE),
-            icon:    Icons.arrow_downward_rounded,
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 14),
-            child: Divider(height: 1, color: Color(0xFFF0F4FA)),
-          ),
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: netProfit >= 0
-                    ? const Color(0xFFE0F2F1)
-                    : const Color(0xFFFFF3E0),
-                borderRadius: BorderRadius.circular(8),
+          if (!hasData)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 32),
+                child: Text('No invoices yet',
+                    style: TextStyle(color: AppColors.textSecondary)),
               ),
-              child: Icon(
-                Icons.account_balance_wallet_rounded,
-                color:
-                    netProfit >= 0 ? const Color(0xFF00695C) : _amber,
-                size: 18,
-              ),
+            )
+          else ...[
+            SizedBox(
+              height: 130,
+              child: Stack(alignment: Alignment.center, children: [
+                PieChart(PieChartData(
+                  sectionsSpace: 2,
+                  centerSpaceRadius: 38,
+                  sections: [
+                    if (paidIncome > 0)
+                      PieChartSectionData(
+                          value: paidIncome,
+                          color: _green,
+                          radius: 20,
+                          showTitle: false),
+                    if (pendingCurrent > 0)
+                      PieChartSectionData(
+                          value: pendingCurrent,
+                          color: _amber,
+                          radius: 20,
+                          showTitle: false),
+                    if (overdueIncome > 0)
+                      PieChartSectionData(
+                          value: overdueIncome,
+                          color: _red,
+                          radius: 20,
+                          showTitle: false),
+                  ],
+                )),
+                Column(mainAxisSize: MainAxisSize.min, children: [
+                  Text(pctLabel,
+                      style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: _navy)),
+                  const Text('collected',
+                      style: TextStyle(
+                          fontSize: 9,
+                          color: AppColors.textSecondary)),
+                ]),
+              ]),
             ),
-            const SizedBox(width: 12),
-            const Expanded(
-                child: Text('Net Profit',
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14))),
-            Text(
-              '\$${netProfit.toStringAsFixed(2)}',
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: netProfit >= 0 ? _green : _red),
-            ),
-          ]),
+            const SizedBox(height: 12),
+            _collectionRow(_green, 'Paid',         fmt(paidIncome)),
+            const SizedBox(height: 6),
+            _collectionRow(_amber, 'Pending',      fmt(pendingCurrent)),
+            const SizedBox(height: 6),
+            _collectionRow(_red,   'Overdue 30d+', fmt(overdueIncome)),
+          ],
         ],
       ),
     );
   }
 
-  Widget _financeRow({
-    required String  label,
-    required double  total,
-    required double  paid,
-    required double  pending,
-    required Color   color,
-    required Color   bgColor,
-    required IconData icon,
-  }) {
+  Widget _collectionRow(Color color, String label, String value) {
     return Row(children: [
       Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-            color: bgColor, borderRadius: BorderRadius.circular(8)),
-        child: Icon(icon, color: color, size: 18),
+        width: 8, height: 8,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       ),
-      const SizedBox(width: 12),
+      const SizedBox(width: 8),
       Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-          Text(label,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w600, fontSize: 13)),
-          const SizedBox(height: 2),
-          Row(children: [
-            _dot(_green),
-            const SizedBox(width: 4),
-            Text('\$${paid.toStringAsFixed(0)} paid',
-                style: const TextStyle(
-                    fontSize: 11, color: AppColors.textSecondary)),
-            const SizedBox(width: 10),
-            _dot(_amber),
-            const SizedBox(width: 4),
-            Text('\$${pending.toStringAsFixed(0)} pending',
-                style: const TextStyle(
-                    fontSize: 11, color: AppColors.textSecondary)),
-          ]),
-        ]),
+        child: Text(label,
+            style: const TextStyle(
+                fontSize: 11, color: AppColors.textSecondary)),
       ),
-      Text('\$${total.toStringAsFixed(2)}',
-          style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: color)),
+      Text(value,
+          style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary)),
     ]);
   }
 
-  Widget _dot(Color c) => Container(
-      width: 6, height: 6,
-      decoration: BoxDecoration(color: c, shape: BoxShape.circle));
-
-  // ── Payment methods card ──────────────────────────────────────────────────
-
-  Widget _paymentMethodsCard(
-      Map<String, int> methods, {required int invoiceCount}) {
-    final sorted = methods.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
-    final colors = [
-      const Color(0xFF1565C0),
-      const Color(0xFF00897B),
-      const Color(0xFFE53935),
-      const Color(0xFF7B1FA2),
-      const Color(0xFFF57C00),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
+  Widget _legendDot(Color color, String label) {
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Container(
+        width: 8, height: 8,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(children: [
-            Icon(Icons.credit_card_rounded, size: 16, color: _navy),
-            SizedBox(width: 6),
-            Text('Payment Methods',
-                style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: _navy)),
-          ]),
-          const SizedBox(height: 14),
-          ...sorted.asMap().entries.map((entry) {
-            final i   = entry.key;
-            final e   = entry.value;
-            final pct = invoiceCount > 0 ? e.value / invoiceCount : 0.0;
-            final clr = colors[i % colors.length];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    _dot(clr),
-                    const SizedBox(width: 8),
-                    Expanded(
-                        child: Text(e.key,
-                            style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500))),
-                    Text(
-                        '${e.value}  ${(pct * 100).toStringAsFixed(0)}%',
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                            fontWeight: FontWeight.w600)),
-                  ]),
-                  const SizedBox(height: 4),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: pct,
-                      minHeight: 6,
-                      backgroundColor: Colors.grey.shade100,
-                      valueColor: AlwaysStoppedAnimation(clr),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-}
-
-extension _StringExt on String {
-  String toTitleCase() {
-    if (isEmpty) return this;
-    return this[0].toUpperCase() + substring(1);
+      const SizedBox(width: 4),
+      Text(label,
+          style: const TextStyle(
+              fontSize: 10, color: AppColors.textSecondary)),
+    ]);
   }
 }
 
