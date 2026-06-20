@@ -574,73 +574,85 @@ Future<void> _showLogout(AppStrings s) async {
           ),
           child: SafeArea(
             bottom: false,
-            child: Stack(
-              clipBehavior: Clip.none,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Doctor photo (right)
-                Positioned(
-                  right: 0, top: 0, bottom: 0,
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(80)),
-                    child: photo.isNotEmpty
-                        ? Image.network(photo,
-                            width: 140, fit: BoxFit.cover)
-                        : Container(
-                            width: 130,
-                            alignment: Alignment.center,
-                            color: Colors.white10,
-                            child: const Icon(Icons.person_rounded,
-                                size: 80, color: Colors.white30)),
-                  ),
+                // ── Left: My Profile + Notifications nav buttons ─────────
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildHeaderNavButton(
+                      icon: Icons.badge_rounded,
+                      label: s.myProfile,
+                      onTap: () => _navigateTo(6),
+                    ),
+                    const SizedBox(height: 4),
+                    _buildHeaderNavButton(
+                      icon: Icons.notifications_rounded,
+                      label: s.notifications,
+                      badge: _doctorUnreadCount > 0 ? _doctorUnreadCount : null,
+                      onTap: () => _navigateTo(7),
+                    ),
+                  ],
                 ),
-                // Language toggle (top-right corner offset from photo)
-                Positioned(
-                  top: 6, right: 148,
-                  child: TextButton.icon(
-                    onPressed: lang.toggle,
-                    icon: const Icon(Icons.language_rounded,
-                        color: Colors.white60, size: 15),
-                    label: Text(s.language,
-                        style: const TextStyle(
-                            color: Colors.white60, fontSize: 11)),
-                  ),
-                ),
-                // Welcome text (left)
-                Padding(
-                  padding:
-                      const EdgeInsets.fromLTRB(22, 24, 160, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('Welcome,',
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.65),
-                              fontSize: 16)),
-                      const SizedBox(height: 4),
-                      Text('${_showDrPrefix ? "Dr. " : ""}$name!',
+                // ── Center: name + specialisation + language toggle ───────
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '${_showDrPrefix ? "Dr. " : ""}$name',
+                          textAlign: TextAlign.center,
                           style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.bold)),
-                      if (spec.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(20),
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
                           ),
-                          child: Text(spec,
+                        ),
+                        if (spec.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(spec,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 13)),
+                          ),
+                        ],
+                        const SizedBox(height: 4),
+                        TextButton.icon(
+                          onPressed: lang.toggle,
+                          icon: const Icon(Icons.language_rounded,
+                              color: Colors.white60, size: 14),
+                          label: Text(s.language,
                               style: const TextStyle(
-                                  color: Colors.white, fontSize: 13)),
+                                  color: Colors.white60, fontSize: 11)),
                         ),
                       ],
-                      const SizedBox(height: 4),
-                    ],
+                    ),
                   ),
+                ),
+                // ── Right: doctor photo ────────────────────────────────
+                ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(80)),
+                  child: photo.isNotEmpty
+                      ? Image.network(photo,
+                          width: 130, height: 130, fit: BoxFit.cover)
+                      : Container(
+                          width: 110,
+                          height: 130,
+                          alignment: Alignment.center,
+                          color: Colors.white10,
+                          child: const Icon(Icons.person_rounded,
+                              size: 70, color: Colors.white30)),
                 ),
               ],
             ),
@@ -658,10 +670,10 @@ Future<void> _showLogout(AppStrings s) async {
               final cols = constraints.maxWidth > 600 ? 4 : 2;
               final showStats = FormFactorFeatures.of(context).showStatistics;
               final showDocs = FormFactorFeatures.of(context).showDocumentation;
-              // Row 1: My Patients, Schedule, Documentation, Notifications
-              // Row 2: Revenues, Expenses, Statistics, PhysioGate
-              // Row 3: My Profile
-              const displayOrder = [2, 0, 1, 9, 7, 4, 5, 3, 8, 6];
+              // Row 1: My Patients, Schedule, Documentation, PhysioGate
+              // Row 2: Revenues, Expenses, Statistics, Assessment Library
+              // My Profile (6) and Notifications (7) live in the header.
+              const displayOrder = [2, 0, 1, 8, 4, 5, 3, 9];
               final visibleIndices = displayOrder.where((i) {
                 if (i >= sections.length) return false;
                 if (i == 3 && !showStats) return false;
@@ -865,6 +877,58 @@ Future<void> _showLogout(AppStrings s) async {
             ),
           ]),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderNavButton({
+    required IconData icon,
+    required String label,
+    int? badge,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(icon, color: Colors.white70, size: 22),
+                if (badge != null)
+                  Positioned(
+                    top: -4, right: -8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 3, vertical: 1),
+                      constraints:
+                          const BoxConstraints(minWidth: 16, minHeight: 14),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade600,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        badge > 9 ? '9+' : '$badge',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(label,
+                style: const TextStyle(
+                    color: Colors.white70, fontSize: 11)),
+          ],
+        ),
       ),
     );
   }
