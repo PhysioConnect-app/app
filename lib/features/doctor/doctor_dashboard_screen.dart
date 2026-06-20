@@ -34,6 +34,7 @@ import 'doctor_service.dart';
 import 'import_help_sheet.dart';
 import '../store/doctor_storefront_screen.dart';
 import '../auth/auth_service.dart';
+import 'assessment_library/assessment_library_screen.dart';
 
 // ── Patient import entry ──────────────────────────────────────────────────
 
@@ -82,7 +83,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   String _drPrefixStatus    = 'none';
   String _nameChangeRequest = 'none';
   String _pendingName       = '';
-  String _userRole    = 'doctor';   // 'doctor' | 'polyclinic'
   double? _lat;
   double? _lng;
 
@@ -110,28 +110,15 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     Icons.badge_rounded,                  // 6 My Profile
     Icons.notifications_rounded,          // 7 Notifications
     Icons.workspace_premium_rounded,      // 8 PhysioGate (doctor only)
+    Icons.assignment_rounded,             // 9 Assessment Library
   ];
 
   int _doctorUnreadCount = 0;
   final Set<String> _seenNotifIds = {};
   bool _notifStreamInitialized = false;
 
-  // Index 8 differs by role: doctor → Store, polyclinic → My Doctors.
-  // The base _navIcons/_tileColors already include the Store entry at [8];
-  // for polyclinic we swap icon+color for My Doctors instead.
-  List<IconData> get _allNavIcons {
-    if (_userRole == 'polyclinic') {
-      return [..._navIcons.sublist(0, 8), Icons.manage_accounts_rounded];
-    }
-    return _navIcons; // doctor: index 8 = storefront_rounded
-  }
-
-  List<Color> get _allTileColors {
-    if (_userRole == 'polyclinic') {
-      return [..._tileColors.sublist(0, 8), const Color(0xFF00695C)];
-    }
-    return _tileColors; // doctor: index 8 = cyan store color
-  }
+  List<IconData> get _allNavIcons => _navIcons;
+  List<Color> get _allTileColors => _tileColors;
 
   // Calendar state
   late DateTime _calMonth;
@@ -150,7 +137,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
           final d = list.first;
           setState(() {
             _sub               = SubConfig.fromMap(d);
-            _userRole          = (d['role']               as String?) ?? 'doctor';
             _showDrPrefix      = (d['show_dr_prefix']      as bool?)   ?? false;
             _drPrefixStatus    = (d['dr_prefix_request']   as String?) ?? 'none';
             _nameChangeRequest = (d['name_change_request'] as String?) ?? 'none';
@@ -478,8 +464,8 @@ Future<void> _showLogout(AppStrings s) async {
       s.expenses,
       s.myProfile,
       s.notifications,
-      if (_userRole == 'polyclinic') s.myDoctors,
-      if (_userRole == 'doctor') s.store,
+      s.store,
+      s.assessmentLibrary,
     ];
 
     return Directionality(
@@ -533,10 +519,8 @@ Future<void> _showLogout(AppStrings s) async {
                          : const ExpensesScreen(),
             _buildProfileTab(s),                                               // 6
             _buildDoctorNotificationsTab(s),                                   // 7
-            if (_userRole == 'polyclinic')
-              _buildPolyclinicDoctorsTab(),                                    // 8
-            if (_userRole == 'doctor')
-              _buildStoreTab(),                                                // 8
+            _buildStoreTab(),                                                // 8
+            const AssessmentLibraryScreen(),                                 // 9
           ],
         ),
       ),
@@ -548,15 +532,16 @@ Future<void> _showLogout(AppStrings s) async {
   // ════════════════════════════════════════════════════════════════════════════
 
   static const List<Color> _tileColors = [
-    Color(0xFF1565C0), // Schedule       – blue
-    Color(0xFF2E7D32), // Documentation  – green
-    Color(0xFFE65100), // My Patients    – orange
-    Color(0xFF00695C), // Statistics     – teal
-    Color(0xFF0E8378), // Revenues       – teal accent
-    Color(0xFF993C1D), // Expenses       – coral
-    Color(0xFF37474F), // My Profile     – blue-grey
-    Color(0xFF6A1B9A), // Notifications  – deep purple
-    Color(0xFF4527A0), // PhysioGate     – deep indigo (premium)
+    Color(0xFF1565C0), // Schedule         – blue
+    Color(0xFF2E7D32), // Documentation    – green
+    Color(0xFFE65100), // My Patients      – orange
+    Color(0xFF00695C), // Statistics       – teal
+    Color(0xFF0E8378), // Revenues         – teal accent
+    Color(0xFF993C1D), // Expenses         – coral
+    Color(0xFF37474F), // My Profile       – blue-grey
+    Color(0xFF6A1B9A), // Notifications    – deep purple
+    Color(0xFF4527A0), // PhysioGate       – deep indigo (premium)
+    Color(0xFF006064), // Assessment Library – dark cyan
   ];
 
   Widget _buildHomeScreen(AppStrings s, LanguageProvider lang) {
@@ -571,7 +556,8 @@ Future<void> _showLogout(AppStrings s) async {
       s.schedule, s.documentation, s.myPatients,
       s.statistics, s.billing, s.expenses, s.myProfile,
       s.notifications,
-      if (_userRole == 'doctor') s.store,
+      s.store,
+      s.assessmentLibrary,
     ];
 
     return Column(
@@ -633,7 +619,7 @@ Future<void> _showLogout(AppStrings s) async {
                               color: Colors.white.withValues(alpha: 0.65),
                               fontSize: 16)),
                       const SizedBox(height: 4),
-                      Text(_userRole == 'polyclinic' ? '$name!' : '${_showDrPrefix ? "Dr. " : ""}$name!',
+                      Text('${_showDrPrefix ? "Dr. " : ""}$name!',
                           style: const TextStyle(
                               color: Colors.white,
                               fontSize: 26,
@@ -662,7 +648,7 @@ Future<void> _showLogout(AppStrings s) async {
         ),
 
         // ── First-time guide (doctors only, while patient list is empty) ──
-        if (_hasPatients == false && _userRole == 'doctor')
+        if (_hasPatients == false)
           _buildAddPatientsGuide(),
 
         // ── Tile grid ─────────────────────────────────────────────────────
@@ -675,7 +661,7 @@ Future<void> _showLogout(AppStrings s) async {
               // Row 1: My Patients, Schedule, Documentation, Notifications
               // Row 2: Revenues, Expenses, Statistics, PhysioGate
               // Row 3: My Profile
-              const displayOrder = [2, 0, 1, 7, 4, 5, 3, 8, 6];
+              const displayOrder = [2, 0, 1, 9, 7, 4, 5, 3, 8, 6];
               final visibleIndices = displayOrder.where((i) {
                 if (i >= sections.length) return false;
                 if (i == 3 && !showStats) return false;
@@ -734,6 +720,39 @@ Future<void> _showLogout(AppStrings s) async {
                       ),
                     ),
                     const Spacer(),
+                    // Plan & expiry
+                    Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(_sub.tier.icon, size: 11, color: Colors.white54),
+                      const SizedBox(width: 4),
+                      Text(_sub.tier.label,
+                          style: const TextStyle(
+                              color: Colors.white54,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600)),
+                      Text('  ·  ',
+                          style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.3),
+                              fontSize: 11)),
+                      Text(
+                        _sub.expiresAt == null
+                            ? 'No expiry'
+                            : _sub.isExpired
+                                ? 'Expired'
+                                : DateFormat('MMM d, yyyy')
+                                    .format(_sub.expiresAt!),
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: _sub.expiresAt != null && _sub.isExpired
+                                ? const Color(0xFFFF7043)
+                                : _sub.expiresAt != null &&
+                                        _sub.expiresAt!.isBefore(
+                                            DateTime.now()
+                                                .add(const Duration(days: 30)))
+                                    ? const Color(0xFFFFB74D)
+                                    : Colors.white54),
+                      ),
+                    ]),
+                    const SizedBox(width: 8),
                     // Logout button
                     TextButton.icon(
                       onPressed: () => _showLogout(AppStrings(false)),
@@ -888,6 +907,39 @@ Future<void> _showLogout(AppStrings s) async {
               ),
             ),
           ),
+          // Plan & expiry (compact, two lines)
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                Icon(_sub.tier.icon, size: 10, color: Colors.white54),
+                const SizedBox(width: 3),
+                Text(_sub.tier.label,
+                    style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600)),
+              ]),
+              Text(
+                _sub.expiresAt == null
+                    ? 'No expiry'
+                    : _sub.isExpired
+                        ? 'Expired'
+                        : DateFormat('MMM d, yy').format(_sub.expiresAt!),
+                style: TextStyle(
+                    fontSize: 10,
+                    color: _sub.expiresAt != null && _sub.isExpired
+                        ? const Color(0xFFFF7043)
+                        : _sub.expiresAt != null &&
+                                _sub.expiresAt!.isBefore(DateTime.now()
+                                    .add(const Duration(days: 30)))
+                            ? const Color(0xFFFFB74D)
+                            : Colors.white54),
+              ),
+            ],
+          ),
+          const SizedBox(width: 6),
           IconButton(
             onPressed: () => _showLogout(AppStrings(false)),
             icon: const Icon(Icons.logout_rounded,
@@ -935,11 +987,25 @@ Future<void> _showLogout(AppStrings s) async {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(icon,
-                        size: 46,
-                        color: locked
-                            ? Colors.white.withValues(alpha: 0.4)
-                            : Colors.white),
+                    if (index == 8)
+                      Opacity(
+                        opacity: locked ? 0.4 : 1.0,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.asset(
+                            'assets/images/physiogate_logo.jpg',
+                            height: 56,
+                            width: 56,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      )
+                    else
+                      Icon(icon,
+                          size: 46,
+                          color: locked
+                              ? Colors.white.withValues(alpha: 0.4)
+                              : Colors.white),
                     const SizedBox(height: 10),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -1136,13 +1202,27 @@ Future<void> _showLogout(AppStrings s) async {
                       leading: Stack(
                         clipBehavior: Clip.none,
                         children: [
-                          Icon(_allNavIcons[i],
-                              color: locked
-                                  ? Colors.grey.shade400
-                                  : selected
-                                      ? AppColors.primary
-                                      : Colors.grey.shade600,
-                              size: 22),
+                          if (i == 8)
+                            Opacity(
+                              opacity: locked ? 0.4 : 1.0,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(5),
+                                child: Image.asset(
+                                  'assets/images/physiogate_logo.jpg',
+                                  height: 22,
+                                  width: 22,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            )
+                          else
+                            Icon(_allNavIcons[i],
+                                color: locked
+                                    ? Colors.grey.shade400
+                                    : selected
+                                        ? AppColors.primary
+                                        : Colors.grey.shade600,
+                                size: 22),
                           if (locked)
                             Positioned(
                               right: -4, bottom: -4,
@@ -2051,11 +2131,7 @@ Future<void> _showLogout(AppStrings s) async {
                 icon: Icon(Icons.more_vert_rounded,
                     color: Colors.grey.shade400, size: 20),
                 onSelected: (v) async {
-                  if (v == 'attend') {
-                    final patientId = (data['patient_id'] as String?) ?? '';
-                    _showMarkAttendedSheet(
-                        s, apptId, patName, patientId, dt, notes);
-                  } else if (v == 'edit') {
+                  if (v == 'edit') {
                     _showEditAppointmentSheet(s, apptId, dt, notes);
                   } else if (v == 'cancel') {
                     final ok = await _service.cancelAppointment(apptId);
@@ -2078,18 +2154,6 @@ Future<void> _showLogout(AppStrings s) async {
                   }
                 },
                 itemBuilder: (_) => [
-                  if (!isCompleted)
-                    const PopupMenuItem(
-                        value: 'attend',
-                        child: Row(children: [
-                          Icon(Icons.how_to_reg_rounded,
-                              size: 18, color: Color(0xFF0E8378)),
-                          SizedBox(width: 8),
-                          Text('Mark as Attended',
-                              style: TextStyle(
-                                  color: Color(0xFF0E8378),
-                                  fontWeight: FontWeight.bold)),
-                        ])),
                   PopupMenuItem(
                       value: 'edit',
                       child: Row(children: [
@@ -2472,194 +2536,6 @@ Future<void> _showLogout(AppStrings s) async {
                 ),
               ),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Mark Attended → create awaiting-review invoice ──────────────────────
-
-  void _showMarkAttendedSheet(AppStrings s, String apptId, String patName,
-      String patientId, DateTime dt, String notes) {
-    final svcCtrl = TextEditingController(
-        text: notes.isNotEmpty ? notes : 'Physical Therapy');
-    final amtCtrl = TextEditingController();
-    String currency = 'USD';
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, set) => Padding(
-          padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 8,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40, height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(2)),
-                  ),
-                ),
-                Row(children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0E8378).withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.how_to_reg_rounded,
-                        color: Color(0xFF0E8378), size: 22),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Mark as Attended',
-                            style: TextStyle(
-                                fontSize: 17, fontWeight: FontWeight.bold)),
-                        Text(patName,
-                            style: const TextStyle(
-                                fontSize: 13, color: AppColors.textSecondary)),
-                      ],
-                    ),
-                  ),
-                ]),
-                const SizedBox(height: 16),
-                // Service
-                TextField(
-                  controller: svcCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'Service / Session type',
-                    prefixIcon: const Icon(Icons.medical_services_rounded,
-                        color: Color(0xFF0E8378), size: 20),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFB),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // Amount
-                TextField(
-                  controller: amtCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true),
-                  decoration: InputDecoration(
-                    labelText: 'Amount',
-                    prefixIcon: const Icon(Icons.payments_rounded,
-                        color: Color(0xFF0E8378), size: 20),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFB),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // Currency
-                Row(children: [
-                  const Text('Currency',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: AppColors.textSecondary)),
-                  const SizedBox(width: 12),
-                  for (final c in ['USD', 'LBP']) ...[
-                    GestureDetector(
-                      onTap: () => set(() => currency = c),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 7),
-                        decoration: BoxDecoration(
-                          color: currency == c
-                              ? const Color(0xFF0E8378)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: currency == c
-                                  ? const Color(0xFF0E8378)
-                                  : Colors.grey.shade300),
-                        ),
-                        child: Text(c,
-                            style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                                color: currency == c
-                                    ? Colors.white
-                                    : AppColors.textSecondary)),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                ]),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0E8378),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onPressed: () async {
-                      final amt =
-                          double.tryParse(amtCtrl.text.trim());
-                      if (amt == null || amt <= 0) return;
-                      final supabase = Supabase.instance.client;
-                      final uid = supabase.auth.currentUser?.id ?? '';
-                      await supabase.from('invoices').insert({
-                        'doctor_id':    uid,
-                        'patient_id':   patientId,
-                        'patient_name': patName,
-                        'service':      svcCtrl.text.trim().isNotEmpty
-                            ? svcCtrl.text.trim()
-                            : 'Physical Therapy',
-                        'amount':       amt,
-                        'currency':     currency,
-                        'status':       'awaiting_review',
-                        'appointment_id': apptId,
-                        'invoice_date': dt.toIso8601String(),
-                        'created_at':  DateTime.now().toIso8601String(),
-                      });
-                      await supabase
-                          .from('appointments')
-                          .update({'status': 'completed'})
-                          .eq('id', apptId);
-                      if (!ctx.mounted) return;
-                      Navigator.pop(ctx);
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                              'Session recorded — review it in Revenues'),
-                          backgroundColor: Color(0xFF0E8378),
-                        ),
-                      );
-                    },
-                    child: const Text('Record Session',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
-            ),
           ),
         ),
       ),
@@ -7642,709 +7518,4 @@ void _showPickPatientForDoc(AppStrings s) {
   // ════════════════════════════════════════════════════════════════════════════
 
   Widget _buildStoreTab() => const DoctorStorefrontScreen();
-
-  // ════════════════════════════════════════════════════════════════════════════
-  // 8 – Polyclinic: My Doctors Tab
-  // ════════════════════════════════════════════════════════════════════════════
-
-  static const _kPolyTeal = Color(0xFF00695C);
-
-  Widget _buildPolyclinicDoctorsTab() {
-    final myUid = Supabase.instance.client.auth.currentUser!.id;
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: Supabase.instance.client.from('users').stream(primaryKey: ['id']).eq('polyclinic_id', myUid),
-        builder: (context, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          final doctors = snap.data ?? [];
-
-          return Column(children: [
-            // ── Action bar ────────────────────────────────────────────────
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _kPolyTeal,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                  icon: const Icon(Icons.person_add_rounded, size: 20),
-                  label: const Text('Add Doctor',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14)),
-                  onPressed: () =>
-                      _showCreateDoctorProfileSheet(myUid),
-                ),
-              ),
-            ),
-            const Divider(height: 1),
-            // ── Doctors list ──────────────────────────────────────────────
-            Expanded(
-              child: doctors.isEmpty
-                  ? Center(
-                      child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                        Icon(Icons.people_outline_rounded,
-                            size: 64,
-                            color: Colors.grey.shade300),
-                        const SizedBox(height: 12),
-                        const Text('No doctors yet',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16)),
-                        const SizedBox(height: 6),
-                        const Text(
-                            'Tap "Add Doctor" to create an internal doctor profile.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 13)),
-                      ]),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(14),
-                      itemCount: doctors.length,
-                      itemBuilder: (_, i) =>
-                          _polyclinicDoctorCard(doctors[i], myUid),
-                    ),
-            ),
-          ]);
-        },
-      ),
-    );
-  }
-
-  // ── Doctor card inside polyclinic tab ──────────────────────────────────────
-
-  Widget _polyclinicDoctorCard(
-      Map<String, dynamic> doc, String polyclinicUid) {
-    final d          = doc;
-    final name       = (d['name'] ?? d['email'] ?? 'Doctor') as String;
-    final spec       = (d['specialization'] ?? '') as String;
-    final phone      = (d['phone'] ?? '') as String;
-    final hasAuth    = (d['hasAuthAccount'] as bool?) ?? true;
-    final color      = _tileColors[1]; // green
-    final patCnt     = ((d['assigned_patient_ids'] as List?) ?? []).length;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE8EAED)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 6,
-              offset: const Offset(0, 2)),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Avatar
-          Container(
-            width: 48, height: 48,
-            decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(13)),
-            child: Center(
-              child: Text(
-                name.trim().split(' ').take(2)
-                    .map((w) => w.isNotEmpty ? w[0].toUpperCase() : '')
-                    .join(),
-                style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Info
-          Expanded(
-            child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-              Text(name,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 15)),
-              if (spec.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(spec,
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 12)),
-              ],
-              if (phone.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                GestureDetector(
-                  onTap: () => _showPhoneOptions(context, phone),
-                  child: Text(phone,
-                      style: const TextStyle(
-                          color: Color(0xFF25D366),
-                          fontSize: 12,
-                          decoration: TextDecoration.underline)),
-                ),
-              ],
-              const SizedBox(height: 6),
-              Row(children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                      color: hasAuth
-                          ? const Color(0xFFE8F5E9)
-                          : const Color(0xFFFFF8E1),
-                      borderRadius: BorderRadius.circular(8)),
-                  child: Text(
-                      hasAuth ? 'Has Login' : 'Profile Only',
-                      style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: hasAuth
-                              ? const Color(0xFF2E7D32)
-                              : const Color(0xFFF57F17))),
-                ),
-                const SizedBox(width: 8),
-                Text('$patCnt patient${patCnt != 1 ? 's' : ''}',
-                    style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondary)),
-              ]),
-            ]),
-          ),
-          // Menu
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert_rounded,
-                color: Colors.grey.shade400, size: 18),
-            onSelected: (v) async {
-              if (v == 'patients') {
-                _showAssignPatientsSheet(doc);
-              } else if (v == 'edit') {
-                _showEditDoctorProfileSheet(doc);
-              } else if (v == 'unlink') {
-                final ok = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => AlertDialog(
-                    title: const Text('Remove Doctor'),
-                    content: Text('Remove "$name" from your polyclinic?'),
-                    actions: [
-                      TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('Cancel')),
-                      ElevatedButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.error,
-                            foregroundColor: Colors.white),
-                        child: const Text('Remove'),
-                      ),
-                    ],
-                  ),
-                );
-                if (ok != true) return;
-                final docId = doc['id'] as String;
-                final polyData = await Supabase.instance.client.from('users').select('linked_doctor_ids').eq('id', polyclinicUid).single();
-                final linkedIds = List<String>.from((polyData['linked_doctor_ids'] as List?) ?? [])..remove(docId);
-                await Supabase.instance.client.from('users').update({'linked_doctor_ids': linkedIds}).eq('id', polyclinicUid);
-                await Supabase.instance.client.from('users').update({'polyclinic_id': null}).eq('id', docId);
-              }
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem(
-                value: 'patients',
-                child: Row(children: [
-                  Icon(Icons.people_rounded, size: 18, color: _kPolyTeal),
-                  SizedBox(width: 8),
-                  Text('Assign Patients'),
-                ]),
-              ),
-              const PopupMenuItem(
-                value: 'edit',
-                child: Row(children: [
-                  Icon(Icons.edit_rounded, size: 18,
-                      color: AppColors.textSecondary),
-                  SizedBox(width: 8),
-                  Text('Edit Profile'),
-                ]),
-              ),
-              const PopupMenuItem(
-                value: 'unlink',
-                child: Row(children: [
-                  Icon(Icons.link_off_rounded, size: 18,
-                      color: AppColors.error),
-                  SizedBox(width: 8),
-                  Text('Remove from Polyclinic',
-                      style: TextStyle(color: AppColors.error)),
-                ]),
-              ),
-            ],
-          ),
-        ]),
-      ),
-    );
-  }
-
-  // ── Create doctor profile sheet (no auth account) ──────────────────────────
-
-  void _showCreateDoctorProfileSheet(
-      String polyclinicUid) {
-    final nameCtrl = TextEditingController();
-    final specCtrl = TextEditingController();
-    final phCtrl   = TextEditingController();
-    bool saving    = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, set) => Padding(
-          padding: EdgeInsets.only(
-              left: 20, right: 20, top: 16,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36, height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2)),
-                ),
-              ),
-              Row(children: [
-                Container(
-                  width: 40, height: 40,
-                  decoration: BoxDecoration(
-                      color: _kPolyTeal.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(11)),
-                  child: const Icon(Icons.person_add_rounded,
-                      color: _kPolyTeal, size: 20),
-                ),
-                const SizedBox(width: 12),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Create Doctor Profile',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text('No login account — profile only',
-                        style: TextStyle(
-                            color: AppColors.textSecondary, fontSize: 12)),
-                  ],
-                ),
-              ]),
-              const SizedBox(height: 20),
-              _polyField(nameCtrl, 'Full Name', Icons.badge_rounded),
-              const SizedBox(height: 10),
-              _polyField(specCtrl, 'Specialization',
-                  Icons.medical_services_rounded),
-              const SizedBox(height: 10),
-              _polyField(phCtrl, 'Phone Number', Icons.phone_rounded,
-                  type: TextInputType.phone),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity, height: 50,
-                child: saving
-                    ? const Center(child: CircularProgressIndicator())
-                    : ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _kPolyTeal,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        icon: const Icon(Icons.check_circle_rounded),
-                        label: const Text('Create Doctor',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold)),
-                        onPressed: () async {
-                          final name = nameCtrl.text.trim();
-                          if (name.isEmpty) return;
-                          set(() => saving = true);
-                          try {
-                            final newDoc = await Supabase.instance.client.from('users').insert({
-                              'role':            'doctor',
-                              'name':            name,
-                              'specialization':  specCtrl.text.trim(),
-                              'phone':           phCtrl.text.trim(),
-                              'polyclinic_id':    polyclinicUid,
-                              'has_auth_account':  false,
-                              'subscription':    'basic',
-                              'is_enabled':       true,
-                              'show_in_search':    false,
-                              'bio':             '',
-                              'profile_photo_url': '',
-                              'assigned_patient_ids': <String>[],
-                              'created_at': DateTime.now().toIso8601String(),
-                            }).select().single();
-                            final newDoctorId = newDoc['id'] as String;
-                            final polyData = await Supabase.instance.client.from('users').select('linked_doctor_ids').eq('id', polyclinicUid).single();
-                            final linkedIds = List<String>.from((polyData['linked_doctor_ids'] as List?) ?? [])..add(newDoctorId);
-                            await Supabase.instance.client.from('users').update({'linked_doctor_ids': linkedIds}).eq('id', polyclinicUid);
-                            if (!ctx.mounted) return;
-                            Navigator.pop(ctx);
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                  content: Text(
-                                      'Doctor profile "$name" created'),
-                                  backgroundColor: AppColors.success),
-                            );
-                          } catch (e) {
-                            set(() => saving = false);
-                          }
-                        },
-                      ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Edit doctor profile sheet ──────────────────────────────────────────────
-
-  void _showEditDoctorProfileSheet(
-      Map<String, dynamic> doc) {
-    final d        = doc;
-    final nameCtrl = TextEditingController(
-        text: (d['name'] ?? '') as String);
-    final specCtrl = TextEditingController(
-        text: (d['specialization'] ?? '') as String);
-    final phCtrl   = TextEditingController(
-        text: (d['phone'] ?? '') as String);
-    bool saving    = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, set) => Padding(
-          padding: EdgeInsets.only(
-              left: 20, right: 20, top: 16,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36, height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2)),
-                ),
-              ),
-              const Text('Edit Doctor Profile',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 16),
-              _polyField(nameCtrl, 'Full Name', Icons.badge_rounded),
-              const SizedBox(height: 10),
-              _polyField(specCtrl, 'Specialization',
-                  Icons.medical_services_rounded),
-              const SizedBox(height: 10),
-              _polyField(phCtrl, 'Phone Number', Icons.phone_rounded,
-                  type: TextInputType.phone),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity, height: 50,
-                child: saving
-                    ? const Center(child: CircularProgressIndicator())
-                    : ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _kPolyTeal,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                        ),
-                        icon: const Icon(Icons.save_rounded),
-                        label: const Text('Save Changes',
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                        onPressed: () async {
-                          set(() => saving = true);
-                          await Supabase.instance.client.from('users').update({
-                            'name':           nameCtrl.text.trim(),
-                            'specialization': specCtrl.text.trim(),
-                            'phone':          phCtrl.text.trim(),
-                          }).eq('id', doc['id'] as String);
-                          if (!ctx.mounted) return;
-                          Navigator.pop(ctx);
-                        },
-                      ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ── Assign patients to a polyclinic-internal doctor ───────────────────────
-
-  void _showAssignPatientsSheet(
-      Map<String, dynamic> doc) {
-    final d       = doc;
-    final docName = (d['name'] ?? 'Doctor') as String;
-    List<String> assignedIds = List<String>.from(
-        (d['assigned_patient_ids'] as List?) ?? []);
-    String query = '';
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, set) => SizedBox(
-          height: MediaQuery.of(ctx).size.height * 0.8,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 36, height: 4,
-                  margin: const EdgeInsets.only(top: 14, bottom: 12),
-                  decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2)),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                child: Row(children: [
-                  Container(
-                    width: 40, height: 40,
-                    decoration: BoxDecoration(
-                        color: _kPolyTeal.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(11)),
-                    child: const Icon(Icons.people_rounded,
-                        color: _kPolyTeal, size: 20),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Assign Patients',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 16)),
-                        Text('to $docName',
-                            style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                        color: _kPolyTeal.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20)),
-                    child: Text('${assignedIds.length} assigned',
-                        style: const TextStyle(
-                            color: _kPolyTeal,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12)),
-                  ),
-                ]),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: TextField(
-                  onChanged: (v) => set(() => query = v.toLowerCase()),
-                  style: const TextStyle(fontSize: 14),
-                  decoration: InputDecoration(
-                    hintText: 'Search patients...',
-                    hintStyle: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 13),
-                    prefixIcon: const Icon(Icons.search_rounded,
-                        size: 20, color: AppColors.textSecondary),
-                    filled: true,
-                    fillColor: const Color(0xFFF5F5F5),
-                    contentPadding: const EdgeInsets.symmetric(
-                        vertical: 0, horizontal: 16),
-                    border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none),
-                    enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none),
-                    focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                            color: _kPolyTeal, width: 1.5)),
-                  ),
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: StreamBuilder<List<Map<String, dynamic>>>(
-                  stream: Supabase.instance.client.from('users').stream(primaryKey: ['id']).eq('role', 'patient'),
-                  builder: (_, snap) {
-                    if (!snap.hasData) {
-                      return const Center(
-                          child: CircularProgressIndicator());
-                    }
-                    var patients = snap.data!;
-                    if (query.isNotEmpty) {
-                      patients = patients.where((p) {
-                        final pd = p;
-                        final n = ((pd['name'] ?? '') as String)
-                            .toLowerCase();
-                        final ph = ((pd['phone'] ?? '') as String)
-                            .toLowerCase();
-                        return n.contains(query) || ph.contains(query);
-                      }).toList();
-                    }
-                    if (patients.isEmpty) {
-                      return Center(
-                        child: Text(
-                          query.isEmpty
-                              ? 'No patients in the system'
-                              : 'No results for "$query"',
-                          style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 14),
-                        ),
-                      );
-                    }
-                    return ListView.builder(
-                      itemCount: patients.length,
-                      itemBuilder: (_, i) {
-                        final p  = patients[i];
-                        final pd = p;
-                        final name  = (pd['name']  ?? 'Patient') as String;
-                        final phone = (pd['phone'] ?? '') as String;
-                        final isAssigned = assignedIds.contains(p['id'] as String);
-
-                        return InkWell(
-                          onTap: () async {
-                            final newIds = List<String>.from(assignedIds);
-                            if (isAssigned) {
-                              newIds.remove(p['id'] as String);
-                            } else {
-                              newIds.add(p['id'] as String);
-                            }
-                            set(() => assignedIds = newIds);
-                            await Supabase.instance.client.from('users').update({
-                              'assigned_patient_ids': newIds,
-                            }).eq('id', doc['id'] as String);
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 10),
-                            child: Row(children: [
-                              CircleAvatar(
-                                radius: 20,
-                                backgroundColor:
-                                    _kPolyTeal.withValues(alpha: 0.1),
-                                child: Text(
-                                  name.isNotEmpty
-                                      ? name[0].toUpperCase()
-                                      : '?',
-                                  style: const TextStyle(
-                                      color: _kPolyTeal,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                  Text(name,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 14)),
-                                  if (phone.isNotEmpty)
-                                    Text(phone,
-                                        style: const TextStyle(
-                                            color: AppColors.textSecondary,
-                                            fontSize: 12)),
-                                ]),
-                              ),
-                              Checkbox(
-                                value: isAssigned,
-                                activeColor: _kPolyTeal,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(4)),
-                                onChanged: (_) async {
-                                  final newIds =
-                                      List<String>.from(assignedIds);
-                                  if (isAssigned) {
-                                    newIds.remove(p['id'] as String);
-                                  } else {
-                                    newIds.add(p['id'] as String);
-                                  }
-                                  set(() => assignedIds = newIds);
-                                  await Supabase.instance.client.from('users').update({'assigned_patient_ids': newIds}).eq('id', doc['id'] as String);
-                                },
-                              ),
-                            ]),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-
-  // ── Shared field helper for polyclinic sheets ──────────────────────────────
-
-  Widget _polyField(
-    TextEditingController ctrl,
-    String label,
-    IconData icon, {
-    TextInputType type = TextInputType.text,
-  }) =>
-      TextField(
-        controller: ctrl,
-        keyboardType: type,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon, color: _kPolyTeal, size: 20),
-          border:
-              OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide:
-                const BorderSide(color: _kPolyTeal, width: 2),
-          ),
-          filled: true, fillColor: Colors.white,
-        ),
-      );
 }
-

@@ -262,6 +262,9 @@ class AppStrings {
   String get store => _t('PhysioGate', 'فيزيو جيت');
   String get storeUpgradeTagline => _t('Upgrade your clinic', 'طوّر عيادتك');
 
+  // Assessment Library (Arabic translation pending — placeholder uses English)
+  String get assessmentLibrary => _t('Assessment Library', 'Assessment Library');
+
   // Privacy policy — replace URL with your real hosted page before Store submission
   static const String privacyPolicyUrl = 'https://jihadzhour-dot.github.io/physioconnect-privacy/';
   String get privacyPolicy => _t('Privacy Policy', 'سياسة الخصوصية');
