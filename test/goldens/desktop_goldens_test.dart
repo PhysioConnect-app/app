@@ -150,7 +150,10 @@ void main() {
     await signInFakeUser();
     await pumpAtSize(tester, const DoctorDashboardScreen(), size: desktopSize);
     _drainExceptions(tester);
-    await tester.tap(find.text('My Patients'));
+    // Two widgets carry this text: the grid tile AND the 'My Patients' shortcut
+    // button inside _buildAddPatientsGuide (which renders when the mock HTTP
+    // client returns an empty patient list). .first targets the grid tile.
+    await tester.tap(find.text('My Patients').first);
     await _settle(tester);
     _drainExceptions(tester);
     await _golden(tester, 'doctor_my_patients');
