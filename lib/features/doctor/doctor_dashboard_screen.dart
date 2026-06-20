@@ -574,88 +574,105 @@ Future<void> _showLogout(AppStrings s) async {
           ),
           child: SafeArea(
             bottom: false,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // ── Left: My Profile + Notifications nav buttons ─────────
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildHeaderNavButton(
-                      icon: Icons.badge_rounded,
-                      label: s.myProfile,
-                      onTap: () => _navigateTo(6),
-                    ),
-                    const SizedBox(height: 4),
-                    _buildHeaderNavButton(
-                      icon: Icons.notifications_rounded,
-                      label: s.notifications,
-                      badge: _doctorUnreadCount > 0 ? _doctorUnreadCount : null,
-                      onTap: () => _navigateTo(7),
-                    ),
-                  ],
-                ),
-                // ── Center: name + specialisation + language toggle ───────
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '${_showDrPrefix ? "Dr. " : ""}$name',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        if (spec.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(20),
+            child: Builder(builder: (ctx) {
+              final mobile = FormFactorFeatures.of(ctx).isMobile;
+              final photoW = mobile ? 100.0 : 130.0;
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // ── Left: My Profile + Notifications nav buttons ─────
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildHeaderNavButton(
+                        icon: Icons.badge_rounded,
+                        label: s.myProfile,
+                        onTap: () => _navigateTo(6),
+                        compact: mobile,
+                      ),
+                      const SizedBox(height: 4),
+                      _buildHeaderNavButton(
+                        icon: Icons.notifications_rounded,
+                        label: s.notifications,
+                        badge: _doctorUnreadCount > 0
+                            ? _doctorUnreadCount
+                            : null,
+                        onTap: () => _navigateTo(7),
+                        compact: mobile,
+                      ),
+                    ],
+                  ),
+                  // ── Center: name + specialisation + language toggle ───
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${_showDrPrefix ? "Dr. " : ""}$name',
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: mobile ? 20 : 24,
+                              fontWeight: FontWeight.bold,
                             ),
-                            child: Text(spec,
-                                textAlign: TextAlign.center,
+                          ),
+                          if (spec.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 4),
+                              decoration: BoxDecoration(
+                                color:
+                                    Colors.white.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(spec,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                      color: Colors.white, fontSize: 13)),
+                            ),
+                          ],
+                          const SizedBox(height: 4),
+                          TextButton.icon(
+                            onPressed: lang.toggle,
+                            icon: const Icon(Icons.language_rounded,
+                                color: Colors.white60, size: 14),
+                            label: Text(s.language,
                                 style: const TextStyle(
-                                    color: Colors.white, fontSize: 13)),
+                                    color: Colors.white60,
+                                    fontSize: 11)),
                           ),
                         ],
-                        const SizedBox(height: 4),
-                        TextButton.icon(
-                          onPressed: lang.toggle,
-                          icon: const Icon(Icons.language_rounded,
-                              color: Colors.white60, size: 14),
-                          label: Text(s.language,
-                              style: const TextStyle(
-                                  color: Colors.white60, fontSize: 11)),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-                // ── Right: doctor photo ────────────────────────────────
-                ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(80)),
-                  child: photo.isNotEmpty
-                      ? Image.network(photo,
-                          width: 130, height: 130, fit: BoxFit.cover)
-                      : Container(
-                          width: 110,
-                          height: 130,
-                          alignment: Alignment.center,
-                          color: Colors.white10,
-                          child: const Icon(Icons.person_rounded,
-                              size: 70, color: Colors.white30)),
-                ),
-              ],
-            ),
+                  // ── Right: doctor photo ──────────────────────────────
+                  ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(80)),
+                    child: photo.isNotEmpty
+                        ? Image.network(photo,
+                            width: photoW,
+                            height: photoW,
+                            fit: BoxFit.cover)
+                        : Container(
+                            width: photoW - 20,
+                            height: photoW,
+                            alignment: Alignment.center,
+                            color: Colors.white10,
+                            child: Icon(Icons.person_rounded,
+                                size: mobile ? 52 : 70,
+                                color: Colors.white30)),
+                  ),
+                ],
+              );
+            }),
           ),
         ),
 
@@ -886,19 +903,22 @@ Future<void> _showLogout(AppStrings s) async {
     required String label,
     int? badge,
     required VoidCallback onTap,
+    bool compact = false,
   }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: EdgeInsets.symmetric(
+            horizontal: compact ? 10 : 14, vertical: 10),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Stack(
               clipBehavior: Clip.none,
               children: [
-                Icon(icon, color: Colors.white70, size: 22),
+                Icon(icon, color: Colors.white70,
+                    size: compact ? 24 : 22),
                 if (badge != null)
                   Positioned(
                     top: -4, right: -8,
@@ -923,10 +943,12 @@ Future<void> _showLogout(AppStrings s) async {
                   ),
               ],
             ),
-            const SizedBox(height: 4),
-            Text(label,
-                style: const TextStyle(
-                    color: Colors.white70, fontSize: 11)),
+            if (!compact) ...[
+              const SizedBox(height: 4),
+              Text(label,
+                  style: const TextStyle(
+                      color: Colors.white70, fontSize: 11)),
+            ],
           ],
         ),
       ),

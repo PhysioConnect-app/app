@@ -339,17 +339,19 @@ class _AssessmentLibraryScreenState extends State<AssessmentLibraryScreen> {
       child: Row(children: [
         Icon(icon, color: _accent, size: 22),
         const SizedBox(width: 12),
-        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary)),
-          const SizedBox(height: 2),
-          Text(subtitle,
-              style: const TextStyle(
-                  fontSize: 12, color: AppColors.textSecondary)),
-        ]),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title,
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary)),
+            const SizedBox(height: 2),
+            Text(subtitle,
+                style: const TextStyle(
+                    fontSize: 12, color: AppColors.textSecondary)),
+          ]),
+        ),
       ]),
     );
   }
