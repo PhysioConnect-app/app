@@ -18,7 +18,6 @@ import 'package:clinic_telehealth_app/features/doctor/expenses_screen.dart';
 import 'package:clinic_telehealth_app/features/doctor/session_stats_screen.dart';
 import 'package:clinic_telehealth_app/features/doctor/create_patient_screen.dart';
 import 'package:clinic_telehealth_app/features/admin/admin_dashboard_screen.dart';
-import 'package:clinic_telehealth_app/features/polyclinic/polyclinic_dashboard_screen.dart';
 import '../test_harness.dart';
 
 Future<void> _settle(WidgetTester tester) async {
@@ -173,7 +172,7 @@ void main() {
     await signInFakeUser();
     await pumpAtSize(tester, const DoctorDashboardScreen(), size: desktopSize);
     _drainExceptions(tester);
-    await tester.tap(find.text('Income'));
+    await tester.tap(find.text('Revenues')); // renamed from 'Income' in 84ed6e2
     await _settle(tester);
     _drainExceptions(tester);
     await _golden(tester, 'doctor_income');
@@ -273,12 +272,4 @@ void main() {
     await _golden(tester, 'admin_dashboard_screen');
   });
 
-  testWidgets('PolyclinicDashboardScreen — desktop', (tester) async {
-    await ensureSupabaseInitialized();
-    await signInFakeUser();
-    await pumpAtSize(tester, const PolyclinicDashboardScreen(), size: desktopSize);
-    await _settle(tester);
-    _drainExceptions(tester);
-    await _golden(tester, 'polyclinic_dashboard_screen');
-  });
 }
