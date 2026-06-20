@@ -77,7 +77,54 @@ class _BillingScreenState extends State<BillingScreen> {
   DateTime _refDate = DateTime.now();
   String   _patientFilter = '';
   String?  _statusFilter;
-  String   _currency = 'USD'; // drives KPI totals and table filter
+
+  @override
+  void initState() {
+    super.initState();
+    _syncPastAppointments();
+  }
+
+  Future<void> _syncPastAppointments() async {
+    final now = DateTime.now().toIso8601String();
+    final appts = await _supabase
+        .from('appointments')
+        .select()
+        .eq('doctor_id', _uid)
+        .neq('status', 'cancelled')
+        .lt('appointment_time', now);
+
+    if ((appts as List).isEmpty) return;
+
+    final existing = await _supabase
+        .from('invoices')
+        .select('appointment_id')
+        .eq('doctor_id', _uid)
+        .not('appointment_id', 'is', null);
+
+    final existingIds = <String>{
+      for (final e in existing as List)
+        if (e['appointment_id'] != null) e['appointment_id'] as String,
+    };
+
+    for (final appt in appts) {
+      final apptId = appt['id'] as String?;
+      if (apptId == null || existingIds.contains(apptId)) continue;
+      await _supabase.from('invoices').insert({
+        'doctor_id':      _uid,
+        'patient_id':     appt['patient_id'],
+        'patient_name':   appt['patient_name'],
+        'service':        (appt['notes'] as String?)?.isNotEmpty == true
+                              ? appt['notes']
+                              : 'Physical Therapy',
+        'amount':         0,
+        'currency':       'USD',
+        'status':         'awaiting_review',
+        'appointment_id': apptId,
+        'invoice_date':   appt['appointment_time'],
+        'created_at':     DateTime.now().toIso8601String(),
+      });
+    }
+  }
 
   // ── Period helpers ──────────────────────────────────────────────────────
 
@@ -144,9 +191,6 @@ class _BillingScreenState extends State<BillingScreen> {
     final s = _start;
     final e = _end;
     return docs.where((d) {
-      // Currency filter — totals and table always single-currency
-      if ((d['currency'] as String? ?? 'USD') != _currency) return false;
-
       final tsStr = d['invoice_date'] as String? ?? d['created_at'] as String?;
       if (tsStr == null) return false;
       final dt = DateTime.parse(tsStr);
@@ -183,7 +227,6 @@ class _BillingScreenState extends State<BillingScreen> {
 
   void _showAddInvoice(AppStrings s) {
     String? patId, patName;
-    String  currency = 'USD';
     _InvStatus status = _InvStatus.pending;
     DateTime invDate  = DateTime.now();
     final amtCtrl     = TextEditingController();
@@ -271,39 +314,17 @@ class _BillingScreenState extends State<BillingScreen> {
                 ),
               ),
               const SizedBox(height: 10),
-              // Amount + Currency
-              Row(children: [
-                Expanded(
-                  flex: 3,
-                  child: TextField(
-                    controller: amtCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(
-                      labelText: s.amount,
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      filled: true, fillColor: Colors.white,
-                    ),
-                  ),
+              // Amount (USD)
+              TextField(
+                controller: amtCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: '${s.amount} (USD)',
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                  filled: true, fillColor: Colors.white,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 2,
-                  child: DropdownButtonFormField<String>(
-                    initialValue: currency,
-                    decoration: InputDecoration(
-                      labelText: s.currency,
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      filled: true, fillColor: Colors.white,
-                    ),
-                    items: ['USD','EUR','SAR','AED','JOD']
-                        .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-                        .toList(),
-                    onChanged: (v) => set(() => currency = v!),
-                  ),
-                ),
-              ]),
+              ),
               const SizedBox(height: 10),
               // Status
               DropdownButtonFormField<_InvStatus>(
@@ -359,7 +380,7 @@ class _BillingScreenState extends State<BillingScreen> {
                             const Icon(Icons.account_balance_wallet_outlined,
                                 size: 16, color: Color(0xFFE65100)),
                             const SizedBox(width: 6),
-                            Text('Remaining: $currency ${remaining.toStringAsFixed(2)}',
+                            Text('Remaining: USD ${remaining.toStringAsFixed(2)}',
                                 style: const TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 13,
@@ -408,7 +429,7 @@ class _BillingScreenState extends State<BillingScreen> {
                                          ? 'Physical Therapy'
                                          : svcCtrl.text.trim(),
                       'amount':      amt,
-                      'currency':    currency,
+                      'currency':    'USD',
                       'status':      status.key,
                       'note':        noteCtrl.text.trim(),
                       'invoice_date': invDate.toIso8601String(),
@@ -436,7 +457,7 @@ class _BillingScreenState extends State<BillingScreen> {
 
   // ── Mark partially paid sheet ─────────────────────────────────────────────
 
-  void _showMarkPartialSheet(String docId, double totalAmt, String currency) {
+  void _showMarkPartialSheet(String docId, double totalAmt) {
     final ctrl = TextEditingController();
     showModalBottomSheet(
       context: context,
@@ -458,7 +479,7 @@ class _BillingScreenState extends State<BillingScreen> {
                 const Text('Mark as Partially Paid',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 4),
-                Text('Total: $currency ${totalAmt.toStringAsFixed(2)}',
+                Text('Total: USD ${totalAmt.toStringAsFixed(2)}',
                     style: const TextStyle(color: AppColors.textSecondary)),
                 const SizedBox(height: 14),
                 TextField(
@@ -488,7 +509,7 @@ class _BillingScreenState extends State<BillingScreen> {
                         size: 16, color: Color(0xFFE65100)),
                     const SizedBox(width: 6),
                     Text(
-                        'Remaining: $currency ${remaining.toStringAsFixed(2)}',
+                        'Remaining: USD ${remaining.toStringAsFixed(2)}',
                         style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
@@ -530,9 +551,20 @@ class _BillingScreenState extends State<BillingScreen> {
 
   // ── Doctor review sheet ───────────────────────────────────────────────────
 
-  void _showReviewSheet(
-      String docId, String patName, String service, double amt, String cur) {
+  void _showReviewSheet(Map<String, dynamic> doc) {
+    final docId   = doc['id'] as String;
+    final patName = (doc['patient_name'] as String?) ?? 'Patient';
+    final existingAmt = (doc['amount'] as num?)?.toDouble() ?? 0;
+    final existingCurrency = (doc['currency'] as String?) ?? 'USD';
+
     _InvStatus selectedStatus = _InvStatus.pending;
+    String currency = existingCurrency;
+    final amtCtrl  = TextEditingController(
+        text: existingAmt > 0 ? existingAmt.toStringAsFixed(2) : '');
+    final svcCtrl  = TextEditingController(
+        text: (doc['service'] as String?) ?? 'Physical Therapy');
+    final noteCtrl = TextEditingController(
+        text: (doc['note'] as String?) ?? '');
     final paidCtrl = TextEditingController();
 
     showModalBottomSheet(
@@ -542,7 +574,39 @@ class _BillingScreenState extends State<BillingScreen> {
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, set) => Padding(
+        builder: (ctx, set) {
+          Future<void> applyStatus(_InvStatus st) async {
+            final amt = double.tryParse(amtCtrl.text.trim());
+            if (amt == null || amt <= 0) {
+              ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                  content: Text('Please enter a valid amount.')));
+              return;
+            }
+            final update = <String, dynamic>{
+              'status':   st.key,
+              'amount':   amt,
+              'currency': currency,
+              'service':  svcCtrl.text.trim().isEmpty
+                              ? 'Physical Therapy'
+                              : svcCtrl.text.trim(),
+              'note':     noteCtrl.text.trim(),
+            };
+            if (st == _InvStatus.partiallyPaid) {
+              final paidAmt = double.tryParse(paidCtrl.text.trim());
+              if (paidAmt == null || paidAmt <= 0) {
+                ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                    content: Text('Please enter the amount paid.')));
+                return;
+              }
+              update['paid_amount'] = paidAmt;
+            } else {
+              update['paid_amount'] = null;
+            }
+            await _supabase.from('invoices').update(update).eq('id', docId);
+            if (!ctx.mounted) return;
+            Navigator.pop(ctx);
+          }
+          return Padding(
           padding: EdgeInsets.only(
               left: 20,
               right: 20,
@@ -573,48 +637,132 @@ class _BillingScreenState extends State<BillingScreen> {
                         color: Color(0xFF1565C0), size: 22),
                   ),
                   const SizedBox(width: 10),
-                  const Text('Review Session',
-                      style: TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Review Session',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(patName,
+                            style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ),
                 ]),
                 const SizedBox(height: 16),
-                // Session summary
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFB),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.grey.shade200),
+                // Service
+                TextField(
+                  controller: svcCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Service / Session type',
+                    prefixIcon: const Icon(Icons.medical_services_rounded,
+                        color: Color(0xFF1565C0), size: 20),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFB),
                   ),
-                  child: Column(
+                ),
+                const SizedBox(height: 12),
+                // Amount + currency row
+                Row(children: [
+                  Expanded(
+                    child: TextField(
+                      controller: amtCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true),
+                      decoration: InputDecoration(
+                        labelText: 'Amount *',
+                        prefixIcon: const Icon(Icons.payments_rounded,
+                            color: Color(0xFF1565C0), size: 20),
+                        border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        filled: true,
+                        fillColor: const Color(0xFFF8FAFB),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _reviewRow(Icons.person_rounded, patName),
-                      const SizedBox(height: 6),
-                      _reviewRow(Icons.medical_services_rounded, service),
-                      const SizedBox(height: 6),
-                      _reviewRow(Icons.payments_rounded,
-                          '$cur ${amt.toStringAsFixed(2)}'),
+                      const Text('Currency',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary)),
+                      const SizedBox(height: 4),
+                      Row(children: [
+                        for (final c in ['USD', 'LBP']) ...[
+                          GestureDetector(
+                            onTap: () => set(() => currency = c),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: currency == c
+                                    ? const Color(0xFF1565C0)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                    color: currency == c
+                                        ? const Color(0xFF1565C0)
+                                        : Colors.grey.shade300),
+                              ),
+                              child: Text(c,
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12,
+                                      color: currency == c
+                                          ? Colors.white
+                                          : AppColors.textSecondary)),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                      ]),
                     ],
+                  ),
+                ]),
+                const SizedBox(height: 12),
+                // Note
+                TextField(
+                  controller: noteCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Note (optional)',
+                    prefixIcon: const Icon(Icons.notes_rounded,
+                        color: Color(0xFF1565C0), size: 20),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFB),
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text('Set payment status',
+                const Text('Apply payment status',
                     style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textSecondary)),
                 const SizedBox(height: 8),
-                // Status chips
                 Wrap(spacing: 8, runSpacing: 8, children: [
                   for (final st in [
                     _InvStatus.paid,
                     _InvStatus.partiallyPaid,
                     _InvStatus.pending,
+                    _InvStatus.cancelled,
                   ])
                     GestureDetector(
-                      onTap: () => set(() => selectedStatus = st),
+                      onTap: () {
+                        if (st == _InvStatus.partiallyPaid) {
+                          set(() => selectedStatus = st);
+                        } else {
+                          applyStatus(st);
+                        }
+                      },
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
                         padding: const EdgeInsets.symmetric(
@@ -657,57 +805,32 @@ class _BillingScreenState extends State<BillingScreen> {
                       fillColor: const Color(0xFFF8FAFB),
                     ),
                   ),
-                ],
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1565C0),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _InvStatus.partiallyPaid.color,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () => applyStatus(_InvStatus.partiallyPaid),
+                      child: const Text('Apply Partial Payment',
+                          style: TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.bold)),
                     ),
-                    onPressed: () async {
-                      final Map<String, dynamic> update = {
-                        'status': selectedStatus.key,
-                      };
-                      if (selectedStatus == _InvStatus.partiallyPaid) {
-                        final paidAmt = double.tryParse(paidCtrl.text.trim());
-                        if (paidAmt != null && paidAmt > 0) {
-                          update['paid_amount'] = paidAmt;
-                        }
-                      }
-                      await _supabase
-                          .from('invoices')
-                          .update(update)
-                          .eq('id', docId);
-                      if (!ctx.mounted) return;
-                      Navigator.pop(ctx);
-                    },
-                    child: const Text('Confirm & Save',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.bold)),
                   ),
-                ),
+                ],
               ],
             ),
           ),
-        ),
+          );
+        },
       ),
     );
   }
-
-  Widget _reviewRow(IconData icon, String text) => Row(children: [
-        Icon(icon, size: 15, color: AppColors.textSecondary),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(text,
-              style: const TextStyle(
-                  fontSize: 13, fontWeight: FontWeight.w500)),
-        ),
-      ]);
 
   // ── Import from Excel ─────────────────────────────────────────────────────
 
@@ -820,7 +943,7 @@ class _BillingScreenState extends State<BillingScreen> {
           'patient_name': name,
           'service':     service.isEmpty ? 'Physical Therapy' : service,
           'amount':      amt,
-          'currency':    _currency,
+          'currency':    'USD',
           'status':      statusKey,
           'note':        note,
           'invoice_date': invoiceDate.toIso8601String(),
@@ -933,7 +1056,7 @@ class _BillingScreenState extends State<BillingScreen> {
                   title: Text(d['patient_name'] ?? 'Patient',
                       style: const TextStyle(fontWeight: FontWeight.bold)),
                   subtitle: Text(
-                    '${d['currency'] ?? 'USD'} ${(d['amount'] as num?)?.toStringAsFixed(2)}  •  ${d['service'] ?? ''}'),
+                    'USD ${(d['amount'] as num?)?.toStringAsFixed(2) ?? '0.00'}  •  ${d['service'] ?? ''}'),
                   trailing: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF546E7A),
@@ -1028,7 +1151,7 @@ class _BillingScreenState extends State<BillingScreen> {
             final st  = _InvStatusX.fromString(d['status'] as String?);
             // Awaiting review and cancelled are excluded from financial stats
             if (st == _InvStatus.cancelled ||
-                st == _InvStatus.awaitingReview) continue;
+                st == _InvStatus.awaitingReview) { continue; }
             invoiceCount++;
             switch (st) {
               case _InvStatus.paid:
@@ -1052,6 +1175,7 @@ class _BillingScreenState extends State<BillingScreen> {
               case _InvStatus.insuranceClaim:
                 insuranceTotal += amt;
               case _InvStatus.cancelled:
+              case _InvStatus.awaitingReview:
                 break;
             }
           }
@@ -1337,11 +1461,10 @@ class _BillingScreenState extends State<BillingScreen> {
     final date = tsStr != null
         ? DateFormat('dd/MM/yyyy').format(DateTime.parse(tsStr))
         : '—';
-    final svc  = (d['service'] as String?) ?? 'Physical Therapy';
-    final amt  = (d['amount'] as num?)?.toDouble() ?? 0;
-    final cur  = (d['currency'] as String?) ?? 'USD';
-    final st   = _InvStatusX.fromString(d['status'] as String?);
-    final bg   = index.isEven ? Colors.white : const Color(0xFFF8FAFF);
+    final svc   = (d['service'] as String?) ?? 'Physical Therapy';
+    final amt   = (d['amount'] as num?)?.toDouble() ?? 0;
+    final st    = _InvStatusX.fromString(d['status'] as String?);
+    final bg    = index.isEven ? Colors.white : const Color(0xFFF8FAFF);
     final docId = d['id'] as String;
 
     return Container(
@@ -1360,7 +1483,7 @@ class _BillingScreenState extends State<BillingScreen> {
           child: Text(svc,
               style: const TextStyle(fontSize: 13))),
         Expanded(flex: 2,
-          child: Text('$cur ${amt.toStringAsFixed(2)}',
+          child: Text(_fmtAmt(amt),
               style: const TextStyle(
                   fontWeight: FontWeight.w600, fontSize: 13))),
         Expanded(flex: 2,
@@ -1369,18 +1492,29 @@ class _BillingScreenState extends State<BillingScreen> {
           icon: Icon(Icons.more_vert_rounded,
               color: Colors.grey.shade400, size: 18),
           onSelected: (v) async {
+            if (v == '__edit__') {
+              _showEditInvoice(d, s);
+              return;
+            }
             if (v == '__review__') {
-              _showReviewSheet(docId, name, svc, amt, cur);
+              _showReviewSheet(d);
               return;
             }
             if (v == '__partial__') {
-              _showMarkPartialSheet(docId, amt, cur);
+              _showMarkPartialSheet(docId, amt);
               return;
             }
             final newSt = _InvStatusX.fromString(v);
             await _updateStatus(docId, newSt);
           },
           itemBuilder: (_) => [
+            const PopupMenuItem(value: '__edit__',
+                child: Row(children: [
+                  Icon(Icons.edit_rounded,
+                      color: Color(0xFF1565C0), size: 18),
+                  SizedBox(width: 8),
+                  Text('Edit'),
+                ])),
             if (st == _InvStatus.awaitingReview)
               const PopupMenuItem(value: '__review__',
                   child: Row(children: [
@@ -1455,7 +1589,6 @@ class _BillingScreenState extends State<BillingScreen> {
         : '—';
     final svc    = (d['service'] as String?) ?? 'Physical Therapy';
     final amt    = (d['amount'] as num?)?.toDouble() ?? 0;
-    final cur    = (d['currency'] as String?) ?? 'USD';
     final st     = _InvStatusX.fromString(d['status'] as String?);
     final docId  = d['id'] as String;
 
@@ -1476,24 +1609,35 @@ class _BillingScreenState extends State<BillingScreen> {
                     overflow: TextOverflow.ellipsis),
               ),
               const SizedBox(width: 8),
-              Text('$cur ${amt.toStringAsFixed(2)}',
+              Text(_fmtAmt(amt),
                   style: const TextStyle(
                       fontWeight: FontWeight.bold, fontSize: 15)),
               PopupMenuButton<String>(
                 icon: Icon(Icons.more_vert_rounded,
                     color: Colors.grey.shade400, size: 18),
                 onSelected: (v) async {
+                  if (v == '__edit__') {
+                    _showEditInvoice(d, s);
+                    return;
+                  }
                   if (v == '__review__') {
-                    _showReviewSheet(docId, name, svc, amt, cur);
+                    _showReviewSheet(d);
                     return;
                   }
                   if (v == '__partial__') {
-                    _showMarkPartialSheet(docId, amt, cur);
+                    _showMarkPartialSheet(docId, amt);
                     return;
                   }
                   await _updateStatus(docId, _InvStatusX.fromString(v));
                 },
                 itemBuilder: (_) => [
+                  const PopupMenuItem(value: '__edit__',
+                      child: Row(children: [
+                        Icon(Icons.edit_rounded,
+                            color: Color(0xFF1565C0), size: 18),
+                        SizedBox(width: 8),
+                        Text('Edit'),
+                      ])),
                   if (st == _InvStatus.awaitingReview)
                     const PopupMenuItem(value: '__review__',
                         child: Row(children: [
@@ -1554,6 +1698,249 @@ class _BillingScreenState extends State<BillingScreen> {
               _statusBadge(st, s),
             ]),
           ],
+        ),
+      ),
+    );
+  }
+
+  // ── Edit Invoice sheet ────────────────────────────────────────────────────
+
+  void _showEditInvoice(Map<String, dynamic> doc, AppStrings s) {
+    final docId = doc['id'] as String;
+    String? patId   = doc['patient_id'] as String?;
+    String? patName = doc['patient_name'] as String?;
+    _InvStatus status = _InvStatusX.fromString(doc['status'] as String?);
+    final tsStr = doc['invoice_date'] as String? ?? doc['created_at'] as String?;
+    DateTime invDate = tsStr != null ? DateTime.parse(tsStr) : DateTime.now();
+    final amtCtrl      = TextEditingController(
+        text: (doc['amount'] as num?)?.toStringAsFixed(2) ?? '');
+    final svcCtrl      = TextEditingController(
+        text: (doc['service'] as String?) ?? '');
+    final noteCtrl     = TextEditingController(
+        text: (doc['note'] as String?) ?? '');
+    final paidAmtCtrl  = TextEditingController(
+        text: (doc['paid_amount'] as num?)?.toStringAsFixed(2) ?? '');
+    final patSearchCtrl = TextEditingController(text: patName ?? '');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => Padding(
+          padding: EdgeInsets.only(
+              left: 20, right: 20, top: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Edit Invoice',
+                    style: TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 14),
+                StreamBuilder<List<Map<String, dynamic>>>(
+                  stream: _supabase
+                      .from('users')
+                      .stream(primaryKey: ['id'])
+                      .eq('role', 'patient')
+                      .map((list) => list.where((r) {
+                            final ids =
+                                (r['doctor_ids'] as List?)?.cast<String>() ?? [];
+                            return ids.contains(_uid);
+                          }).toList()),
+                  builder: (_, snap) {
+                    final pats = snap.data ?? [];
+                    return PatientSearchField(
+                      patients: pats,
+                      labelText: s.selectPatient,
+                      controller: patSearchCtrl,
+                      onSelected: (id, name) =>
+                          set(() { patId = id; patName = name; }),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: svcCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Service',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    filled: true, fillColor: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                InkWell(
+                  onTap: () async {
+                    final d = await showDatePicker(
+                      context: ctx,
+                      initialDate: invDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (d != null) set(() => invDate = d);
+                  },
+                  child: InputDecorator(
+                    decoration: InputDecoration(
+                      labelText: 'Invoice Date',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      filled: true, fillColor: Colors.white,
+                      suffixIcon: const Icon(Icons.calendar_today_rounded,
+                          color: AppColors.primary),
+                    ),
+                    child: Text(DateFormat('MMM d, yyyy').format(invDate)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: amtCtrl,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: '${s.amount} (USD)',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    filled: true, fillColor: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<_InvStatus>(
+                  value: status,
+                  decoration: InputDecoration(
+                    labelText: 'Status',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    filled: true, fillColor: Colors.white,
+                  ),
+                  items: [
+                    if (status == _InvStatus.awaitingReview)
+                      _InvStatus.awaitingReview,
+                    _InvStatus.pending, _InvStatus.paid,
+                    _InvStatus.partiallyPaid, _InvStatus.insuranceClaim,
+                    _InvStatus.cancelled,
+                  ].map((st) => DropdownMenuItem(
+                        value: st,
+                        child: Text(st.label(s).replaceAll('\n', ' ')),
+                      )).toList(),
+                  onChanged: (v) => set(() => status = v!),
+                ),
+                if (status == _InvStatus.partiallyPaid) ...[
+                  const SizedBox(height: 10),
+                  StatefulBuilder(
+                    builder: (ctx2, set2) {
+                      final total = double.tryParse(amtCtrl.text.trim()) ?? 0;
+                      final paid  = double.tryParse(paidAmtCtrl.text.trim()) ?? 0;
+                      final remaining = (total - paid).clamp(0, double.infinity);
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          TextField(
+                            controller: paidAmtCtrl,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            onChanged: (_) => set2(() {}),
+                            decoration: InputDecoration(
+                              labelText: 'Amount Paid',
+                              prefixIcon: const Icon(Icons.payments_rounded,
+                                  color: Color(0xFFE65100)),
+                              border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                              filled: true, fillColor: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF3E0),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(children: [
+                              const Icon(
+                                  Icons.account_balance_wallet_outlined,
+                                  size: 16, color: Color(0xFFE65100)),
+                              const SizedBox(width: 6),
+                              Text(
+                                  'Remaining: USD ${remaining.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      color: Color(0xFFE65100))),
+                            ]),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+                const SizedBox(height: 10),
+                TextField(
+                  controller: noteCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Note',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    filled: true, fillColor: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity, height: 48,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _kAccent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.save_rounded),
+                    label: const Text('Save Changes',
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.bold)),
+                    onPressed: () async {
+                      final amt = double.tryParse(amtCtrl.text.trim());
+                      if (patId == null || amt == null || amt <= 0) return;
+                      final paidAmt = double.tryParse(paidAmtCtrl.text.trim());
+                      final data = <String, dynamic>{
+                        'patient_id':   patId,
+                        'patient_name': patName,
+                        'service': svcCtrl.text.trim().isEmpty
+                            ? 'Physical Therapy'
+                            : svcCtrl.text.trim(),
+                        'amount':      amt,
+                        'currency':    'USD',
+                        'status':      status.key,
+                        'note':        noteCtrl.text.trim(),
+                        'invoice_date': invDate.toIso8601String(),
+                      };
+                      if (status == _InvStatus.partiallyPaid &&
+                          paidAmt != null) {
+                        data['paid_amount'] = paidAmt;
+                      } else {
+                        data['paid_amount'] = null;
+                      }
+                      await _supabase
+                          .from('invoices')
+                          .update(data)
+                          .eq('id', docId);
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Invoice updated successfully.'),
+                        backgroundColor: AppColors.success,
+                      ));
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1751,18 +2138,6 @@ class _BillingScreenState extends State<BillingScreen> {
             ),
             const SizedBox(height: 10),
           ],
-          Row(children: [
-            const Text('Currency',
-                style: TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w500)),
-            const SizedBox(width: 10),
-            _currencyChip('USD'),
-            const SizedBox(width: 6),
-            _currencyChip('LBP'),
-          ]),
-          const SizedBox(height: 12),
           if (isDesktop)
             Row(children: [
               Expanded(child: _kpiCard(title: 'Collected', amount: collected,
@@ -1925,33 +2300,6 @@ class _BillingScreenState extends State<BillingScreen> {
         ],
       );
 
-  Widget _currencyChip(String cur) {
-    final selected = _currency == cur;
-    return GestureDetector(
-      onTap: () => setState(() => _currency = cur),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-        decoration: BoxDecoration(
-          color: selected ? _kAccent : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: selected ? _kAccent : Colors.grey.shade300,
-          ),
-        ),
-        child: Text(cur,
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: selected ? Colors.white : AppColors.textSecondary)),
-      ),
-    );
-  }
-
-  String _fmtAmt(double amt) {
-    if (_currency == 'LBP') {
-      return 'LBP ${NumberFormat('#,###', 'en_US').format(amt.round())}';
-    }
-    return 'USD ${NumberFormat('#,##0.00', 'en_US').format(amt)}';
-  }
+  String _fmtAmt(double amt) =>
+      'USD ${NumberFormat('#,##0.00', 'en_US').format(amt)}';
 }
