@@ -67,6 +67,17 @@ class DoctorService {
     }
   }
 
+  Future<bool> updatePatientInfo(
+      String patientId, Map<String, dynamic> updates) async {
+    try {
+      await _supabase.from('users').update(updates).eq('id', patientId);
+      return true;
+    } catch (e) {
+      if (kDebugMode) debugPrint('updatePatientInfo error: $e');
+      return false;
+    }
+  }
+
   // ── Appointments ──────────────────────────────────────────────────────────
 
   Future<bool> bookAppointment(String patientId, String patientName, DateTime dateTime, String notes) async {
