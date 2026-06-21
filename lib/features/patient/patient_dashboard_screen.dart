@@ -379,28 +379,35 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
                           : null,
                     ),
                     const SizedBox(width: 12),
-                    Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      Text(
-                        dShowDr && dName.isNotEmpty ? 'Dr. $dName' : dName.isNotEmpty ? dName : 'Your Doctor',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 17),
-                      ),
-                      Text(dSpec,
+                    Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text(
+                          dShowDr && dName.isNotEmpty ? 'Dr. $dName' : dName.isNotEmpty ? dName : 'Your Doctor',
                           style: const TextStyle(
-                              color: Colors.grey, fontSize: 13)),
-                    ]),
+                              fontWeight: FontWeight.bold, fontSize: 17),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(dSpec,
+                            style: const TextStyle(
+                                color: Colors.grey, fontSize: 13),
+                            overflow: TextOverflow.ellipsis),
+                      ]),
+                    ),
                   ]),
                   const Divider(height: 22),
                   Row(children: [
                     const Icon(Icons.calendar_today_rounded,
                         size: 16, color: Colors.grey),
                     const SizedBox(width: 8),
-                    Text(
-                      '${DateFormat('MMM d, yyyy').format(dt)} at ${DateFormat('h:mm a').format(dt)}',
-                      style: const TextStyle(
-                          fontSize: 13, color: Color(0xFF444444)),
+                    Expanded(
+                      child: Text(
+                        '${DateFormat('MMM d, yyyy').format(dt)} at ${DateFormat('h:mm a').format(dt)}',
+                        style: const TextStyle(
+                            fontSize: 13, color: Color(0xFF444444)),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ]),
                   if (dClinic.isNotEmpty) ...[
@@ -409,9 +416,12 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
                       const Icon(Icons.location_on_rounded,
                           size: 16, color: Colors.grey),
                       const SizedBox(width: 8),
-                      Text(dClinic,
-                          style: const TextStyle(
-                              fontSize: 13, color: Color(0xFF444444))),
+                      Expanded(
+                        child: Text(dClinic,
+                            style: const TextStyle(
+                                fontSize: 13, color: Color(0xFF444444)),
+                            overflow: TextOverflow.ellipsis),
+                      ),
                     ]),
                   ],
                 ],

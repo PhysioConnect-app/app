@@ -761,25 +761,28 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                     const Icon(Icons.monitor_heart_rounded,
                         color: Color(0xFF4FC3F7), size: 20),
                     const SizedBox(width: 8),
-                    RichText(
-                      text: TextSpan(
-                        style: const TextStyle(fontSize: 14),
-                        children: [
-                          TextSpan(
-                            text: '${_showDrPrefix ? "Dr. " : ""}$name  ',
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold),
-                          ),
-                          TextSpan(
-                            text: clinic,
-                            style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.55)),
-                          ),
-                        ],
+                    Expanded(
+                      child: RichText(
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        text: TextSpan(
+                          style: const TextStyle(fontSize: 14),
+                          children: [
+                            TextSpan(
+                              text: '${_showDrPrefix ? "Dr. " : ""}$name  ',
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                            TextSpan(
+                              text: clinic,
+                              style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.55)),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                    const Spacer(),
                     // Plan & expiry
                     Row(mainAxisSize: MainAxisSize.min, children: [
                       Icon(_sub.tier.icon, size: 11, color: Colors.white54),
