@@ -1,8 +1,11 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../../widgets/physio_logo.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/config/form_factor_features.dart';
+import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
 import '../patient/find_doctors_screen.dart';
@@ -79,6 +82,140 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailFocus.dispose();
     _passwordFocus.dispose();
     super.dispose();
+  }
+
+  Future<void> _showRequestAccountDialog() async {
+    final nameCtrl  = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    bool hasDoctorate = false;
+    bool sending = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setBS) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(children: [
+            Icon(Icons.person_add_rounded, color: AppColors.primary, size: 22),
+            SizedBox(width: 10),
+            Text('Request a Doctor Account'),
+          ]),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Text(
+                'Fill in your details and the admin team will review your request.',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Full Name *',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                ),
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email Address *',
+                  prefixIcon: Icon(Icons.email_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'Phone Number',
+                  prefixIcon: Icon(Icons.phone_outlined),
+                ),
+              ),
+              const SizedBox(height: 8),
+              CheckboxListTile(
+                value: hasDoctorate,
+                onChanged: (v) => setBS(() => hasDoctorate = v ?? false),
+                title: const Text('I hold a doctorate / PhD',
+                    style: TextStyle(fontSize: 13)),
+                contentPadding: EdgeInsets.zero,
+                activeColor: AppColors.primary,
+                controlAffinity: ListTileControlAffinity.leading,
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: sending
+                  ? null
+                  : () async {
+                      final name  = nameCtrl.text.trim();
+                      final email = emailCtrl.text.trim();
+                      if (name.isEmpty || email.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Name and email are required.')),
+                        );
+                        return;
+                      }
+                      setBS(() => sending = true);
+                      try {
+                        await Supabase.instance.client
+                            .from('account_requests')
+                            .insert({
+                          'therapist_name': name,
+                          'email':          email,
+                          'phone_number':   phoneCtrl.text.trim(),
+                          'has_doctorate':  hasDoctorate,
+                          'status':         'pending',
+                        });
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Request submitted! We\'ll be in touch.'),
+                              backgroundColor: AppColors.success,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setBS(() => sending = false);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error: $e'),
+                              backgroundColor: AppColors.error,
+                            ),
+                          );
+                        }
+                      }
+                    },
+              child: sending
+                  ? const SizedBox(
+                      width: 18, height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Text('Submit Request'),
+            ),
+          ],
+        ),
+      ),
+    );
+    nameCtrl.dispose();
+    emailCtrl.dispose();
+    phoneCtrl.dispose();
+  }
+
+  void _openPhysioGate() {
+    launchUrl(
+      Uri.parse('https://www.physiogate.com'),
+      mode: LaunchMode.externalApplication,
+    );
   }
 
   /// Mobile-only "Continue as Guest" entry. No Supabase session is created
@@ -163,6 +300,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     s: s,
                     showGuestLogin:     FormFactorFeatures.of(context).showGuestLogin,
                     onContinueAsGuest:  _continueAsGuest,
+                    onRequestAccount:   _showRequestAccountDialog,
+                    onOpenPhysioGate:   _openPhysioGate,
                   ),
                 ),
               ),
@@ -190,6 +329,8 @@ class _LoginCard extends StatelessWidget {
   final AppStrings s;
   final bool showGuestLogin;
   final VoidCallback onContinueAsGuest;
+  final VoidCallback onRequestAccount;
+  final VoidCallback onOpenPhysioGate;
 
   const _LoginCard({
     required this.emailController,
@@ -205,6 +346,8 @@ class _LoginCard extends StatelessWidget {
     required this.s,
     required this.showGuestLogin,
     required this.onContinueAsGuest,
+    required this.onRequestAccount,
+    required this.onOpenPhysioGate,
   });
 
   @override
@@ -233,19 +376,7 @@ class _LoginCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           // ── Logo ────────────────────────────────────────────────────────────
-          const _PhysioLogo(size: 96),
-          const SizedBox(height: 12),
-
-          // ── App name — single teal ──────────────────────────────────────────
-          const Text(
-            'PhysioConnect',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF00897B),
-              letterSpacing: 0.5,
-            ),
-          ),
+          const PhysioLogo(fontSize: 40, showTagline: true),
           const SizedBox(height: 28),
 
           // ── "Welcome Back!" ──────────────────────────────────────────────────
@@ -308,26 +439,37 @@ class _LoginCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // ── Forgot Password ──────────────────────────────────────────────────
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: onForgotPassword,
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF00897B),
-                padding: EdgeInsets.zero,
-                minimumSize: const Size(0, 36),
-              ),
-              child: Text(
-                s.forgotPassword,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
+          // ── Forgot Password + Request Account ────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton(
+                onPressed: onRequestAccount,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF78909C),
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 36),
+                ),
+                child: const Text(
+                  'Request an account',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
                 ),
               ),
-            ),
+              TextButton(
+                onPressed: onForgotPassword,
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color(0xFF00897B),
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 36),
+                ),
+                child: Text(
+                  s.forgotPassword,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 20),
 
           // ── Sign In button ───────────────────────────────────────────────────
           SizedBox(
@@ -401,7 +543,66 @@ class _LoginCard extends StatelessWidget {
               ),
             ),
           ],
-          const SizedBox(height: 26),
+          const SizedBox(height: 20),
+
+          // ── Divider ──────────────────────────────────────────────────────────
+          Row(children: [
+            const Expanded(child: Divider()),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text('or',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade400,
+                      fontWeight: FontWeight.w500)),
+            ),
+            const Expanded(child: Divider()),
+          ]),
+          const SizedBox(height: 16),
+
+          // ── PhysioGate square tile ───────────────────────────────────────────
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                InkWell(
+                  onTap: onOpenPhysioGate,
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: const Color(0xFFCE93D8), width: 1.5),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(13),
+                      child: Image.asset(
+                        'assets/images/physiogate_logo.jpg',
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.store_rounded,
+                          size: 32,
+                          color: Color(0xFF4527A0),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'PhysioGate',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF4527A0),
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
 
           // ── Language toggle ──────────────────────────────────────────────────
           TextButton.icon(
@@ -544,177 +745,6 @@ class _InputFieldState extends State<_InputField> {
       ),
     );
   }
-}
-
-// ── New PhysioConnect logo ─────────────────────────────────────────────────────
-
-class _PhysioLogo extends StatelessWidget {
-  final double size;
-  const _PhysioLogo({this.size = 96});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF1565C0).withValues(alpha: 0.28),
-            blurRadius: 28,
-            offset: const Offset(0, 10),
-            spreadRadius: -4,
-          ),
-          BoxShadow(
-            color: const Color(0xFF00897B).withValues(alpha: 0.20),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: CustomPaint(
-        painter: _PhysioLogoPainter(),
-        size: Size(size, size),
-      ),
-    );
-  }
-}
-
-class _PhysioLogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final c = Offset(size.width / 2, size.height / 2);
-    final r = size.width / 2;
-    final w = size.width;
-
-    // ── 1. Gradient background circle ─────────────────────────────────────────
-    final bgRect  = Rect.fromCircle(center: c, radius: r);
-    final bgPaint = Paint()
-      ..shader = const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Color(0xFF1565C0),
-          Color(0xFF0277BD),
-          Color(0xFF00695C),
-          Color(0xFF2E7D32),
-        ],
-        stops: [0.0, 0.32, 0.65, 1.0],
-      ).createShader(bgRect);
-    canvas.drawCircle(c, r, bgPaint);
-
-    // ── 2. Outer ring ──────────────────────────────────────────────────────────
-    canvas.drawCircle(c, r - 2,
-        Paint()
-          ..color = Colors.white.withValues(alpha: 0.20)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5);
-
-    // ── 3. Head (filled circle) ────────────────────────────────────────────────
-    final headR  = w * 0.10;
-    final headCY = c.dy - r * 0.54;
-    canvas.drawCircle(
-      Offset(c.dx, headCY),
-      headR,
-      Paint()..color = Colors.white.withValues(alpha: 0.95),
-    );
-
-    // ── 4. Shoulders arc ──────────────────────────────────────────────────────
-    final shoulderPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.50)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.round;
-    final shoulderY = headCY + headR + w * 0.04;
-    canvas.drawLine(
-      Offset(c.dx - w * 0.22, shoulderY + w * 0.06),
-      Offset(c.dx,             shoulderY),
-      shoulderPaint,
-    );
-    canvas.drawLine(
-      Offset(c.dx,             shoulderY),
-      Offset(c.dx + w * 0.22, shoulderY + w * 0.06),
-      shoulderPaint,
-    );
-
-    // ── 5. Spinal column (the core PT symbol) ─────────────────────────────────
-    const vertebrae = 6;
-    final spineTop    = shoulderY + w * 0.04;
-    final spineBottom = c.dy + r * 0.52;
-    final totalH      = spineBottom - spineTop;
-    final vH          = totalH / (vertebrae + (vertebrae - 1) * 0.45);
-    final gapH        = vH * 0.45;
-    final vW          = w * 0.32;
-    final wingW       = w * 0.13;
-    final wingH       = vH * 0.55;
-
-    for (int i = 0; i < vertebrae; i++) {
-      final vy = spineTop + i * (vH + gapH);
-      final vc = Offset(c.dx, vy + vH / 2);
-
-      // Body of vertebra
-      final shade = i.isEven
-          ? Colors.white.withValues(alpha: 0.92)
-          : Colors.white.withValues(alpha: 0.78);
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCenter(center: vc, width: vW, height: vH),
-          const Radius.circular(3),
-        ),
-        Paint()..color = shade,
-      );
-
-      // Transverse processes (wings)
-      for (final side in [-1, 1]) {
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromCenter(
-              center: Offset(c.dx + side * (vW / 2 + wingW / 2), vy + vH * 0.35),
-              width: wingW,
-              height: wingH,
-            ),
-            const Radius.circular(2),
-          ),
-          Paint()..color = Colors.white.withValues(alpha: 0.55),
-        );
-      }
-
-      // Inter-vertebral disc gap (teal accent)
-      if (i < vertebrae - 1) {
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(
-            Rect.fromCenter(
-              center: Offset(c.dx, vy + vH + gapH / 2),
-              width: vW * 0.70,
-              height: gapH * 0.60,
-            ),
-            const Radius.circular(2),
-          ),
-          Paint()..color = const Color(0xFF80CBC4).withValues(alpha: 0.70),
-        );
-      }
-    }
-
-    // ── 6. Glossy highlight (top-left lens) ───────────────────────────────────
-    final highlightPaint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.55, -0.55),
-        radius: 0.88,
-        colors: [
-          Colors.white.withValues(alpha: 0.25),
-          Colors.white.withValues(alpha: 0.0),
-        ],
-      ).createShader(bgRect);
-
-    canvas.save();
-    canvas.clipPath(Path()..addOval(bgRect));
-    canvas.drawRect(bgRect, highlightPaint);
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 // ── PT-themed background ──────────────────────────────────────────────────────
