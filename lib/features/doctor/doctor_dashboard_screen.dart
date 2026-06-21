@@ -689,16 +689,44 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Avatar
+                  // Profile button — prominent avatar with label
                   GestureDetector(
                     onTap: () => _navigateTo(6),
-                    child: CircleAvatar(
-                      radius: 26,
-                      backgroundColor: Colors.white.withValues(alpha: 0.2),
-                      backgroundImage: photo.isNotEmpty ? NetworkImage(photo) : null,
-                      child: photo.isEmpty
-                          ? const Icon(Icons.person_rounded, color: Colors.white, size: 28)
-                          : null,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.15),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: CircleAvatar(
+                            radius: 30,
+                            backgroundColor: Colors.white.withValues(alpha: 0.25),
+                            backgroundImage: photo.isNotEmpty ? NetworkImage(photo) : null,
+                            child: photo.isEmpty
+                                ? const Icon(Icons.person_rounded, color: Colors.white, size: 32)
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text('Profile',
+                              style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600)),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -779,56 +807,55 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
           ),
         ),
 
-        // ── Scrollable body ───────────────────────────────────────────────
+        // ── First-time guide (above agenda, non-scrolling) ───────────────
+        if (_hasPatients == false)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+            child: _buildAddPatientsGuide(),
+          ),
+
+        // ── Compact agenda card (fixed, always visible) ───────────────────
+        if (_hasPatients != false)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+            child: _buildTodayAgendaCard(s),
+          ),
+
+        // ── Tile grid fills all remaining space ───────────────────────────
         Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-
-                // ── First-time guide ──────────────────────────────────────
-                if (_hasPatients == false) ...[
-                  _buildAddPatientsGuide(),
-                  const SizedBox(height: 16),
-                ],
-
-                // ── Today's Agenda ────────────────────────────────────────
-                _buildTodayAgendaCard(s),
-                const SizedBox(height: 16),
-
-                // ── Quick Access label ────────────────────────────────────
                 Text('Quick Access',
                     style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textSecondary)),
-                const SizedBox(height: 10),
-
-                // ── White tile grid ───────────────────────────────────────
-                LayoutBuilder(builder: (ctx, constraints) {
-                  final cols = constraints.maxWidth > 500 ? 4 : 3;
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: cols,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                      childAspectRatio: 1.0,
-                    ),
-                    itemCount: primaryIndices.length,
-                    itemBuilder: (_, i) {
-                      final idx = primaryIndices[i];
-                      return _buildHomeTile(
-                          sections[idx], _allNavIcons[idx], _allTileColors[idx], idx);
-                    },
-                  );
-                }),
-
-                // ── Subscription status (compact, bottom) ─────────────────
+                const SizedBox(height: 8),
+                Expanded(
+                  child: LayoutBuilder(builder: (ctx, constraints) {
+                    final cols = constraints.maxWidth > 500 ? 5 : 3;
+                    return GridView.builder(
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: cols,
+                        crossAxisSpacing: 8,
+                        mainAxisSpacing: 8,
+                        childAspectRatio: 1.1,
+                      ),
+                      itemCount: primaryIndices.length,
+                      itemBuilder: (_, i) {
+                        final idx = primaryIndices[i];
+                        return _buildHomeTile(
+                            sections[idx], _allNavIcons[idx], _allTileColors[idx], idx);
+                      },
+                    );
+                  }),
+                ),
                 if (_sub.expiresAt != null) ...[
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 8),
                   _buildSubStatusBar(),
                 ],
               ],
@@ -1238,7 +1265,18 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                                 alpha: locked ? 0.06 : 0.12),
                             borderRadius: BorderRadius.circular(11),
                           ),
-                          child: Icon(icon, size: 22, color: iconColor),
+                          child: index == 8
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Opacity(
+                                    opacity: locked ? 0.4 : 1.0,
+                                    child: Image.asset(
+                                      'assets/images/physiogate_logo.jpg',
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                )
+                              : Icon(icon, size: 22, color: iconColor),
                         ),
                         const SizedBox(height: 7),
                         Text(
@@ -3887,6 +3925,281 @@ void _showPickPatientForDoc(AppStrings s) {
     );
   }
 
+  // ── Patient summary sheet ─────────────────────────────────────────────────
+
+  void _showPatientSummary(
+      AppStrings s, String patientId, String patientName, String photoUrl,
+      {bool hasAccount = true, String phone = '',
+       String diagnosis = '', String? dateOfBirth}) {
+    final uid = Supabase.instance.client.auth.currentUser!.id;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (_, controller) => Column(
+          children: [
+            // drag handle
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2)),
+            ),
+            // Patient header
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: Row(children: [
+                CircleAvatar(
+                  radius: 26,
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+                  backgroundImage: photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
+                  child: photoUrl.isEmpty
+                      ? const Icon(Icons.person_rounded, color: AppColors.primary, size: 28)
+                      : null,
+                ),
+                const SizedBox(width: 14),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(patientName,
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 17)),
+                    if (diagnosis.isNotEmpty)
+                      Text(diagnosis,
+                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                    if (phone.isNotEmpty)
+                      Text(phone,
+                          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  ],
+                )),
+                TextButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _showPatientActions(s, patientId, patientName, photoUrl,
+                        hasAccount: hasAccount, phone: phone,
+                        diagnosis: diagnosis, dateOfBirth: dateOfBirth);
+                  },
+                  icon: const Icon(Icons.more_horiz_rounded, size: 18),
+                  label: const Text('Actions'),
+                  style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+                ),
+              ]),
+            ),
+            const Divider(height: 1),
+            // Summary body
+            Expanded(
+              child: FutureBuilder<List<List<Map<String, dynamic>>>>(
+                future: Future.wait([
+                  Supabase.instance.client
+                      .from('appointments')
+                      .select()
+                      .eq('patient_id', patientId)
+                      .eq('doctor_id', uid)
+                      .order('appointment_time', ascending: false)
+                      .then((d) => List<Map<String, dynamic>>.from(d)),
+                  Supabase.instance.client
+                      .from('invoices')
+                      .select()
+                      .eq('patient_id', patientId)
+                      .eq('doctor_id', uid)
+                      .then((d) => List<Map<String, dynamic>>.from(d)),
+                ]),
+                builder: (_, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final appts    = snap.data?[0] ?? [];
+                  final invoices = snap.data?[1] ?? [];
+                  final now      = DateTime.now();
+                  final upcoming = appts.where((a) {
+                    final t = DateTime.tryParse(a['appointment_time'] as String? ?? '');
+                    return t != null && t.isAfter(now) && (a['status'] as String? ?? '') != 'cancelled';
+                  }).length;
+                  final completed = appts.where((a) {
+                    final t = DateTime.tryParse(a['appointment_time'] as String? ?? '');
+                    return t != null && t.isBefore(now);
+                  }).length;
+                  final totalRevenue = invoices.fold<double>(0, (sum, inv) {
+                    return sum + ((inv['amount'] as num?)?.toDouble() ?? 0);
+                  });
+                  final paidRevenue = invoices.where((inv) => (inv['status'] as String? ?? '') == 'paid')
+                      .fold<double>(0, (sum, inv) => sum + ((inv['amount'] as num?)?.toDouble() ?? 0));
+
+                  return ListView(
+                    controller: controller,
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+                    children: [
+                      // ── Summary KPI cards ───────────────────────────
+                      Row(children: [
+                        _summaryKpi('Total Sessions', '${appts.length}',
+                            Icons.calendar_today_rounded, AppColors.primary),
+                        const SizedBox(width: 10),
+                        _summaryKpi('Upcoming', '$upcoming',
+                            Icons.event_rounded, const Color(0xFF1565C0)),
+                        const SizedBox(width: 10),
+                        _summaryKpi('Completed', '$completed',
+                            Icons.check_circle_rounded, AppColors.success),
+                      ]),
+                      const SizedBox(height: 10),
+                      Row(children: [
+                        _summaryKpi('Total Billed',
+                            '\$${totalRevenue.toStringAsFixed(0)}',
+                            Icons.receipt_long_rounded, AppColors.primary),
+                        const SizedBox(width: 10),
+                        _summaryKpi('Paid',
+                            '\$${paidRevenue.toStringAsFixed(0)}',
+                            Icons.payments_rounded, AppColors.success),
+                        const SizedBox(width: 10),
+                        _summaryKpi('Pending',
+                            '\$${(totalRevenue - paidRevenue).toStringAsFixed(0)}',
+                            Icons.pending_rounded, AppColors.warning),
+                      ]),
+
+                      // ── Recent appointments ────────────────────────
+                      const SizedBox(height: 18),
+                      const Text('Appointment History',
+                          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                      const SizedBox(height: 8),
+                      if (appts.isEmpty)
+                        const Text('No appointments yet.',
+                            style: TextStyle(color: AppColors.textSecondary))
+                      else
+                        ...appts.take(8).map((a) {
+                          final dt  = DateTime.tryParse(a['appointment_time'] as String? ?? '');
+                          final status = (a['status'] as String? ?? 'scheduled');
+                          final isPast  = dt != null && dt.isBefore(now);
+                          final statusColor = status == 'cancelled'
+                              ? AppColors.error
+                              : isPast ? AppColors.textSecondary : AppColors.primary;
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(children: [
+                              Container(
+                                width: 48,
+                                padding: const EdgeInsets.symmetric(vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Column(children: [
+                                  Text(dt != null ? DateFormat('MMM d').format(dt) : '—',
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: statusColor)),
+                                  Text(dt != null ? DateFormat('h:mm a').format(dt) : '',
+                                      style: TextStyle(fontSize: 9, color: statusColor)),
+                                ]),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  (a['notes'] as String? ?? '').isNotEmpty
+                                      ? (a['notes'] as String)
+                                      : 'Session',
+                                  style: const TextStyle(fontSize: 13),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  status == 'cancelled' ? 'Cancelled' : isPast ? 'Done' : 'Upcoming',
+                                  style: TextStyle(fontSize: 10, color: statusColor, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ]),
+                          );
+                        }),
+
+                      // ── Recent invoices ────────────────────────────
+                      if (invoices.isNotEmpty) ...[
+                        const SizedBox(height: 18),
+                        const Text('Revenue',
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                        const SizedBox(height: 8),
+                        ...invoices.take(5).map((inv) {
+                          final amount  = (inv['amount'] as num?)?.toDouble() ?? 0;
+                          final status  = (inv['status'] as String?) ?? 'pending';
+                          final color   = status == 'paid' ? AppColors.success
+                              : status == 'cancelled'     ? AppColors.error
+                              : AppColors.warning;
+                          final dateStr = (inv['created_at'] as String?) ?? '';
+                          final dt      = DateTime.tryParse(dateStr);
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(children: [
+                              Expanded(
+                                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                                  Text((inv['service_name'] as String? ?? '').isNotEmpty
+                                      ? inv['service_name'] as String
+                                      : 'Session fee',
+                                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                                  if (dt != null)
+                                    Text(DateFormat('MMM d, yyyy').format(dt),
+                                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                                ]),
+                              ),
+                              Text('\$${amount.toStringAsFixed(0)}',
+                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.10),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(status,
+                                    style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600)),
+                              ),
+                            ]),
+                          );
+                        }),
+                      ],
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryKpi(String label, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.15)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(height: 6),
+          Text(value,
+              style: TextStyle(
+                  fontWeight: FontWeight.w800, fontSize: 18, color: color)),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 10, color: AppColors.textSecondary),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+        ]),
+      ),
+    );
+  }
+
   void _showPatientActions(
       AppStrings s, String patientId, String patientName, String photoUrl,
       {bool hasAccount = true, String phone = '',
@@ -4347,7 +4660,7 @@ void _showPickPatientForDoc(AppStrings s) {
           ),
           child: InkWell(
             borderRadius: BorderRadius.circular(12),
-            onTap: () => _showPatientActions(
+            onTap: () => _showPatientSummary(
                 s, patientId, name, photoUrl,
                 hasAccount: hasAccount, phone: phone,
                 diagnosis: diagnosis, dateOfBirth: dateOfBirth),
@@ -4502,7 +4815,7 @@ void _showPickPatientForDoc(AppStrings s) {
                   return Container(
                     color: i.isEven ? Colors.white : const Color(0xFFF8FAFF),
                     child: GestureDetector(
-                      onTap: () => _showPatientActions(
+                      onTap: () => _showPatientSummary(
                           s, patientId, name, photoUrl,
                           hasAccount: hasAccount, phone: phone,
                           diagnosis: diagnosis, dateOfBirth: dateOfBirth),
