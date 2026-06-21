@@ -1223,18 +1223,7 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                                 alpha: locked ? 0.06 : 0.12),
                             borderRadius: BorderRadius.circular(11),
                           ),
-                          child: index == 8
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(11),
-                                  child: Opacity(
-                                    opacity: locked ? 0.4 : 1.0,
-                                    child: Image.asset(
-                                      'assets/images/physiogate_logo.jpg',
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                )
-                              : Icon(icon, size: 22, color: iconColor),
+                          child: Icon(icon, size: 22, color: iconColor),
                         ),
                         const SizedBox(height: 7),
                         Text(
