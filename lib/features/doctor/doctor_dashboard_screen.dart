@@ -36,6 +36,8 @@ import 'import_help_sheet.dart';
 import '../store/doctor_storefront_screen.dart';
 import '../auth/auth_service.dart';
 import 'assessment_library/assessment_library_screen.dart';
+import 'doctor_notifications_tab.dart';
+import '../../core/constants/design_tokens.dart';
 
 // ── Patient import entry ──────────────────────────────────────────────────
 
@@ -347,7 +349,9 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     });
   }
 
-Future<void> _showLogout(AppStrings s) async {
+Future<void> _showLogout([AppStrings? overrideStrings]) async {
+    final s = overrideStrings ??
+        AppStrings(context.read<LanguageProvider>().isArabic);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -526,7 +530,7 @@ Future<void> _showLogout(AppStrings s) async {
             _isLocked(5) ? _buildLockedScreen('Expenses',   SubTier.premium) // 5
                          : const ExpensesScreen(),
             _buildProfileTab(s),                                               // 6
-            _buildDoctorNotificationsTab(s),                                   // 7
+            DoctorNotificationsTab(service: _service),                          // 7
             _buildStoreTab(),                                                // 8
             const AssessmentLibraryScreen(),                                 // 9
           ],
@@ -574,11 +578,7 @@ Future<void> _showLogout(AppStrings s) async {
         Container(
           width: double.infinity,
           decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFF1A3A5C), Color(0xFF2C5F8A)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            gradient: DesignTokens.doctorHeaderGradient,
           ),
           child: SafeArea(
             bottom: false,
@@ -752,7 +752,7 @@ Future<void> _showLogout(AppStrings s) async {
             ? _buildMobileHomeFooter(name, clinic)
             : Container(
                 width: double.infinity,
-                color: const Color(0xFF1A3A5C),
+                color: DesignTokens.doctorHeaderGradient.colors.first,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 child: SafeArea(
@@ -815,7 +815,7 @@ Future<void> _showLogout(AppStrings s) async {
                     const SizedBox(width: 8),
                     // Logout button
                     TextButton.icon(
-                      onPressed: () => _showLogout(AppStrings(false)),
+                      onPressed: () => _showLogout(),
                       icon: const Icon(Icons.logout_rounded,
                           color: Colors.white54, size: 16),
                       label: const Text('Logout',
@@ -994,7 +994,7 @@ Future<void> _showLogout(AppStrings s) async {
   Widget _buildMobileHomeFooter(String name, String clinic) {
     return Container(
       width: double.infinity,
-      color: const Color(0xFF1A3A5C),
+      color: DesignTokens.doctorHeaderGradient.colors.first,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: SafeArea(
         top: false,
@@ -1058,7 +1058,7 @@ Future<void> _showLogout(AppStrings s) async {
           ),
           const SizedBox(width: 6),
           IconButton(
-            onPressed: () => _showLogout(AppStrings(false)),
+            onPressed: () => _showLogout(),
             icon: const Icon(Icons.logout_rounded,
                 color: Colors.white54, size: 20),
             tooltip: 'Logout',
@@ -1407,115 +1407,13 @@ Future<void> _showLogout(AppStrings s) async {
     );
   }
 
-  // ════════════════════════════════════════════════════════════════════════════
-  // 7 – Notifications Tab
-  // ════════════════════════════════════════════════════════════════════════════
-
-  Widget _buildDoctorNotificationsTab(AppStrings s) {
-    final uid = Supabase.instance.client.auth.currentUser?.id;
-    if (uid == null) return const Center(child: Text('Not signed in'));
-
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: Supabase.instance.client
-          .from('notifications')
-          .stream(primaryKey: ['id'])
-          .eq('recipient_id', uid)
-          .map((list) => (list
-            ..sort((a, b) => (b['created_at'] as String)
-                .compareTo(a['created_at'] as String)))
-              .toList()),
-      builder: (ctx, snap) {
-        final notifs = snap.data ?? [];
-        final unreadCount =
-            notifs.where((n) => !(n['read'] as bool? ?? false)).length;
-
-        return Column(children: [
-          // ── header ──────────────────────────────────────────────────────
-          Container(
-            color: Colors.white,
-            padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
-            child: Row(children: [
-              if (unreadCount > 0) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6A1B9A).withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text('$unreadCount unread',
-                      style: const TextStyle(
-                          color: Color(0xFF6A1B9A),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600)),
-                ),
-              ] else
-                const Text('All caught up',
-                    style: TextStyle(
-                        color: AppColors.textSecondary, fontSize: 13)),
-              const Spacer(),
-              if (unreadCount > 0)
-                TextButton(
-                  onPressed: () async {
-                    final ids = notifs
-                        .where((n) => !(n['read'] as bool? ?? false))
-                        .map((n) => n['id'] as String)
-                        .toList();
-                    for (final id in ids) {
-                      await Supabase.instance.client
-                          .from('notifications')
-                          .update({'read': true}).eq('id', id);
-                    }
-                  },
-                  child: const Text('Mark all read',
-                      style: TextStyle(fontSize: 13)),
-                ),
-            ]),
-          ),
-          const Divider(height: 1),
-          // ── content ─────────────────────────────────────────────────────
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(12),
-              children: [
-                _buildPendingRequestsCard(s),
-                if (notifs.isEmpty) ...[
-                  const SizedBox(height: 32),
-                  Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.notifications_none_rounded,
-                            size: 64, color: Colors.grey.shade300),
-                        const SizedBox(height: 12),
-                        const Text('No notifications yet',
-                            style: TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 15)),
-                      ],
-                    ),
-                  ),
-                ] else ...[
-                  const SizedBox(height: 8),
-                  ...notifs.map((n) => Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: _notifCard(n),
-                      )),
-                ],
-              ],
-            ),
-          ),
-        ]);
-      },
-    );
-  }
 
   // Show a transient toast for a notification that just arrived via the
   // realtime stream (i.e. not part of the initial snapshot).
   void _showNotifPopup(Map<String, dynamic> n) {
     final title = (n['title'] as String?) ?? 'Notification';
     final body  = (n['body']  as String?) ?? '';
-    final (icon, color) = _notifIconFor((n['type'] as String?) ?? '');
+    final (icon, color) = DoctorNotificationsTab.iconFor((n['type'] as String?) ?? '');
 
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       backgroundColor: color,
@@ -1545,100 +1443,6 @@ Future<void> _showLogout(AppStrings s) async {
     ));
   }
 
-  static (IconData, Color) _notifIconFor(String type) => switch (type) {
-        'patient_added_you'           => (Icons.person_add_rounded,        const Color(0xFF1565C0)),
-        'appointment_request'
-        || 'appointment_reschedule'   => (Icons.event_rounded,             Colors.orange),
-        'appointment_cancelled'       => (Icons.event_busy_rounded,        AppColors.error),
-        'admin_note'                  => (Icons.campaign_rounded,          const Color(0xFF6A1B9A)),
-        'patient_added_confirmation'  => (Icons.person_add_rounded,        const Color(0xFF2E7D32)),
-        'admin'                       => (Icons.admin_panel_settings_rounded, Colors.teal),
-        _                             => (Icons.notifications_rounded,     const Color(0xFF6A1B9A)),
-      };
-
-  Widget _notifCard(Map<String, dynamic> n) {
-    final type    = (n['type']  as String?) ?? '';
-    final title   = (n['title'] as String?) ?? 'Notification';
-    final body    = (n['body']  as String?) ?? '';
-    final raw     = n['created_at'] as String?;
-    final dt      = raw != null ? DateTime.tryParse(raw) : null;
-    final timeStr = dt != null
-        ? DateFormat('MMM d, h:mm a').format(dt.toLocal())
-        : '';
-    final unread  = !(n['read'] as bool? ?? false);
-
-    final (IconData icon, Color iconColor) = _notifIconFor(type);
-
-    return Material(
-      color: unread ? const Color(0xFFF3E5F5) : Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      elevation: unread ? 1 : 0,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: unread
-            ? () => Supabase.instance.client
-                .from('notifications')
-                .update({'read': true})
-                .eq('id', n['id'] as String)
-            : null,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: iconColor, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Expanded(
-                        child: Text(title,
-                            style: TextStyle(
-                                fontWeight: unread
-                                    ? FontWeight.bold
-                                    : FontWeight.w600,
-                                fontSize: 14)),
-                      ),
-                      if (unread)
-                        Container(
-                          width: 8, height: 8,
-                          decoration: const BoxDecoration(
-                              color: Color(0xFF6A1B9A),
-                              shape: BoxShape.circle),
-                        ),
-                    ]),
-                    if (body.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(body,
-                          style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 13)),
-                    ],
-                    if (timeStr.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(timeStr,
-                          style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 11)),
-                    ],
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   // ════════════════════════════════════════════════════════════════════════════
   // 0 – Schedule Tab
@@ -1693,7 +1497,7 @@ Future<void> _showLogout(AppStrings s) async {
             return SingleChildScrollView(
               padding: const EdgeInsets.all(14),
               child: Column(children: [
-                _buildPendingRequestsCard(s),
+                PendingRequestsCard(service: _service),
                 const SizedBox(height: 14),
                 _buildCalendarCard(allAppts, s),
                 const SizedBox(height: 14),
@@ -1706,181 +1510,6 @@ Future<void> _showLogout(AppStrings s) async {
     );
   }
 
-  // ── Pending appointment requests ──────────────────────────────────────────
-
-  Widget _buildPendingRequestsCard(AppStrings s) {
-    final uid = Supabase.instance.client.auth.currentUser!.id;
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: Supabase.instance.client
-          .from('appointment_requests')
-          .stream(primaryKey: ['id'])
-          .eq('doctor_id', uid)
-          .map((list) => list
-              .where((r) => (r['status'] as String? ?? '') == 'pending')
-              .toList()
-              ..sort((a, b) => (b['created_at'] as String)
-                  .compareTo(a['created_at'] as String))),
-      builder: (context, snap) {
-        final requests = snap.data ?? [];
-        if (requests.isEmpty) return const SizedBox.shrink();
-
-        return Card(
-          elevation: 2,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.pending_actions_rounded,
-                        color: Colors.orange, size: 18),
-                  ),
-                  const SizedBox(width: 10),
-                  Text('Appointment Requests (${requests.length})',
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 15)),
-                ]),
-                const SizedBox(height: 10),
-                ...requests.map((req) {
-                  final patName  = (req['patient_name'] as String?) ?? 'Patient';
-                  final patId    = (req['patient_id']   as String?) ?? '';
-                  final notes    = (req['notes']         as String?) ?? '';
-                  final reqTime  = req['requested_time'] as String?;
-                  final dt       = reqTime != null ? DateTime.parse(reqTime) : null;
-                  final timeStr  = dt != null
-                      ? DateFormat('EEE, MMM d – h:mm a').format(dt)
-                      : '—';
-
-                  return FutureBuilder<Map<String, dynamic>?>(
-                    future: Supabase.instance.client
-                        .from('users').select('phone').eq('id', patId).maybeSingle(),
-                    builder: (_, patSnap) {
-                      final phone = (patSnap.data?['phone'] as String?) ?? '';
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withValues(alpha: 0.04),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: Colors.orange.withValues(alpha: 0.2)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(children: [
-                              Expanded(
-                                child: Text(patName,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14)),
-                              ),
-                              if (phone.isNotEmpty)
-                                GestureDetector(
-                                  onTap: () => _showPhoneOptions(context, phone),
-                                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                    const Icon(Icons.phone_rounded,
-                                        size: 14, color: Color(0xFF25D366)),
-                                    const SizedBox(width: 4),
-                                    Text(phone,
-                                        style: const TextStyle(
-                                            fontSize: 12,
-                                            color: Color(0xFF25D366),
-                                            decoration: TextDecoration.underline)),
-                                  ]),
-                                ),
-                            ]),
-                            const SizedBox(height: 4),
-                            Row(children: [
-                              const Icon(Icons.schedule_rounded,
-                                  size: 13, color: AppColors.textSecondary),
-                              const SizedBox(width: 4),
-                              Text(timeStr,
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textSecondary)),
-                            ]),
-                            if (notes.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(notes,
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textSecondary)),
-                            ],
-                            const SizedBox(height: 10),
-                            Row(children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () async {
-                                    await Supabase.instance.client
-                                        .from('appointment_requests')
-                                        .update({'status': 'declined'})
-                                        .eq('id', req['id'] as String);
-                                  },
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: AppColors.error,
-                                    side: const BorderSide(color: AppColors.error),
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                  child: const Text('Decline', style: TextStyle(fontSize: 12)),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: ElevatedButton(
-                                  onPressed: () async {
-                                    if (dt == null) return;
-                                    final messenger = ScaffoldMessenger.of(context);
-                                    final ok = await _service.bookAppointment(
-                                        patId, patName, dt, notes);
-                                    if (!mounted) return;
-                                    if (ok) {
-                                      await Supabase.instance.client
-                                          .from('appointment_requests')
-                                          .update({'status': 'accepted'})
-                                          .eq('id', req['id'] as String);
-                                      messenger.showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Appointment confirmed!'),
-                                          backgroundColor: AppColors.success,
-                                        ),
-                                      );
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 8),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8)),
-                                  ),
-                                  child: const Text('Accept', style: TextStyle(fontSize: 12)),
-                                ),
-                              ),
-                            ]),
-                          ],
-                        ),
-                      );
-                    },
-                  );
-                }),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   // ── Calendar card ─────────────────────────────────────────────────────────
 

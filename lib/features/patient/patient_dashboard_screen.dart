@@ -8,6 +8,7 @@ import 'package:intl/intl.dart' hide TextDirection;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/design_tokens.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
 import 'find_doctors_screen.dart';
@@ -17,8 +18,8 @@ import '../hep/screens/patient_hep_screen.dart';
 import '../../core/widgets/lebanon_phone_field.dart';
 
 const _kNavy = Color(0xFF1A237E);
-const _kBlue = Color(0xFF1565C0);
-const _kGreen = Color(0xFF2E7D32);
+const _kBlue = DesignTokens.info;     // Color(0xFF1565C0)
+const _kGreen = DesignTokens.success; // Color(0xFF2E7D32)
 
 /// Overridable in tests so the time-of-day greeting doesn't make golden
 /// renders depend on the wall-clock time the test happens to run at.
@@ -175,11 +176,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
   Widget _buildHeader(AppStrings s, LanguageProvider lang) {
     return Container(
       decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFFE3F0FF), Color(0xFFB3D4F7)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
+        gradient: DesignTokens.patientHomeHeaderGradient,
       ),
       child: SafeArea(
         bottom: false,

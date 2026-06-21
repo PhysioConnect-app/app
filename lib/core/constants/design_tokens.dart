@@ -97,4 +97,11 @@ class DesignTokens {
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
+
+  /// Soft blue gradient used for the patient home screen header.
+  static const LinearGradient patientHomeHeaderGradient = LinearGradient(
+    colors: [Color(0xFFE3F0FF), Color(0xFFB3D4F7)],
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+  );
 }

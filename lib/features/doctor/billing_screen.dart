@@ -1810,7 +1810,7 @@ class _BillingScreenState extends State<BillingScreen> {
                 ),
                 const SizedBox(height: 10),
                 DropdownButtonFormField<_InvStatus>(
-                  value: status,
+                  initialValue: status,
                   decoration: InputDecoration(
                     labelText: 'Status',
                     border: OutlineInputBorder(

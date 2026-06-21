@@ -518,7 +518,7 @@ class _ProductFormDialogState extends State<_ProductFormDialog> {
       widget.existing?['currency'] as String? ?? 'USD';
   late String? _categoryId =
       widget.existing?['category_id'] as String?;
-  late List<String> _imageUrls = _initImageUrls();
+  late final List<String> _imageUrls = _initImageUrls();
 
   List<String> _initImageUrls() {
     final raw = widget.existing?['image_urls'];
