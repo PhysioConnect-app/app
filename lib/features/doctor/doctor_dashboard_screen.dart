@@ -662,7 +662,8 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
       0,  // Schedule
       2,  // My Patients
       if (showDocs) 1,  // Documentation
-      if (_sub.billing) 4,  // Revenues
+      if (_sub.billing)    4,  // Revenues
+      if (_sub.expenses)   5,  // Expenses
       if (showStats && _sub.statistics) 3,  // Statistics
       9,  // Assessment Library
       8,  // Store
