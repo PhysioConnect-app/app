@@ -13,6 +13,7 @@ import '../../core/providers/language_provider.dart';
 import 'find_doctors_screen.dart';
 import 'patient_service.dart';
 import '../auth/auth_service.dart';
+import '../hep/screens/patient_hep_screen.dart';
 import '../../core/widgets/lebanon_phone_field.dart';
 
 const _kNavy = Color(0xFF1A237E);
@@ -144,6 +145,8 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
                         : _buildNoApptBanner(s),
                     const SizedBox(height: 20),
                     _buildGrid(s),
+                    const SizedBox(height: 14),
+                    _buildMyExercisesTile(),
                     const SizedBox(height: 14),
                     _buildProfileTile(s),
                   ],
@@ -443,8 +446,57 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
       case 1: _go(_PatientMyDoctorsScreen(service: _service));
       case 2: _go(const FindDoctorsScreen());
       case 3: _go(_PatientNotificationsScreen(service: _service));
-      case 4: _go(_PatientProfileScreen(profile: _profile));
     }
+  }
+
+  Widget _buildMyExercisesTile() {
+    const color = Color(0xFF00897B);
+    return GestureDetector(
+      onTap: () => _go(const PatientHepScreen()),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.fitness_center_rounded,
+                color: color, size: 26),
+          ),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('My Exercises',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Color(0xFF1A1A1A))),
+                SizedBox(height: 2),
+                Text('View your home exercise programs',
+                    style: TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+        ]),
+      ),
+    );
   }
 
   Widget _buildProfileTile(AppStrings s) {

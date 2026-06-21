@@ -28,6 +28,7 @@ import '../../core/providers/language_provider.dart';
 import 'create_patient_screen.dart';
 import 'soap_note_screen.dart';
 import 'session_stats_screen.dart';
+import '../hep/screens/hep_builder_screen.dart';
 import 'billing_screen.dart';
 import 'expenses_screen.dart';
 import 'doctor_service.dart';
@@ -4201,6 +4202,24 @@ void _showPickPatientForDoc(AppStrings s) {
                     context,
                     MaterialPageRoute(
                       builder: (_) => SoapNoteScreen(
+                        patientId:   patientId,
+                        patientName: patientName,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              _actionTile(
+                icon: Icons.fitness_center_rounded,
+                color: AppColors.primary,
+                title: 'Exercise Programs (HEP)',
+                subtitle: 'Create or edit home exercise programs',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => HepProgramListScreen(
                         patientId:   patientId,
                         patientName: patientName,
                       ),
