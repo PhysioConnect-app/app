@@ -100,6 +100,9 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   // null = stream not yet received; true/false = confirmed state
   bool? _hasPatients;
   Timer? _expiryTimer;
+  // Tracks last-known expiry state so the 30-s timer only triggers a rebuild
+  // when the value actually changes, avoiding unnecessary full-tree rebuilds.
+  bool _wasExpired = false;
 
   static const List<IconData> _navIcons = [
     Icons.calendar_today_rounded,         // 0 Schedule
@@ -178,7 +181,11 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     // locked out the moment `expires_at` passes, even with no other
     // realtime updates triggering a rebuild.
     _expiryTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      final nowExpired = _sub.isExpired;
+      if (nowExpired != _wasExpired) {
+        setState(() => _wasExpired = nowExpired);
+      }
     });
   }
 
@@ -658,10 +665,33 @@ Future<void> _showLogout(AppStrings s) async {
                     borderRadius: const BorderRadius.only(
                         bottomLeft: Radius.circular(80)),
                     child: photo.isNotEmpty
-                        ? Image.network(photo,
+                        ? Image.network(
+                            photo,
                             width: photoW,
                             height: photoW,
-                            fit: BoxFit.cover)
+                            fit: BoxFit.cover,
+                            loadingBuilder: (_, child, progress) =>
+                                progress == null
+                                    ? child
+                                    : SizedBox(
+                                        width: photoW,
+                                        height: photoW,
+                                        child: const Center(
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white38,
+                                          ),
+                                        ),
+                                      ),
+                            errorBuilder: (_, __, ___) => Container(
+                              width: photoW - 20,
+                              height: photoW,
+                              alignment: Alignment.center,
+                              color: Colors.white10,
+                              child: const Icon(Icons.person_rounded,
+                                  color: Colors.white30),
+                            ),
+                          )
                         : Container(
                             width: photoW - 20,
                             height: photoW,
@@ -1046,7 +1076,17 @@ Future<void> _showLogout(AppStrings s) async {
     final tileColor = locked ? color.withValues(alpha: 0.45) : color;
     final badge = index == 7 ? _doctorUnreadCount : 0;
 
-    return Material(
+    final semanticLabel = locked
+        ? '$title — locked, requires upgrade'
+        : badge > 0
+            ? '$title — $badge unread'
+            : title;
+
+    return Semantics(
+      label: semanticLabel,
+      button: true,
+      enabled: !locked,
+      child: Material(
       color: tileColor,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
@@ -1150,6 +1190,7 @@ Future<void> _showLogout(AppStrings s) async {
           ),
         ),
       ),
+    ),
     );
   }
 

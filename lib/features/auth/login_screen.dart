@@ -300,18 +300,15 @@ class _LoginCard extends StatelessWidget {
             icon:       Icons.lock_outline_rounded,
             obscureText: obscure,
             onSubmitted: (_) => onLogin(),
-            suffix: GestureDetector(
-              onTap: onObscureToggle,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: Text(
-                  obscure ? s.showPassword : s.hidePassword,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF1565C0),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+            suffix: IconButton(
+              onPressed: onObscureToggle,
+              tooltip: obscure ? s.showPassword : s.hidePassword,
+              icon: Icon(
+                obscure
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
+                color: const Color(0xFF1565C0),
+                size: 20,
               ),
             ),
           ),
@@ -415,12 +412,12 @@ class _LoginCard extends StatelessWidget {
           TextButton.icon(
             onPressed: langProvider.toggle,
             icon: const Icon(Icons.language_rounded,
-                size: 15, color: Color(0xFFCFD8DC)),
+                size: 15, color: Color(0xFF78909C)),
             label: Text(
               s.language,
-              style: const TextStyle(color: Color(0xFFCFD8DC), fontSize: 13),
+              style: const TextStyle(color: Color(0xFF78909C), fontSize: 13),
             ),
-            style: TextButton.styleFrom(foregroundColor: const Color(0xFFCFD8DC)),
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFF78909C)),
           ),
 
           // ── Privacy policy (required by App Store, Play Store, MS Store) ─────

@@ -47,6 +47,10 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
   StreamSubscription? _notifSub;
   StreamSubscription? _apptSub;
 
+  // Cached doctor fetch so FutureBuilder doesn't re-fire on every rebuild.
+  String? _cachedDoctorId;
+  Future<Map<String, dynamic>?>? _doctorFuture;
+
   @override
   void initState() {
     super.initState();
@@ -74,7 +78,16 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
           final bt = DateTime.parse(b['appointment_time'] as String);
           return at.compareTo(bt);
         });
-      setState(() => _nextAppt = upcoming.isEmpty ? null : upcoming.first);
+      final appt = upcoming.isEmpty ? null : upcoming.first;
+      final newDoctorId = appt?['doctor_id'] as String?;
+      if (newDoctorId != null && newDoctorId != _cachedDoctorId) {
+        _cachedDoctorId = newDoctorId;
+        _doctorFuture = PatientService().getDoctorById(newDoctorId);
+      } else if (newDoctorId == null) {
+        _cachedDoctorId = null;
+        _doctorFuture = null;
+      }
+      setState(() => _nextAppt = appt);
     });
   }
 
@@ -219,29 +232,52 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              Container(
-                width: 86,
-                height: 86,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.55),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF1565C0).withValues(alpha: 0.12),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: const Icon(
-                  Icons.medical_services_rounded,
-                  size: 44,
-                  color: Color(0xFF1565C0),
-                ),
-              ),
+              _buildProfileAvatar(),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildProfileAvatar() {
+    final photoUrl = _profile?['profile_photo_url'] as String? ?? '';
+    return Container(
+      width: 86,
+      height: 86,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.55),
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1565C0).withValues(alpha: 0.12),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipOval(
+        child: photoUrl.isNotEmpty
+            ? Image.network(
+                photoUrl,
+                width: 86,
+                height: 86,
+                fit: BoxFit.cover,
+                loadingBuilder: (_, child, progress) => progress == null
+                    ? child
+                    : const Center(
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Color(0xFF1565C0))),
+                errorBuilder: (_, __, ___) => const Icon(
+                    Icons.person_rounded,
+                    size: 44,
+                    color: Color(0xFF1565C0)),
+              )
+            : const Icon(
+                Icons.person_rounded,
+                size: 44,
+                color: Color(0xFF1565C0),
+              ),
       ),
     );
   }
@@ -320,7 +356,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
           const SizedBox(height: 14),
           FutureBuilder<Map<String, dynamic>?>(
             future: doctorId.isNotEmpty
-                ? PatientService().getDoctorById(doctorId)
+                ? _doctorFuture
                 : Future.value(null),
             builder: (_, snap) {
               final doc = snap.data;
@@ -566,65 +602,71 @@ class _GridTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-          Stack(clipBehavior: Clip.none, children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: item.color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(18),
+    final semanticLabel =
+        badge > 0 ? '$label — $badge unread' : label;
+    return Semantics(
+      label: semanticLabel,
+      button: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.06),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
-              child: Icon(item.icon, color: item.color, size: 32),
-            ),
-            if (badge > 0)
-              Positioned(
-                right: -6,
-                top: -6,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.error,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  child: Text(
-                    badge > 99 ? '99+' : '$badge',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
+            ],
+          ),
+          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Stack(clipBehavior: Clip.none, children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: item.color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(item.icon, color: item.color, size: 32),
+              ),
+              if (badge > 0)
+                Positioned(
+                  right: -6,
+                  top: -6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.error,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: Text(
+                      badge > 99 ? '99+' : '$badge',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
+            ]),
+            const SizedBox(height: 10),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1A1A1A),
               ),
-          ]),
-          const SizedBox(height: 10),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Color(0xFF1A1A1A),
+              textAlign: TextAlign.center,
             ),
-            textAlign: TextAlign.center,
-          ),
-        ]),
+          ]),
+        ),
       ),
     );
   }
