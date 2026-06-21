@@ -67,7 +67,7 @@ class _LoginScreenState extends State<LoginScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(sent ? s.forgotPasswordSent : s.forgotPasswordError),
-        backgroundColor: sent ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
+        backgroundColor: sent ? const Color(0xFF00897B) : const Color(0xFFC62828),
       ),
     );
   }
@@ -119,17 +119,17 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // ── Ambient gradient ────────────────────────────────────────────────
+          // ── Ambient gradient — single teal family ───────────────────────────
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Color(0xFFE8F5E9),
-                  Color(0xFFF0F9FF),
-                  Color(0xFFE0F2F1),
-                  Color(0xFFE3F2FD),
+                  Color(0xFFE0F2F1), // teal 50
+                  Color(0xFFF4F9F9),
+                  Color(0xFFE0F7FA), // cyan 50
+                  Color(0xFFE8F5E9), // light green 50
                 ],
                 stops: [0.0, 0.33, 0.66, 1.0],
               ),
@@ -213,19 +213,19 @@ class _LoginCard extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(40, 44, 40, 36),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE4ECF5), width: 1.5),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFB2DFDB), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1565C0).withValues(alpha: 0.09),
-            blurRadius: 64,
-            offset: const Offset(0, 24),
-            spreadRadius: -6,
+            color: const Color(0xFF00897B).withValues(alpha: 0.10),
+            blurRadius: 48,
+            offset: const Offset(0, 16),
+            spreadRadius: -4,
           ),
           BoxShadow(
-            color: const Color(0xFF2E7D32).withValues(alpha: 0.07),
-            blurRadius: 32,
-            offset: const Offset(0, 8),
+            color: const Color(0xFF00897B).withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -236,43 +236,37 @@ class _LoginCard extends StatelessWidget {
           const _PhysioLogo(size: 96),
           const SizedBox(height: 12),
 
-          // ── App name gradient ────────────────────────────────────────────────
-          ShaderMask(
-            shaderCallback: (bounds) => const LinearGradient(
-              colors: [Color(0xFF1565C0), Color(0xFF00897B), Color(0xFF2E7D32)],
-              stops: [0.0, 0.5, 1.0],
-            ).createShader(bounds),
-            child: const Text(
-              'PhysioConnect',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-                letterSpacing: 1.0,
-              ),
+          // ── App name — single teal ──────────────────────────────────────────
+          const Text(
+            'PhysioConnect',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: Color(0xFF00897B),
+              letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 28),
 
           // ── "Welcome Back!" ──────────────────────────────────────────────────
           Text(
             s.welcomeBack,
             style: const TextStyle(
-              fontSize: 27,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF2E7D32),
-              letterSpacing: -0.4,
-              height: 1.15,
+              fontSize: 26,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF1A2332),
+              letterSpacing: -0.3,
+              height: 1.2,
             ),
           ),
-          const SizedBox(height: 7),
+          const SizedBox(height: 6),
 
           // ── Subheading ───────────────────────────────────────────────────────
           Text(
             s.signInSubtitle,
             style: const TextStyle(
               fontSize: 14,
-              color: Color(0xFF90A4AE),
+              color: Color(0xFF78909C),
               fontWeight: FontWeight.w400,
             ),
           ),
@@ -307,7 +301,7 @@ class _LoginCard extends StatelessWidget {
                 obscure
                     ? Icons.visibility_off_rounded
                     : Icons.visibility_rounded,
-                color: const Color(0xFF1565C0),
+                color: const Color(0xFF00897B),
                 size: 20,
               ),
             ),
@@ -317,12 +311,16 @@ class _LoginCard extends StatelessWidget {
           // ── Forgot Password ──────────────────────────────────────────────────
           Align(
             alignment: Alignment.centerRight,
-            child: GestureDetector(
-              onTap: onForgotPassword,
+            child: TextButton(
+              onPressed: onForgotPassword,
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF00897B),
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 36),
+              ),
               child: Text(
                 s.forgotPassword,
                 style: const TextStyle(
-                  color: Color(0xFF1565C0),
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                 ),
@@ -334,28 +332,28 @@ class _LoginCard extends StatelessWidget {
           // ── Sign In button ───────────────────────────────────────────────────
           SizedBox(
             width: double.infinity,
-            height: 54,
+            height: 52,
             child: isLoading
                 ? const Center(
                     child: CircularProgressIndicator(
-                      color: Color(0xFF2E7D32),
+                      color: Color(0xFF00897B),
                       strokeWidth: 2.5,
                     ),
                   )
                 : DecoratedBox(
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFF2E7D32), Color(0xFF43A047)],
+                        colors: [Color(0xFF00897B), Color(0xFF00695C)],
                         begin: Alignment.centerLeft,
                         end: Alignment.centerRight,
                       ),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF2E7D32).withValues(alpha: 0.38),
-                          blurRadius: 20,
-                          offset: const Offset(0, 8),
-                          spreadRadius: -4,
+                          color: const Color(0xFF00897B).withValues(alpha: 0.35),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                          spreadRadius: -2,
                         ),
                       ],
                     ),
@@ -365,7 +363,7 @@ class _LoginCard extends StatelessWidget {
                         backgroundColor: Colors.transparent,
                         shadowColor: Colors.transparent,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       child: Text(
@@ -374,7 +372,7 @@ class _LoginCard extends StatelessWidget {
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
-                          letterSpacing: 0.6,
+                          letterSpacing: 0.4,
                         ),
                       ),
                     ),
@@ -383,25 +381,22 @@ class _LoginCard extends StatelessWidget {
 
           // ── Continue as Guest (mobile only) ──────────────────────────────────
           if (showGuestLogin) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 48,
               child: OutlinedButton(
                 onPressed: onContinueAsGuest,
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF2E7D32),
-                  side: const BorderSide(color: Color(0xFFBBD1EA)),
+                  foregroundColor: const Color(0xFF00897B),
+                  side: const BorderSide(color: Color(0xFF80CBC4)),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 child: Text(
                   s.continueAsGuest,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                 ),
               ),
             ),
@@ -490,16 +485,16 @@ class _InputFieldState extends State<_InputField> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       decoration: BoxDecoration(
-        color: _focused ? const Color(0xFFF1FBF4) : const Color(0xFFF8FAFD),
+        color: _focused ? const Color(0xFFE0F2F1) : const Color(0xFFF8FAFD),
         borderRadius: BorderRadius.circular(13),
         border: Border.all(
-          color: _focused ? const Color(0xFF43A047) : const Color(0xFFDDE3EA),
+          color: _focused ? const Color(0xFF00897B) : const Color(0xFFDDE3EA),
           width: _focused ? 1.5 : 1.0,
         ),
         boxShadow: _focused
             ? [
                 BoxShadow(
-                  color: const Color(0xFF43A047).withValues(alpha: 0.13),
+                  color: const Color(0xFF00897B).withValues(alpha: 0.13),
                   blurRadius: 10,
                   offset: const Offset(0, 3),
                 ),
@@ -524,7 +519,7 @@ class _InputFieldState extends State<_InputField> {
           fontSize: 14.5,
           fontWeight: FontWeight.w500,
         ),
-        cursorColor: const Color(0xFF2E7D32),
+        cursorColor: const Color(0xFF00897B),
         decoration: InputDecoration(
           hintText: widget.hintText,
           hintStyle: const TextStyle(
@@ -536,7 +531,7 @@ class _InputFieldState extends State<_InputField> {
             padding: const EdgeInsets.only(left: 14, right: 10),
             child: Icon(
               widget.icon,
-              color: _focused ? const Color(0xFF2E7D32) : const Color(0xFFB0BEC5),
+              color: _focused ? const Color(0xFF00897B) : const Color(0xFFB0BEC5),
               size: 20,
             ),
           ),

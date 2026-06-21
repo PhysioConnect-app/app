@@ -37,7 +37,6 @@ import '../store/doctor_storefront_screen.dart';
 import '../auth/auth_service.dart';
 import 'assessment_library/assessment_library_screen.dart';
 import 'doctor_notifications_tab.dart';
-import '../../core/constants/design_tokens.dart';
 
 // ── Patient import entry ──────────────────────────────────────────────────
 
@@ -102,6 +101,9 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   // null = stream not yet received; true/false = confirmed state
   bool? _hasPatients;
   Timer? _expiryTimer;
+  // Today's appointments for the Agenda card on the home screen
+  List<Map<String, dynamic>> _todayAppts = [];
+  StreamSubscription<List<Map<String, dynamic>>>? _todayApptsListener;
   // Tracks last-known expiry state so the 30-s timer only triggers a rebuild
   // when the value actually changes, avoiding unnecessary full-tree rebuilds.
   bool _wasExpired = false;
@@ -156,6 +158,25 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
       _patientsListener = _service.getAssignedPatients().listen((list) {
         if (mounted) setState(() => _hasPatients = list.isNotEmpty);
       });
+      // Stream today's appointments for the home Agenda card
+      final todayStart = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      final todayEnd   = todayStart.add(const Duration(days: 1));
+      _todayApptsListener = Supabase.instance.client
+          .from('appointments').stream(primaryKey: ['id']).eq('doctor_id', uid)
+          .listen((list) {
+        if (!mounted) return;
+        final filtered = list.where((a) {
+          final t = DateTime.tryParse(a['appointment_time'] as String? ?? '');
+          final status = (a['status'] as String?) ?? '';
+          return t != null && !t.isBefore(todayStart) && t.isBefore(todayEnd) && status != 'cancelled';
+        }).toList()
+          ..sort((a, b) {
+            final at = DateTime.parse(a['appointment_time'] as String);
+            final bt = DateTime.parse(b['appointment_time'] as String);
+            return at.compareTo(bt);
+          });
+        setState(() => _todayAppts = filtered);
+      });
       _notifListener = Supabase.instance.client
           .from('notifications').stream(primaryKey: ['id'])
           .eq('recipient_id', uid)
@@ -196,6 +217,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     _subListener?.cancel();
     _notifListener?.cancel();
     _patientsListener?.cancel();
+    _todayApptsListener?.cancel();
     _expiryTimer?.cancel();
     _nameCtrl.dispose();
     _bioCtrl.dispose();
@@ -557,278 +579,373 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
   ];
 
   Widget _buildHomeScreen(AppStrings s, LanguageProvider lang) {
-    final name     = _nameCtrl.text.isNotEmpty ? _nameCtrl.text : 'Doctor';
-    final spec     = _specCtrl.text;
-    final photo    = _photoCtrl.text;
-    final clinic   = _clinicNameCtrl.text.isNotEmpty
-        ? _clinicNameCtrl.text
-        : 'PT Clinic';
+    final name   = _nameCtrl.text.isNotEmpty ? _nameCtrl.text : 'Doctor';
+    final spec   = _specCtrl.text;
+    final photo  = _photoCtrl.text;
+    final now    = DateTime.now();
+    final today  = DateFormat('EEEE, MMM d').format(now);
 
     final sections = [
       s.schedule, s.documentation, s.myPatients,
       s.statistics, s.billing, s.expenses, s.myProfile,
-      s.notifications,
-      s.store,
-      s.assessmentLibrary,
+      s.notifications, s.store, s.assessmentLibrary,
+    ];
+
+    // Primary tiles shown on home: Schedule, Patients, Documentation,
+    // Revenues, Assessment Library, Store. Profile+Notifications live
+    // in the header; Statistics/Expenses accessible via the drawer.
+    final showDocs  = FormFactorFeatures.of(context).showDocumentation;
+    final showStats = FormFactorFeatures.of(context).showStatistics;
+    final primaryIndices = [
+      0,  // Schedule
+      2,  // My Patients
+      if (showDocs) 1,  // Documentation
+      if (_sub.billing) 4,  // Revenues
+      if (showStats && _sub.statistics) 3,  // Statistics
+      9,  // Assessment Library
+      8,  // Store
     ];
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ── Header ────────────────────────────────────────────────────────
+        // ── Teal header ───────────────────────────────────────────────────
         Container(
-          width: double.infinity,
           decoration: const BoxDecoration(
-            gradient: DesignTokens.doctorHeaderGradient,
+            gradient: LinearGradient(
+              colors: [AppColors.primary, AppColors.primaryDark],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
           ),
           child: SafeArea(
             bottom: false,
-            child: Builder(builder: (ctx) {
-              final mobile = FormFactorFeatures.of(ctx).isMobile;
-              final photoW = mobile ? 100.0 : 130.0;
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 12, 18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Left: My Profile + Notifications nav buttons ─────
+                  // Avatar
+                  GestureDetector(
+                    onTap: () => _navigateTo(6),
+                    child: CircleAvatar(
+                      radius: 26,
+                      backgroundColor: Colors.white.withValues(alpha: 0.2),
+                      backgroundImage: photo.isNotEmpty ? NetworkImage(photo) : null,
+                      child: photo.isEmpty
+                          ? const Icon(Icons.person_rounded, color: Colors.white, size: 28)
+                          : null,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Name + spec + date
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${_showDrPrefix ? "Dr. " : ""}$name',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700),
+                        ),
+                        if (spec.isNotEmpty)
+                          Text(spec,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.80),
+                                  fontSize: 13)),
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(today,
+                              style: const TextStyle(
+                                  color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Notification bell + language toggle
                   Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _buildHeaderNavButton(
-                        icon: Icons.badge_rounded,
-                        label: s.myProfile,
-                        onTap: () => _navigateTo(6),
-                        compact: mobile,
-                      ),
-                      const SizedBox(height: 4),
-                      _buildHeaderNavButton(
                         icon: Icons.notifications_rounded,
                         label: s.notifications,
-                        badge: _doctorUnreadCount > 0
-                            ? _doctorUnreadCount
-                            : null,
+                        badge: _doctorUnreadCount > 0 ? _doctorUnreadCount : null,
                         onTap: () => _navigateTo(7),
-                        compact: mobile,
+                        compact: true,
+                      ),
+                      TextButton(
+                        onPressed: lang.toggle,
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.white70,
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(40, 28),
+                        ),
+                        child: Text(s.language,
+                            style: const TextStyle(fontSize: 10)),
                       ),
                     ],
                   ),
-                  // ── Center: name + specialisation + language toggle ───
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '${_showDrPrefix ? "Dr. " : ""}$name',
-                            textAlign: TextAlign.center,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: mobile ? 20 : 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          if (spec.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 4),
-                              decoration: BoxDecoration(
-                                color:
-                                    Colors.white.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(spec,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      color: Colors.white, fontSize: 13)),
-                            ),
-                          ],
-                          const SizedBox(height: 4),
-                          TextButton.icon(
-                            onPressed: lang.toggle,
-                            icon: const Icon(Icons.language_rounded,
-                                color: Colors.white60, size: 14),
-                            label: Text(s.language,
-                                style: const TextStyle(
-                                    color: Colors.white60,
-                                    fontSize: 11)),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  // ── Right: doctor photo ──────────────────────────────
-                  ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(80)),
-                    child: photo.isNotEmpty
-                        ? Image.network(
-                            photo,
-                            width: photoW,
-                            height: photoW,
-                            fit: BoxFit.cover,
-                            loadingBuilder: (_, child, progress) =>
-                                progress == null
-                                    ? child
-                                    : SizedBox(
-                                        width: photoW,
-                                        height: photoW,
-                                        child: const Center(
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white38,
-                                          ),
-                                        ),
-                                      ),
-                            errorBuilder: (_, __, ___) => Container(
-                              width: photoW - 20,
-                              height: photoW,
-                              alignment: Alignment.center,
-                              color: Colors.white10,
-                              child: const Icon(Icons.person_rounded,
-                                  color: Colors.white30),
-                            ),
-                          )
-                        : Container(
-                            width: photoW - 20,
-                            height: photoW,
-                            alignment: Alignment.center,
-                            color: Colors.white10,
-                            child: Icon(Icons.person_rounded,
-                                size: mobile ? 52 : 70,
-                                color: Colors.white30)),
-                  ),
                 ],
-              );
-            }),
+              ),
+            ),
           ),
         ),
 
-        // ── First-time guide (doctors only, while patient list is empty) ──
-        if (_hasPatients == false)
-          _buildAddPatientsGuide(),
-
-        // ── Tile grid ─────────────────────────────────────────────────────
+        // ── Scrollable body ───────────────────────────────────────────────
         Expanded(
-          child: LayoutBuilder(
-            builder: (ctx, constraints) {
-              final cols = constraints.maxWidth > 600 ? 4 : 2;
-              final showStats = FormFactorFeatures.of(context).showStatistics;
-              final showDocs = FormFactorFeatures.of(context).showDocumentation;
-              // Row 1: My Patients, Schedule, Documentation, PhysioGate
-              // Row 2: Revenues, Expenses, Statistics, Assessment Library
-              // My Profile (6) and Notifications (7) live in the header.
-              const displayOrder = [2, 0, 1, 8, 4, 5, 3, 9];
-              final visibleIndices = displayOrder.where((i) {
-                if (i >= sections.length) return false;
-                if (i == 3 && !showStats) return false;
-                if (i == 1 && !showDocs) return false;
-                return true;
-              }).toList();
-              return GridView.builder(
-                padding: const EdgeInsets.all(16),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: cols,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: cols == 4 ? 1.15 : 1.05,
-                ),
-                itemCount: visibleIndices.length,
-                itemBuilder: (_, i) {
-                  final idx = visibleIndices[i];
-                  return _buildHomeTile(
-                      sections[idx], _allNavIcons[idx], _allTileColors[idx], idx);
-                },
-              );
-            },
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+
+                // ── First-time guide ──────────────────────────────────────
+                if (_hasPatients == false) ...[
+                  _buildAddPatientsGuide(),
+                  const SizedBox(height: 16),
+                ],
+
+                // ── Today's Agenda ────────────────────────────────────────
+                _buildTodayAgendaCard(s),
+                const SizedBox(height: 16),
+
+                // ── Quick Access label ────────────────────────────────────
+                Text('Quick Access',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary)),
+                const SizedBox(height: 10),
+
+                // ── White tile grid ───────────────────────────────────────
+                LayoutBuilder(builder: (ctx, constraints) {
+                  final cols = constraints.maxWidth > 500 ? 4 : 3;
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: cols,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                      childAspectRatio: 1.0,
+                    ),
+                    itemCount: primaryIndices.length,
+                    itemBuilder: (_, i) {
+                      final idx = primaryIndices[i];
+                      return _buildHomeTile(
+                          sections[idx], _allNavIcons[idx], _allTileColors[idx], idx);
+                    },
+                  );
+                }),
+
+                // ── Subscription status (compact, bottom) ─────────────────
+                if (_sub.expiresAt != null) ...[
+                  const SizedBox(height: 20),
+                  _buildSubStatusBar(),
+                ],
+              ],
+            ),
           ),
         ),
+      ],
+    );
+  }
 
-        // ── Footer ────────────────────────────────────────────────────────
-        FormFactorFeatures.of(context).isMobile
-            ? _buildMobileHomeFooter(name, clinic)
-            : Container(
-                width: double.infinity,
-                color: DesignTokens.doctorHeaderGradient.colors.first,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                child: SafeArea(
-                  top: false,
-                  child: Row(children: [
-                    const Icon(Icons.monitor_heart_rounded,
-                        color: Color(0xFF4FC3F7), size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: RichText(
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                        text: TextSpan(
-                          style: const TextStyle(fontSize: 14),
-                          children: [
-                            TextSpan(
-                              text: '${_showDrPrefix ? "Dr. " : ""}$name  ',
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                            TextSpan(
-                              text: clinic,
-                              style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.55)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    // Plan & expiry
-                    Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(_sub.tier.icon, size: 11, color: Colors.white54),
-                      const SizedBox(width: 4),
-                      Text(_sub.tier.label,
-                          style: const TextStyle(
-                              color: Colors.white54,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600)),
-                      Text('  ·  ',
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.3),
-                              fontSize: 11)),
-                      Text(
-                        _sub.expiresAt == null
-                            ? 'No expiry'
-                            : _sub.isExpired
-                                ? 'Expired'
-                                : DateFormat('MMM d, yyyy')
-                                    .format(_sub.expiresAt!),
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: _sub.expiresAt != null && _sub.isExpired
-                                ? const Color(0xFFFF7043)
-                                : _sub.expiresAt != null &&
-                                        _sub.expiresAt!.isBefore(
-                                            DateTime.now()
-                                                .add(const Duration(days: 30)))
-                                    ? const Color(0xFFFFB74D)
-                                    : Colors.white54),
-                      ),
-                    ]),
-                    const SizedBox(width: 8),
-                    // Logout button
-                    TextButton.icon(
-                      onPressed: () => _showLogout(),
-                      icon: const Icon(Icons.logout_rounded,
-                          color: Colors.white54, size: 16),
-                      label: const Text('Logout',
-                          style:
-                              TextStyle(color: Colors.white54, fontSize: 12)),
-                    ),
+  Widget _buildTodayAgendaCard(AppStrings s) {
+    final today = DateFormat('EEEE, MMM d').format(DateTime.now());
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.cardBorder),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
+            child: Row(children: [
+              Container(
+                padding: const EdgeInsets.all(7),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.today_rounded, color: AppColors.primary, size: 18),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Today\'s Agenda',
+                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                  Text(today,
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 12)),
+                ]),
+              ),
+              GestureDetector(
+                onTap: () => _navigateTo(0),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text('${_todayAppts.length} sessions',
+                        style: const TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.arrow_forward_rounded,
+                        color: AppColors.primary, size: 14),
                   ]),
                 ),
               ),
-      ],
+            ]),
+          ),
+          const Divider(height: 1),
+          // Appointment rows
+          if (_todayAppts.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(children: [
+                Icon(Icons.event_available_rounded,
+                    color: Colors.grey.shade300, size: 28),
+                const SizedBox(width: 12),
+                const Text('No appointments today',
+                    style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
+              ]),
+            )
+          else
+            ...(_todayAppts.take(4).map((appt) {
+              final dt   = DateTime.parse(appt['appointment_time'] as String);
+              final name = (appt['patient_name'] as String?) ?? 'Patient';
+              final isPast = dt.isBefore(DateTime.now());
+              return InkWell(
+                onTap: () => _navigateTo(0),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(children: [
+                    // Time block
+                    Container(
+                      width: 52,
+                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      decoration: BoxDecoration(
+                        color: isPast
+                            ? const Color(0xFFF5F5F5)
+                            : AppColors.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(children: [
+                        Text(DateFormat('h:mm').format(dt),
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13,
+                                color: isPast
+                                    ? AppColors.textSecondary
+                                    : AppColors.primary)),
+                        Text(DateFormat('a').format(dt),
+                            style: TextStyle(
+                                fontSize: 10,
+                                color: isPast
+                                    ? AppColors.textSecondary
+                                    : AppColors.primary)),
+                      ]),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(name,
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: isPast
+                                  ? AppColors.textSecondary
+                                  : AppColors.textPrimary,
+                              decoration: isPast
+                                  ? TextDecoration.lineThrough
+                                  : null)),
+                    ),
+                    if (!isPast)
+                      Icon(Icons.chevron_right_rounded,
+                          color: Colors.grey.shade300, size: 18),
+                  ]),
+                ),
+              );
+            })),
+          if (_todayAppts.length > 4)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: Text('+${_todayAppts.length - 4} more',
+                  style: const TextStyle(
+                      color: AppColors.primary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500)),
+            ),
+          const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubStatusBar() {
+    final expired = _sub.isExpired;
+    final expiringSoon = !expired &&
+        _sub.expiresAt!.isBefore(DateTime.now().add(const Duration(days: 30)));
+    final color = expired
+        ? AppColors.error
+        : expiringSoon
+            ? AppColors.warning
+            : AppColors.textSecondary;
+    final text = expired
+        ? 'Subscription expired — contact admin to renew'
+        : expiringSoon
+            ? 'Expires ${DateFormat("MMM d, yyyy").format(_sub.expiresAt!)}'
+            : '${_sub.tier.label} plan · Expires ${DateFormat("MMM d, yyyy").format(_sub.expiresAt!)}';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Row(children: [
+        Icon(expired ? Icons.timer_off_rounded : Icons.info_outline_rounded,
+            color: color, size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(text,
+              style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500)),
+        ),
+        TextButton(
+          onPressed: () => _showLogout(),
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.textSecondary,
+            padding: EdgeInsets.zero,
+            minimumSize: const Size(0, 0),
+          ),
+          child: const Text('Log out', style: TextStyle(fontSize: 12)),
+        ),
+      ]),
     );
   }
 
@@ -989,95 +1106,11 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
     );
   }
 
-  /// Mobile replacement for the desktop home footer. The desktop Row above
-  /// lets the doctor's name + clinic text grow unbounded next to a Spacer
-  /// and Logout button, which overflows at narrow widths; here the identity
-  /// text is constrained to a single ellipsized line and Logout is an
-  /// icon-only button so the row always fits.
-  Widget _buildMobileHomeFooter(String name, String clinic) {
-    return Container(
-      width: double.infinity,
-      color: DesignTokens.doctorHeaderGradient.colors.first,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: SafeArea(
-        top: false,
-        child: Row(children: [
-          const Icon(Icons.monitor_heart_rounded,
-              color: Color(0xFF4FC3F7), size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: RichText(
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-              text: TextSpan(
-                style: const TextStyle(fontSize: 13),
-                children: [
-                  TextSpan(
-                    text: '${_showDrPrefix ? "Dr. " : ""}$name  ',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold),
-                  ),
-                  TextSpan(
-                    text: clinic,
-                    style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.55)),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Plan & expiry (compact, two lines)
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(_sub.tier.icon, size: 10, color: Colors.white54),
-                const SizedBox(width: 3),
-                Text(_sub.tier.label,
-                    style: const TextStyle(
-                        color: Colors.white54,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600)),
-              ]),
-              Text(
-                _sub.expiresAt == null
-                    ? 'No expiry'
-                    : _sub.isExpired
-                        ? 'Expired'
-                        : DateFormat('MMM d, yy').format(_sub.expiresAt!),
-                style: TextStyle(
-                    fontSize: 10,
-                    color: _sub.expiresAt != null && _sub.isExpired
-                        ? const Color(0xFFFF7043)
-                        : _sub.expiresAt != null &&
-                                _sub.expiresAt!.isBefore(DateTime.now()
-                                    .add(const Duration(days: 30)))
-                            ? const Color(0xFFFFB74D)
-                            : Colors.white54),
-              ),
-            ],
-          ),
-          const SizedBox(width: 6),
-          IconButton(
-            onPressed: () => _showLogout(),
-            icon: const Icon(Icons.logout_rounded,
-                color: Colors.white54, size: 20),
-            tooltip: 'Logout',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
-          ),
-        ]),
-      ),
-    );
-  }
-
   Widget _buildHomeTile(
       String title, IconData icon, Color color, int index) {
-    final locked = _isLocked(index);
-    final tileColor = locked ? color.withValues(alpha: 0.45) : color;
-    final badge = index == 7 ? _doctorUnreadCount : 0;
+    final locked    = _isLocked(index);
+    final badge     = index == 7 ? _doctorUnreadCount : 0;
+    final iconColor = locked ? Colors.grey.shade400 : color;
 
     final semanticLabel = locked
         ? '$title — locked, requires upgrade'
@@ -1090,110 +1123,108 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
       button: true,
       enabled: !locked,
       child: Material(
-      color: tileColor,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => setState(() {
-          _currentIndex = index;
-          _showHome = false;
-        }),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: locked
-                ? []
-                : [
-                    BoxShadow(
-                      color: color.withValues(alpha: 0.45),
-                      blurRadius: 10,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-          ),
-          child: Stack(
-            children: [
-              Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (index == 8)
-                      Opacity(
-                        opacity: locked ? 0.4 : 1.0,
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Image.asset(
-                            'assets/images/physiogate_logo.jpg',
-                            height: 56,
-                            width: 56,
-                            fit: BoxFit.cover,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: locked
+              ? null
+              : () => setState(() {
+                    _currentIndex = index;
+                    _showHome = false;
+                  }),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.cardBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.04),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: iconColor.withValues(
+                                alpha: locked ? 0.06 : 0.12),
+                            borderRadius: BorderRadius.circular(11),
                           ),
+                          child: index == 8
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(11),
+                                  child: Opacity(
+                                    opacity: locked ? 0.4 : 1.0,
+                                    child: Image.asset(
+                                      'assets/images/physiogate_logo.jpg',
+                                      fit: BoxFit.cover,
+                                    ),
+                                  ),
+                                )
+                              : Icon(icon, size: 22, color: iconColor),
                         ),
-                      )
-                    else
-                      Icon(icon,
-                          size: 46,
-                          color: locked
-                              ? Colors.white.withValues(alpha: 0.4)
-                              : Colors.white),
-                    const SizedBox(height: 10),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                        const SizedBox(height: 7),
+                        Text(
+                          title,
+                          style: TextStyle(
+                              color: locked
+                                  ? AppColors.textSecondary
+                                  : AppColors.textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (locked)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Icon(Icons.lock_rounded,
+                        color: Colors.grey.shade400, size: 12),
+                  ),
+                if (badge > 0)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.error,
+                        borderRadius: BorderRadius.circular(8),
+                        border:
+                            Border.all(color: Colors.white, width: 1.5),
+                      ),
                       child: Text(
-                        title,
-                        style: TextStyle(
-                            color: locked
-                                ? Colors.white.withValues(alpha: 0.5)
-                                : Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        badge > 99 ? '99+' : '$badge',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
-                  ],
-                ),
-              ),
-              if (locked)
-                Positioned(
-                  top: 8, right: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.25),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.lock_rounded,
-                        color: Colors.white, size: 14),
                   ),
-                ),
-              if (badge > 0)
-                Positioned(
-                  top: 8, right: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: Colors.white, width: 1.5),
-                    ),
-                    child: Text(
-                      badge > 99 ? '99+' : '$badge',
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
     );
   }
 

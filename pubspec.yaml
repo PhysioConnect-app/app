@@ -24,6 +24,7 @@ dependencies:
   provider: ^6.1.2
   shared_preferences: ^2.3.3
   # UI & utilities
+  google_fonts: ^6.2.1
   fl_chart: ^0.70.2
   flutter_local_notifications: ^18.0.1
   intl: ^0.20.1

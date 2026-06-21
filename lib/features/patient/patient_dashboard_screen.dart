@@ -144,20 +144,27 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
     return Directionality(
       textDirection: lang.isArabic ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF0F4F8),
+        backgroundColor: AppColors.background,
         body: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildHeader(s, lang),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 28),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _nextAppt != null
                         ? _buildUpcomingApptCard()
                         : _buildNoApptBanner(s),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 18),
+                    Text('Quick Access',
+                        style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textSecondary)),
+                    const SizedBox(height: 10),
                     _buildGrid(s),
                     const SizedBox(height: 14),
                     _buildMyExercisesTile(),
@@ -174,62 +181,75 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
   }
 
   Widget _buildHeader(AppStrings s, LanguageProvider lang) {
+    final greeting = _greeting(s);
+    final name     = _displayName();
+    final date     = DateFormat('EEEE, MMM d').format(patientDashboardClock());
+
     return Container(
       decoration: const BoxDecoration(
-        gradient: DesignTokens.patientHomeHeaderGradient,
+        gradient: LinearGradient(
+          colors: [AppColors.primary, AppColors.primaryDark],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
       ),
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 16, 22),
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 18),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Avatar — tappable → profile
+              GestureDetector(
+                onTap: () => _go(_PatientProfileScreen(profile: _profile)),
+                child: _buildProfileAvatar(),
+              ),
+              const SizedBox(width: 12),
+              // Name + greeting + date
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '${s.welcome}, ${_displayName()}!',
-                      style: const TextStyle(
-                        color: Color(0xFF0D1B4B),
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    Text(greeting,
+                        style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.80),
+                            fontSize: 13)),
+                    Text(name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700)),
                     const SizedBox(height: 4),
-                    Text(
-                      _greeting(s),
-                      style: const TextStyle(
-                        color: Color(0xFF3A5BA0),
-                        fontSize: 15,
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                    ),
-                    const SizedBox(height: 14),
-                    GestureDetector(
-                      onTap: lang.toggle,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: Colors.white38,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(mainAxisSize: MainAxisSize.min, children: [
-                          const Icon(Icons.language_rounded,
-                              color: Color(0xFF0D47A1), size: 14),
-                          const SizedBox(width: 4),
-                          Text(s.language,
-                              style: const TextStyle(
-                                  color: Color(0xFF0D47A1), fontSize: 11)),
-                        ]),
-                      ),
+                      child: Text(date,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500)),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
-              _buildProfileAvatar(),
+              // Language toggle
+              TextButton(
+                onPressed: lang.toggle,
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white70,
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(40, 32),
+                ),
+                child: Text(s.language,
+                    style: const TextStyle(fontSize: 11)),
+              ),
             ],
           ),
         ),
@@ -240,40 +260,36 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
   Widget _buildProfileAvatar() {
     final photoUrl = _profile?['profile_photo_url'] as String? ?? '';
     return Container(
-      width: 86,
-      height: 86,
+      width: 52,
+      height: 52,
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.55),
         shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF1565C0).withValues(alpha: 0.12),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: Colors.white.withValues(alpha: 0.6), width: 2),
       ),
       child: ClipOval(
         child: photoUrl.isNotEmpty
             ? Image.network(
                 photoUrl,
-                width: 86,
-                height: 86,
+                width: 52,
+                height: 52,
                 fit: BoxFit.cover,
                 loadingBuilder: (_, child, progress) => progress == null
                     ? child
-                    : const Center(
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Color(0xFF1565C0))),
-                errorBuilder: (_, __, ___) => const Icon(
-                    Icons.person_rounded,
-                    size: 44,
-                    color: Color(0xFF1565C0)),
+                    : Container(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )),
+                errorBuilder: (_, __, ___) => Container(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    child: const Icon(Icons.person_rounded,
+                        size: 28, color: Colors.white)),
               )
-            : const Icon(
-                Icons.person_rounded,
-                size: 44,
-                color: Color(0xFF1565C0),
+            : Container(
+                color: Colors.white.withValues(alpha: 0.2),
+                child: const Icon(Icons.person_rounded,
+                    size: 28, color: Colors.white),
               ),
       ),
     );
@@ -282,40 +298,58 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
   Widget _buildNoApptBanner(AppStrings s) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primary.withValues(alpha: 0.08),
+            AppColors.primaryLight.withValues(alpha: 0.15),
+          ],
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.20)),
       ),
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       child: Row(children: [
         Container(
-          width: 52,
-          height: 52,
+          width: 48,
+          height: 48,
           decoration: BoxDecoration(
-            color: const Color(0xFF1565C0).withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(14),
+            color: AppColors.primary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: const Icon(Icons.event_available_rounded,
-              color: Color(0xFF1565C0), size: 28),
+              color: AppColors.primary, size: 26),
         ),
         const SizedBox(width: 14),
         Expanded(
           child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-            Text(s.noUpcomingAppointments,
-                style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-            const SizedBox(height: 4),
-            Text(s.bookSessionToday,
-                style: const TextStyle(color: Colors.grey, fontSize: 12)),
-          ]),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(s.noUpcomingAppointments,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      color: AppColors.textPrimary)),
+              const SizedBox(height: 3),
+              Text(s.bookSessionToday,
+                  style: const TextStyle(
+                      color: AppColors.textSecondary, fontSize: 12)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: () => _go(_PatientMyDoctorsScreen(service: _service)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+            elevation: 0,
+          ),
+          child: const Text('Book', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
         ),
       ]),
     );

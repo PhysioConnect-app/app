@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'core/config/supabase_config.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'core/constants/app_colors.dart';
 import 'core/constants/app_strings.dart';
 import 'core/providers/language_provider.dart';
@@ -48,12 +49,34 @@ class MyClinicApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(
           seedColor: AppColors.primary,
           primary: AppColors.primary,
+          secondary: AppColors.accent,
           surface: AppColors.surface,
+          error: AppColors.error,
+          brightness: Brightness.light,
         ),
         useMaterial3: true,
+        // Inter — clean, professional, excellent legibility for clinical use
+        textTheme: GoogleFonts.interTextTheme(ThemeData.light().textTheme),
+        // Propagate Inter to all Material components
+        primaryTextTheme: GoogleFonts.interTextTheme(ThemeData.light().primaryTextTheme),
+        appBarTheme: AppBarTheme(
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: false,
+          titleTextStyle: GoogleFonts.inter(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
         inputDecorationTheme: InputDecorationTheme(
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
@@ -61,13 +84,38 @@ class MyClinicApp extends StatelessWidget {
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             padding: const EdgeInsets.symmetric(vertical: 14),
+            textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 15),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.primary,
+            side: const BorderSide(color: AppColors.primary),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 15),
           ),
         ),
         cardTheme: CardThemeData(
-          elevation: 1,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: AppColors.cardBorder),
+          ),
           color: Colors.white,
         ),
+        chipTheme: ChipThemeData(
+          backgroundColor: const Color(0xFFF0F9F7),
+          selectedColor: AppColors.primary,
+          labelStyle: GoogleFonts.inter(fontSize: 13),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        ),
+        dividerTheme: const DividerThemeData(
+          color: AppColors.cardBorder,
+          thickness: 1,
+          space: 1,
+        ),
+        scaffoldBackgroundColor: AppColors.background,
       ),
       home: const AuthGate(),
     );
