@@ -190,3 +190,62 @@ alter publication supabase_realtime add table public.messages;
 alter publication supabase_realtime add table public.chat_rooms;
 alter publication supabase_realtime add table public.notifications;
 alter publication supabase_realtime add table public.appointments;
+
+-- ── Home Exercise Programs (HEP) ─────────────────────────────────────────────
+
+create table public.hep_programs (
+  id          uuid        primary key default gen_random_uuid(),
+  doctor_id   uuid        not null references public.users(id) on delete cascade,
+  patient_id  uuid        not null references public.users(id) on delete cascade,
+  title       text        not null,
+  notes_en    text        not null default '',
+  status      text        not null default 'active',
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now(),
+  deleted_at  timestamptz
+);
+
+create or replace function public.update_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+create trigger hep_programs_updated_at
+  before update on public.hep_programs
+  for each row execute function public.update_updated_at();
+
+create table public.hep_items (
+  id              uuid primary key default gen_random_uuid(),
+  hep_id          uuid not null references public.hep_programs(id) on delete cascade,
+  exercise_id     text not null,
+  sets            int  not null default 3,
+  reps            int  not null default 10,
+  hold_sec        int  not null default 2,
+  freq_per_week   int  not null default 7,
+  custom_note_en  text not null default '',
+  sort_order      int  not null default 0
+);
+
+-- RLS
+alter table public.hep_programs enable row level security;
+alter table public.hep_items    enable row level security;
+
+create policy "doctor manages own hep_programs"
+  on public.hep_programs for all
+  using (doctor_id = auth.uid());
+
+create policy "patient reads own hep_programs"
+  on public.hep_programs for select
+  using (patient_id = auth.uid());
+
+create policy "hep_items follow program access"
+  on public.hep_items for all
+  using (
+    hep_id in (
+      select id from public.hep_programs
+      where doctor_id = auth.uid() or patient_id = auth.uid()
+    )
+  );
