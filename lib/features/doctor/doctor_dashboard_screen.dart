@@ -113,9 +113,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   // null = stream not yet received; true/false = confirmed state
   bool? _hasPatients;
   Timer? _expiryTimer;
-  // Today's appointments for the Agenda card on the home screen
-  List<Map<String, dynamic>> _todayAppts = [];
-  StreamSubscription<List<Map<String, dynamic>>>? _todayApptsListener;
   // Tracks last-known expiry state so the 30-s timer only triggers a rebuild
   // when the value actually changes, avoiding unnecessary full-tree rebuilds.
   bool _wasExpired = false;
@@ -170,25 +167,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
       _patientsListener = _service.getAssignedPatients().listen((list) {
         if (mounted) setState(() => _hasPatients = list.isNotEmpty);
       });
-      // Stream today's appointments for the home Agenda card
-      final todayStart = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
-      final todayEnd   = todayStart.add(const Duration(days: 1));
-      _todayApptsListener = Supabase.instance.client
-          .from('appointments').stream(primaryKey: ['id']).eq('doctor_id', uid)
-          .listen((list) {
-        if (!mounted) return;
-        final filtered = list.where((a) {
-          final t = DateTime.tryParse(a['appointment_time'] as String? ?? '');
-          final status = (a['status'] as String?) ?? '';
-          return t != null && !t.isBefore(todayStart) && t.isBefore(todayEnd) && status != 'cancelled';
-        }).toList()
-          ..sort((a, b) {
-            final at = DateTime.parse(a['appointment_time'] as String);
-            final bt = DateTime.parse(b['appointment_time'] as String);
-            return at.compareTo(bt);
-          });
-        setState(() => _todayAppts = filtered);
-      });
       _notifListener = Supabase.instance.client
           .from('notifications').stream(primaryKey: ['id'])
           .eq('recipient_id', uid)
@@ -229,7 +207,6 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     _subListener?.cancel();
     _notifListener?.cancel();
     _patientsListener?.cancel();
-    _todayApptsListener?.cancel();
     _expiryTimer?.cancel();
     _nameCtrl.dispose();
     _bioCtrl.dispose();
@@ -653,21 +630,19 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
       s.notifications, s.store, s.assessmentLibrary,
     ];
 
-    // Primary tiles shown on home: Schedule, Patients, Documentation,
-    // Revenues, Assessment Library, Store. Profile+Notifications live
-    // in the header; Statistics/Expenses accessible via the drawer.
-    final showDocs  = FormFactorFeatures.of(context).showDocumentation;
-    final showStats = FormFactorFeatures.of(context).showStatistics;
-    final primaryIndices = [
-      0,  // Schedule
+    // Fixed 4×2 grid layout.
+    // Row 1: My Patients | Schedule | Documentation | Assessment Library
+    // Row 2: Revenues    | Expenses | Statistics    | PhysioGate
+    // My Profile lives in the header only (not in the grid).
+    const primaryIndices = [
       2,  // My Patients
-      if (showDocs) 1,  // Documentation
-      if (_sub.billing)    4,  // Revenues
-      if (_sub.expenses)   5,  // Expenses
-      if (showStats && _sub.statistics) 3,  // Statistics
-      6,  // My Profile
+      0,  // Schedule
+      1,  // Documentation
       9,  // Assessment Library
-      8,  // Store
+      4,  // Revenues
+      5,  // Expenses
+      3,  // Statistics
+      8,  // PhysioGate
     ];
 
     return Column(
@@ -814,13 +789,6 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
             child: _buildAddPatientsGuide(),
           ),
 
-        // ── Compact agenda card (fixed, always visible) ───────────────────
-        if (_hasPatients != false)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-            child: _buildTodayAgendaCard(s),
-          ),
-
         // ── Tile grid fills all remaining space ───────────────────────────
         Expanded(
           child: Padding(
@@ -836,21 +804,27 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                 const SizedBox(height: 8),
                 Expanded(
                   child: LayoutBuilder(builder: (ctx, constraints) {
-                    final cols = constraints.maxWidth > 500 ? 5 : 3;
-                    return GridView.builder(
+                    const cols    = 4;
+                    const rows    = 2;
+                    const spacing = 8.0;
+                    final tileW = (constraints.maxWidth - (cols - 1) * spacing) / cols;
+                    // On portrait/narrow screens the available height is much larger
+                    // than the width, which would make tiles very tall and their
+                    // content tiny. Cap tileH so childAspectRatio = tileW/tileH
+                    // stays ≥ 0.82 (tiles no taller than ~1.22× their width).
+                    final rawTileH = (constraints.maxHeight - (rows - 1) * spacing) / rows;
+                    final tileH   = rawTileH.clamp(0.0, tileW / 0.82);
+                    final ratio   = tileW / tileH;
+                    return GridView.count(
+                      crossAxisCount: cols,
+                      crossAxisSpacing: spacing,
+                      mainAxisSpacing: spacing,
+                      childAspectRatio: ratio,
                       physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: cols,
-                        crossAxisSpacing: 8,
-                        mainAxisSpacing: 8,
-                        childAspectRatio: 1.1,
-                      ),
-                      itemCount: primaryIndices.length,
-                      itemBuilder: (_, i) {
-                        final idx = primaryIndices[i];
-                        return _buildHomeTile(
-                            sections[idx], _allNavIcons[idx], _allTileColors[idx], idx);
-                      },
+                      shrinkWrap: true,
+                      children: primaryIndices.map((idx) => _buildHomeTile(
+                          sections[idx], _allNavIcons[idx], _allTileColors[idx], idx,
+                          tileW: tileW, tileH: tileH)).toList(),
                     );
                   }),
                 ),
@@ -863,151 +837,6 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildTodayAgendaCard(AppStrings s) {
-    final today = DateFormat('EEEE, MMM d').format(DateTime.now());
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.cardBorder),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header row
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
-            child: Row(children: [
-              Container(
-                padding: const EdgeInsets.all(7),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.today_rounded, color: AppColors.primary, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Today\'s Agenda',
-                      style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                  Text(today,
-                      style: const TextStyle(
-                          color: AppColors.textSecondary, fontSize: 12)),
-                ]),
-              ),
-              GestureDetector(
-                onTap: () => _navigateTo(0),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text('${_todayAppts.length} sessions',
-                        style: const TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600)),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.arrow_forward_rounded,
-                        color: AppColors.primary, size: 14),
-                  ]),
-                ),
-              ),
-            ]),
-          ),
-          const Divider(height: 1),
-          // Appointment rows
-          if (_todayAppts.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(children: [
-                Icon(Icons.event_available_rounded,
-                    color: Colors.grey.shade300, size: 28),
-                const SizedBox(width: 12),
-                const Text('No appointments today',
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 14)),
-              ]),
-            )
-          else
-            ...(_todayAppts.take(4).map((appt) {
-              final dt   = DateTime.parse(appt['appointment_time'] as String);
-              final name = (appt['patient_name'] as String?) ?? 'Patient';
-              final isPast = dt.isBefore(DateTime.now());
-              return InkWell(
-                onTap: () => _navigateTo(0),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  child: Row(children: [
-                    // Time block
-                    Container(
-                      width: 52,
-                      padding: const EdgeInsets.symmetric(vertical: 5),
-                      decoration: BoxDecoration(
-                        color: isPast
-                            ? const Color(0xFFF5F5F5)
-                            : AppColors.primary.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(children: [
-                        Text(DateFormat('h:mm').format(dt),
-                            style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                                color: isPast
-                                    ? AppColors.textSecondary
-                                    : AppColors.primary)),
-                        Text(DateFormat('a').format(dt),
-                            style: TextStyle(
-                                fontSize: 10,
-                                color: isPast
-                                    ? AppColors.textSecondary
-                                    : AppColors.primary)),
-                      ]),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(name,
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: isPast
-                                  ? AppColors.textSecondary
-                                  : AppColors.textPrimary,
-                              decoration: isPast
-                                  ? TextDecoration.lineThrough
-                                  : null)),
-                    ),
-                    if (!isPast)
-                      Icon(Icons.chevron_right_rounded,
-                          color: Colors.grey.shade300, size: 18),
-                  ]),
-                ),
-              );
-            })),
-          if (_todayAppts.length > 4)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-              child: Text('+${_todayAppts.length - 4} more',
-                  style: const TextStyle(
-                      color: AppColors.primary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500)),
-            ),
-          const SizedBox(height: 4),
-        ],
-      ),
     );
   }
 
@@ -1211,10 +1040,19 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
   }
 
   Widget _buildHomeTile(
-      String title, IconData icon, Color color, int index) {
+      String title, IconData icon, Color color, int index,
+      {double tileW = 80, double tileH = 80}) {
     final locked    = _isLocked(index);
     final badge     = index == 7 ? _doctorUnreadCount : 0;
     final iconColor = locked ? Colors.grey.shade400 : color;
+
+    // Scale all visual elements to fill the tile without overflow.
+    final boxSize  = (tileW * 0.42).clamp(28.0, 64.0);
+    final iconSize = (boxSize  * 0.54).clamp(16.0, 34.0);
+    final gap      = (tileH   * 0.06).clamp(3.0,  10.0);
+    final fontSize = (tileW   * 0.13).clamp(9.0,  14.0);
+    final pad      = (tileW   * 0.06).clamp(4.0,  12.0);
+    final radius   = (tileW   * 0.15).clamp(8.0,  16.0);
 
     final semanticLabel = locked
         ? '$title — locked, requires upgrade'
@@ -1239,7 +1077,7 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                   }),
           child: Container(
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(radius),
               border: Border.all(color: AppColors.cardBorder),
               boxShadow: [
                 BoxShadow(
@@ -1253,21 +1091,21 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
               children: [
                 Center(
                   child: Padding(
-                    padding: const EdgeInsets.all(8),
+                    padding: EdgeInsets.all(pad),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Container(
-                          width: 42,
-                          height: 42,
+                          width: boxSize,
+                          height: boxSize,
                           decoration: BoxDecoration(
                             color: iconColor.withValues(
                                 alpha: locked ? 0.06 : 0.12),
-                            borderRadius: BorderRadius.circular(11),
+                            borderRadius: BorderRadius.circular(radius * 0.75),
                           ),
                           child: index == 8
                               ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
+                                  borderRadius: BorderRadius.circular(radius * 0.75 - 1),
                                   child: Opacity(
                                     opacity: locked ? 0.4 : 1.0,
                                     child: Image.asset(
@@ -1276,9 +1114,9 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                                     ),
                                   ),
                                 )
-                              : Icon(icon, size: 22, color: iconColor),
+                              : Icon(icon, size: iconSize, color: iconColor),
                         ),
-                        const SizedBox(height: 7),
+                        SizedBox(height: gap),
                         Text(
                           title,
                           style: TextStyle(
@@ -1286,7 +1124,7 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                                   ? AppColors.textSecondary
                                   : AppColors.textPrimary,
                               fontWeight: FontWeight.w600,
-                              fontSize: 11),
+                              fontSize: fontSize),
                           textAlign: TextAlign.center,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
