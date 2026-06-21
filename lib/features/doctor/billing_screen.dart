@@ -18,30 +18,27 @@ import 'import_help_sheet.dart';
 
 // ── Status helpers ─────────────────────────────────────────────────────────
 
-enum _InvStatus { pending, paid, partiallyPaid, insuranceClaim, cancelled, awaitingReview }
+enum _InvStatus { pending, paid, partiallyPaid, cancelled, awaitingReview }
 
 extension _InvStatusX on _InvStatus {
   String get key => switch (this) {
     _InvStatus.pending        => 'pending',
     _InvStatus.paid           => 'paid',
     _InvStatus.partiallyPaid  => 'partially_paid',
-    _InvStatus.insuranceClaim => 'insurance_claim',
     _InvStatus.cancelled      => 'cancelled',
     _InvStatus.awaitingReview => 'awaiting_review',
   };
   String label(AppStrings s) => switch (this) {
     _InvStatus.pending        => s.statusPending,
     _InvStatus.paid           => s.statusPaid,
-    _InvStatus.partiallyPaid  => 'Partially\nPaid',
-    _InvStatus.insuranceClaim => 'Insurance\nClaim',
+    _InvStatus.partiallyPaid  => 'Part. Paid',
     _InvStatus.cancelled      => s.statusCancelled,
-    _InvStatus.awaitingReview => 'Awaiting\nReview',
+    _InvStatus.awaitingReview => 'In Review',
   };
   Color get color => switch (this) {
     _InvStatus.pending        => const Color(0xFFF57F17),
     _InvStatus.paid           => const Color(0xFF2E7D32),
     _InvStatus.partiallyPaid  => const Color(0xFFE65100),
-    _InvStatus.insuranceClaim => const Color(0xFF546E7A),
     _InvStatus.cancelled      => const Color(0xFFC62828),
     _InvStatus.awaitingReview => const Color(0xFF1565C0),
   };
@@ -49,7 +46,6 @@ extension _InvStatusX on _InvStatus {
   static _InvStatus fromString(String? raw) => switch (raw) {
     'paid'             => _InvStatus.paid,
     'partially_paid'   => _InvStatus.partiallyPaid,
-    'insurance_claim'  => _InvStatus.insuranceClaim,
     'cancelled'        => _InvStatus.cancelled,
     'awaiting_review'  => _InvStatus.awaitingReview,
     _                  => _InvStatus.pending,
@@ -336,11 +332,10 @@ class _BillingScreenState extends State<BillingScreen> {
                   filled: true, fillColor: Colors.white,
                 ),
                 items: [_InvStatus.pending, _InvStatus.paid,
-                        _InvStatus.partiallyPaid,
-                        _InvStatus.insuranceClaim].map((st) =>
-                  DropdownMenuItem(
+                        _InvStatus.partiallyPaid].map((st) =>
+                  DropdownMenuItem<_InvStatus>(
                     value: st,
-                    child: Text(st.label(s).replaceAll('\n', ' ')),
+                    child: Text(st.label(s)),
                   )).toList(),
                 onChanged: (v) => set(() => status = v!),
               ),
@@ -1020,75 +1015,6 @@ class _BillingScreenState extends State<BillingScreen> {
     await downloadExcel(Uint8List.fromList(bytes), 'billing_${_period}_export.xlsx');
   }
 
-  // ── Submit insurance claim ──────────────────────────────────────────────
-
-  void _showInsuranceClaim(List<Map<String, dynamic>> pending, AppStrings s) {
-    if (pending.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No pending invoices to submit.')));
-      return;
-    }
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(children: [
-              const Icon(Icons.shield_rounded, color: _kAccent),
-              const SizedBox(width: 10),
-              const Text('Submit Insurance Claim',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
-            ]),
-          ),
-          const Divider(height: 1),
-          Flexible(
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: pending.length,
-              itemBuilder: (_, i) {
-                final d = pending[i];
-                return ListTile(
-                  leading: const Icon(Icons.receipt_outlined, color: _kAccent),
-                  title: Text(d['patient_name'] ?? 'Patient',
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(
-                    'USD ${(d['amount'] as num?)?.toStringAsFixed(2) ?? '0.00'}  •  ${d['service'] ?? ''}'),
-                  trailing: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF546E7A),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    onPressed: () async {
-                      await _updateStatus(
-                          d['id'] as String, _InvStatus.insuranceClaim);
-                      if (!ctx.mounted) return;
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Insurance claim submitted!'),
-                          backgroundColor: AppColors.success,
-                        ));
-                    },
-                    child: const Text('Submit'),
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-      ),
-    );
-  }
-
   // ── Build ───────────────────────────────────────────────────────────────
 
   @override
@@ -1135,9 +1061,7 @@ class _BillingScreenState extends State<BillingScreen> {
           double collected    = 0; // paid amounts + partial-paid portions
           double pendingOnly  = 0; // pending (non-overdue) + remaining partial
           double overdueAmt   = 0; // pending invoices > 30 days old
-          double insuranceTotal = 0;
           int    invoiceCount = 0;
-          final  pendingDocs  = <Map<String, dynamic>>[];
           final  overdueThreshold =
               DateTime.now().subtract(const Duration(days: 30));
 
@@ -1161,7 +1085,6 @@ class _BillingScreenState extends State<BillingScreen> {
                 collected   += paidAmt;
                 pendingOnly += (amt - paidAmt).clamp(0, double.infinity);
               case _InvStatus.pending:
-                pendingDocs.add(d);
                 final dateStr = d['invoice_date'] as String? ??
                     d['created_at'] as String?;
                 final dt = dateStr != null
@@ -1172,15 +1095,13 @@ class _BillingScreenState extends State<BillingScreen> {
                 } else {
                   pendingOnly += amt;
                 }
-              case _InvStatus.insuranceClaim:
-                insuranceTotal += amt;
               case _InvStatus.cancelled:
               case _InvStatus.awaitingReview:
                 break;
             }
           }
 
-          final pendingTotal = pendingOnly + insuranceTotal;
+          final pendingTotal = pendingOnly;
           final invoiced     = collected + pendingTotal + overdueAmt;
 
           return LayoutBuilder(
@@ -1203,7 +1124,7 @@ class _BillingScreenState extends State<BillingScreen> {
                       ? _desktopTable(filtered, s)
                       : _narrowLayout(s, filtered),
                   ),
-                  _bottomBar(s, filtered, pendingDocs, isDesktop: isDesktop),
+                  _bottomBar(s, filtered, isDesktop: isDesktop),
                 ],
               );
             },
@@ -1330,7 +1251,7 @@ class _BillingScreenState extends State<BillingScreen> {
                   icon: const Icon(Icons.arrow_drop_down_rounded,
                       color: Colors.white),
                   items: [null, 'awaiting_review', 'pending', 'paid',
-                          'partially_paid', 'insurance_claim', 'cancelled']
+                          'partially_paid', 'cancelled']
                       .map((st) => DropdownMenuItem(
                         value: st,
                         child: Row(children: [
@@ -1366,18 +1287,66 @@ class _BillingScreenState extends State<BillingScreen> {
       return Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Icon(Icons.receipt_long_outlined,
-              size: 50, color: Colors.grey.shade300),
-          const SizedBox(height: 10),
+              size: 56, color: Colors.grey.shade300),
+          const SizedBox(height: 12),
           Text(s.noData,
-              style: const TextStyle(color: AppColors.textSecondary)),
+              style: const TextStyle(
+                  color: AppColors.textSecondary, fontSize: 15)),
+          const SizedBox(height: 4),
+          Text('No invoices in this period',
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 13)),
         ]),
       );
     }
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 96),
-      itemCount: filtered.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (_, i) => _compactInvoiceCard(filtered[i], s),
+
+    // Group invoices by calendar date (list is already newest-first).
+    final groups = <String, List<Map<String, dynamic>>>{};
+    for (final inv in filtered) {
+      final tsStr = inv['invoice_date'] as String? ?? inv['created_at'] as String?;
+      final key = tsStr != null
+          ? DateFormat('MMM d, yyyy').format(DateTime.parse(tsStr))
+          : 'Unknown';
+      groups.putIfAbsent(key, () => []).add(inv);
+    }
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Text(
+            '${filtered.length} invoice${filtered.length == 1 ? '' : 's'}',
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade500),
+          ),
+        ),
+        for (final entry in groups.entries) ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 6),
+            child: Row(children: [
+              Container(
+                width: 3, height: 13,
+                decoration: BoxDecoration(
+                    color: _kAccent,
+                    borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(width: 7),
+              Text(entry.key,
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.grey.shade600,
+                      letterSpacing: 0.2)),
+            ]),
+          ),
+          for (final inv in entry.value) ...[
+            _compactInvoiceCard(inv, s),
+            const SizedBox(height: 6),
+          ],
+        ],
+      ],
     );
   }
 
@@ -1542,14 +1511,6 @@ class _BillingScreenState extends State<BillingScreen> {
                     SizedBox(width: 8),
                     Text('Mark Partially Paid'),
                   ])),
-            if (st != _InvStatus.insuranceClaim)
-              const PopupMenuItem(value: 'insurance_claim',
-                  child: Row(children: [
-                    Icon(Icons.shield_rounded,
-                        color: Color(0xFF546E7A), size: 18),
-                    SizedBox(width: 8),
-                    Text('Insurance Claim'),
-                  ])),
             if (st != _InvStatus.cancelled)
               PopupMenuItem(value: _InvStatus.cancelled.key,
                   child: Row(children: [
@@ -1580,124 +1541,176 @@ class _BillingScreenState extends State<BillingScreen> {
       );
 
   // ── Compact invoice card (mobile) ─────────────────────────────────────────
+  //
+  // Layout: [status strip] [icon] [name / date·svc subtext] [amount / badge] [⋮]
+  // Amount uses explicit LTR direction so "USD X,XXX.XX" never reverses in RTL.
 
   Widget _compactInvoiceCard(Map<String, dynamic> d, AppStrings s) {
-    final name   = (d['patient_name'] as String?) ?? 'Patient';
-    final tsStr  = d['invoice_date'] as String? ?? d['created_at'] as String?;
-    final date   = tsStr != null
+    final name    = (d['patient_name'] as String?) ?? 'Patient';
+    final tsStr   = d['invoice_date'] as String? ?? d['created_at'] as String?;
+    final date    = tsStr != null
         ? DateFormat('MMM d, yyyy').format(DateTime.parse(tsStr))
         : '—';
-    final svc    = (d['service'] as String?) ?? 'Physical Therapy';
-    final amt    = (d['amount'] as num?)?.toDouble() ?? 0;
-    final st     = _InvStatusX.fromString(d['status'] as String?);
-    final docId  = d['id'] as String;
+    final svc     = (d['service'] as String?) ?? 'Physical Therapy';
+    final amt     = (d['amount'] as num?)?.toDouble() ?? 0;
+    final paidAmt = (d['paid_amount'] as num?)?.toDouble();
+    final st      = _InvStatusX.fromString(d['status'] as String?);
+    final docId   = d['id'] as String;
 
     return Card(
-      elevation: 1,
+      elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              Expanded(
-                child: Text(name,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 15),
-                    overflow: TextOverflow.ellipsis),
+      color: Colors.white,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Status color strip
+              Container(width: 4, color: st.color),
+
+              // Leading category icon
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: Container(
+                    width: 34, height: 34,
+                    decoration: BoxDecoration(
+                      color: st.color.withValues(alpha: 0.10),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.receipt_long_rounded,
+                        color: st.color, size: 15),
+                  ),
+                ),
               ),
-              const SizedBox(width: 8),
-              Text(_fmtAmt(amt),
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 15)),
-              PopupMenuButton<String>(
-                icon: Icon(Icons.more_vert_rounded,
-                    color: Colors.grey.shade400, size: 18),
-                onSelected: (v) async {
-                  if (v == '__edit__') {
-                    _showEditInvoice(d, s);
-                    return;
-                  }
-                  if (v == '__review__') {
-                    _showReviewSheet(d);
-                    return;
-                  }
-                  if (v == '__partial__') {
-                    _showMarkPartialSheet(docId, amt);
-                    return;
-                  }
-                  await _updateStatus(docId, _InvStatusX.fromString(v));
-                },
-                itemBuilder: (_) => [
-                  const PopupMenuItem(value: '__edit__',
-                      child: Row(children: [
-                        Icon(Icons.edit_rounded,
-                            color: Color(0xFF1565C0), size: 18),
-                        SizedBox(width: 8),
-                        Text('Edit'),
-                      ])),
-                  if (st == _InvStatus.awaitingReview)
-                    const PopupMenuItem(value: '__review__',
+
+              // Primary label + secondary subtext
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 11, 8, 11),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(name,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1),
+                      const SizedBox(height: 2),
+                      Text('$date · $svc',
+                          style: TextStyle(
+                              color: Colors.grey.shade500, fontSize: 11),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1),
+                      if (st == _InvStatus.partiallyPaid && paidAmt != null) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          'Paid: ${_fmtAmt(paidAmt)}  ·  Rem: ${_fmtAmt((amt - paidAmt).clamp(0, double.infinity))}',
+                          style: const TextStyle(
+                              fontSize: 10, color: Color(0xFFE65100),
+                              fontWeight: FontWeight.w500),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+
+              // Trailing: amount (color-coded, LTR-pinned) + status badge
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(_fmtAmt(amt),
+                        textDirection: TextDirection.ltr,
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: st.color)),
+                    const SizedBox(height: 4),
+                    _statusBadge(st, s),
+                  ],
+                ),
+              ),
+
+              // Actions menu
+              Center(
+                child: PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert_rounded,
+                      color: Colors.grey.shade400, size: 18),
+                  onSelected: (v) async {
+                    if (v == '__edit__') {
+                      _showEditInvoice(d, s);
+                      return;
+                    }
+                    if (v == '__review__') {
+                      _showReviewSheet(d);
+                      return;
+                    }
+                    if (v == '__partial__') {
+                      _showMarkPartialSheet(docId, amt);
+                      return;
+                    }
+                    await _updateStatus(docId, _InvStatusX.fromString(v));
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: '__edit__',
                         child: Row(children: [
-                          Icon(Icons.rate_review_rounded,
+                          Icon(Icons.edit_rounded,
                               color: Color(0xFF1565C0), size: 18),
                           SizedBox(width: 8),
-                          Text('Review Session',
-                              style: TextStyle(
-                                  color: Color(0xFF1565C0),
-                                  fontWeight: FontWeight.bold)),
+                          Text('Edit'),
                         ])),
-                  if (st != _InvStatus.paid)
-                    PopupMenuItem(value: _InvStatus.paid.key,
-                        child: Row(children: [
-                          const Icon(Icons.check_circle_rounded,
-                              color: Color(0xFF2E7D32), size: 18),
-                          const SizedBox(width: 8),
-                          Text(s.markAsPaid),
-                        ])),
-                  if (st != _InvStatus.partiallyPaid)
-                    const PopupMenuItem(value: '__partial__',
-                        child: Row(children: [
-                          Icon(Icons.payments_rounded,
-                              color: Color(0xFFE65100), size: 18),
-                          SizedBox(width: 8),
-                          Text('Mark Partially Paid'),
-                        ])),
-                  if (st != _InvStatus.insuranceClaim)
-                    const PopupMenuItem(value: 'insurance_claim',
-                        child: Row(children: [
-                          Icon(Icons.shield_rounded,
-                              color: Color(0xFF546E7A), size: 18),
-                          SizedBox(width: 8),
-                          Text('Insurance Claim'),
-                        ])),
-                  if (st != _InvStatus.cancelled)
-                    PopupMenuItem(value: _InvStatus.cancelled.key,
-                        child: Row(children: [
-                          const Icon(Icons.cancel_rounded,
-                              color: AppColors.error, size: 18),
-                          const SizedBox(width: 8),
-                          Text(s.statusCancelled,
-                              style: const TextStyle(
-                                  color: AppColors.error)),
-                        ])),
-                ],
+                    if (st == _InvStatus.awaitingReview)
+                      const PopupMenuItem(value: '__review__',
+                          child: Row(children: [
+                            Icon(Icons.rate_review_rounded,
+                                color: Color(0xFF1565C0), size: 18),
+                            SizedBox(width: 8),
+                            Text('Review Session',
+                                style: TextStyle(
+                                    color: Color(0xFF1565C0),
+                                    fontWeight: FontWeight.bold)),
+                          ])),
+                    if (st != _InvStatus.paid)
+                      PopupMenuItem(value: _InvStatus.paid.key,
+                          child: Row(children: [
+                            const Icon(Icons.check_circle_rounded,
+                                color: Color(0xFF2E7D32), size: 18),
+                            const SizedBox(width: 8),
+                            Text(s.markAsPaid),
+                          ])),
+                    if (st != _InvStatus.partiallyPaid)
+                      const PopupMenuItem(value: '__partial__',
+                          child: Row(children: [
+                            Icon(Icons.payments_rounded,
+                                color: Color(0xFFE65100), size: 18),
+                            SizedBox(width: 8),
+                            Text('Mark Partially Paid'),
+                          ])),
+                    if (st != _InvStatus.cancelled)
+                      PopupMenuItem(value: _InvStatus.cancelled.key,
+                          child: Row(children: [
+                            const Icon(Icons.cancel_rounded,
+                                color: AppColors.error, size: 18),
+                            const SizedBox(width: 8),
+                            Text(s.statusCancelled,
+                                style:
+                                    const TextStyle(color: AppColors.error)),
+                          ])),
+                  ],
+                ),
               ),
-            ]),
-            const SizedBox(height: 6),
-            Row(children: [
-              Expanded(
-                child: Text('$svc · $date',
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 13),
-                    overflow: TextOverflow.ellipsis),
-              ),
-              const SizedBox(width: 8),
-              _statusBadge(st, s),
-            ]),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1821,11 +1834,10 @@ class _BillingScreenState extends State<BillingScreen> {
                     if (status == _InvStatus.awaitingReview)
                       _InvStatus.awaitingReview,
                     _InvStatus.pending, _InvStatus.paid,
-                    _InvStatus.partiallyPaid, _InvStatus.insuranceClaim,
-                    _InvStatus.cancelled,
-                  ].map((st) => DropdownMenuItem(
+                    _InvStatus.partiallyPaid, _InvStatus.cancelled,
+                  ].map((st) => DropdownMenuItem<_InvStatus>(
                         value: st,
-                        child: Text(st.label(s).replaceAll('\n', ' ')),
+                        child: Text(st.label(s)),
                       )).toList(),
                   onChanged: (v) => set(() => status = v!),
                 ),
@@ -1950,7 +1962,6 @@ class _BillingScreenState extends State<BillingScreen> {
 
   Widget _bottomBar(AppStrings s,
       List<Map<String, dynamic>> filtered,
-      List<Map<String, dynamic>> pendingDocs,
       {bool isDesktop = true}) {
     return Container(
       color: Colors.white,
@@ -1980,9 +1991,8 @@ class _BillingScreenState extends State<BillingScreen> {
               ),
               const SizedBox(height: 8),
             ],
-            Row(children: [
-              if (FormFactorFeatures.of(context)
-                  .showBillingImportExport) ...[
+            if (FormFactorFeatures.of(context).showBillingImportExport)
+              Row(children: [
                 Expanded(
                   child: _smallActionBtn(
                     icon: Icons.download_rounded,
@@ -1990,17 +2000,6 @@ class _BillingScreenState extends State<BillingScreen> {
                     onTap: () => _showExport(filtered, s),
                   ),
                 ),
-                const SizedBox(width: 7),
-              ],
-              Expanded(
-                child: _smallActionBtn(
-                  icon: Icons.shield_rounded,
-                  label: 'Insurance',
-                  onTap: () => _showInsuranceClaim(pendingDocs, s),
-                ),
-              ),
-              if (FormFactorFeatures.of(context)
-                  .showBillingImportExport) ...[
                 const SizedBox(width: 7),
                 Expanded(
                   child: _smallActionBtn(
@@ -2020,7 +2019,7 @@ class _BillingScreenState extends State<BillingScreen> {
                     ],
                     examples: [
                       ['John Smith', 'Physical Therapy', '01/15/2024',
-                       '150', 'paid', 'Insurance'],
+                       '150', 'paid', ''],
                       ['Sara Lee', 'Follow-up Session', '02/10/2024',
                        '80', 'pending', ''],
                     ],
@@ -2043,8 +2042,7 @@ class _BillingScreenState extends State<BillingScreen> {
                         color: Colors.grey.shade600, size: 20),
                   ),
                 ),
-              ],
-            ]),
+              ]),
           ],
         ),
     );
