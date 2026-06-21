@@ -112,4 +112,50 @@ class AdminService {
       'duplicateIds': duplicateIds,
     });
   }
+
+  // ── Approve a therapist account request ──────────────────────────────────────
+  //
+  // Creates the doctor account then marks the request row as 'approved'.
+  // Returns null on success or an error string on failure.
+
+  Future<String?> approveAccountRequest({
+    required String requestId,
+    required String name,
+    required String email,
+    required String password,
+    required String specialty,
+  }) async {
+    final error = await createDoctorAccount(
+      name: name,
+      email: email,
+      password: password,
+      specialty: specialty,
+    );
+    if (error != null) return error;
+    try {
+      await _supabase
+          .from('account_requests')
+          .update({'status': 'approved'})
+          .eq('id', requestId);
+      return null;
+    } catch (e) {
+      if (kDebugMode) debugPrint('approveAccountRequest update error: $e');
+      return e.toString();
+    }
+  }
+
+  // ── Decline a therapist account request ──────────────────────────────────────
+
+  Future<String?> declineAccountRequest(String requestId) async {
+    try {
+      await _supabase
+          .from('account_requests')
+          .update({'status': 'declined'})
+          .eq('id', requestId);
+      return null;
+    } catch (e) {
+      if (kDebugMode) debugPrint('declineAccountRequest error: $e');
+      return e.toString();
+    }
+  }
 }
