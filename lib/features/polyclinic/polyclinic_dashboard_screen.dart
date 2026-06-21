@@ -5,9 +5,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import '../../core/constants/app_colors.dart';
 
-const _kTeal  = Color(0xFF00695C);
-const _kNavy  = Color(0xFF1A3A5C);
-const _kBlue  = Color(0xFF1565C0);
+// Unified teal brand — all polyclinic UI derives from these two tokens
+const _kTeal = AppColors.primary;      // 0xFF00897B
+const _kNavy = AppColors.primaryDark;  // 0xFF005B4F
+const _kBlue = AppColors.primary;      // same teal, no more competing blue
 
 // ── tiny helpers ─────────────────────────────────────────────────────────────
 
@@ -200,7 +201,7 @@ class _PolyclinicDashboardScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEBF2FB),
+      backgroundColor: AppColors.background,
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: _supabase.from('users').stream(primaryKey: ['id']).eq('id', _uid),
         builder: (context, snap) {
@@ -238,7 +239,7 @@ class _PolyclinicDashboardScreenState
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [_kTeal, Color(0xFF004D40)],
+          colors: [AppColors.primary, AppColors.primaryDark],
         ),
       ),
       child: SafeArea(
@@ -310,7 +311,7 @@ class _PolyclinicDashboardScreenState
 
   Widget _buildDoctorsTab(List<String> linkedIds) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEBF2FB),
+      backgroundColor: AppColors.background,
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: _kTeal,
         foregroundColor: Colors.white,
@@ -1004,11 +1005,11 @@ class _IncomeTabState extends State<_IncomeTab> {
                 Row(children: [
                   Expanded(child: _summaryCard(
                       'Revenue', 'USD ${totalRevenue.toStringAsFixed(2)}',
-                      'Paid', const Color(0xFF2E7D32))),
+                      'Paid', AppColors.success)),
                   const SizedBox(width: 10),
                   Expanded(child: _summaryCard(
                       'Pending', 'USD ${pendingTotal.toStringAsFixed(2)}',
-                      'Awaiting', const Color(0xFFF57F17))),
+                      'Awaiting', AppColors.warning)),
                 ]),
                 const SizedBox(height: 10),
                 _summaryCard('Completed Transactions', '$completedCount',
@@ -1079,10 +1080,10 @@ class _IncomeTabState extends State<_IncomeTab> {
                           final cur  = (d['currency'] as String?) ?? 'USD';
                           final st   = (d['status'] as String?) ?? 'pending';
                           final stColor = st == 'paid'
-                              ? const Color(0xFF2E7D32)
+                              ? AppColors.success
                               : st == 'cancelled'
                                   ? AppColors.error
-                                  : const Color(0xFFF57F17);
+                                  : AppColors.warning;
 
                           return Container(
                             color: i.isEven

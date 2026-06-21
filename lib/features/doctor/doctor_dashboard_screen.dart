@@ -18,7 +18,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/utils/file_saver.dart';
 import 'location_picker_screen.dart';
 import '../../core/config/form_factor_features.dart';
-import '../../core/widgets/available_on_desktop_screen.dart';
 import '../../core/widgets/patient_search_field.dart';
 import '../../core/widgets/lebanon_phone_field.dart';
 import '../../core/constants/app_colors.dart';
@@ -88,10 +87,23 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   double? _lat;
   double? _lng;
 
-  // Navigation – order: Schedule | Documentation | My Patients | Chat |
-  //                     Statistics | Billing | Expenses | My Profile
+  // Navigation – order: Schedule | Documentation | My Patients | Statistics |
+  //                     Billing | Expenses | My Profile | Notifications | Store | Assessment
   int _currentIndex = 0;
   bool _showHome = true; // landing home screen
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  // Bottom nav (mobile) — 5 positions → section tab indices
+  // 0=Schedule  1=Patients  2=Notes/Docs  3=Finance  4=More(opens drawer)
+  int get _bottomNavIndex {
+    switch (_currentIndex) {
+      case 0: return 0;
+      case 2: return 1;
+      case 1: return 2;
+      case 4: return 3;
+      default: return 4; // "More" catches all other tabs
+    }
+  }
 
   // Subscription
   SubConfig _sub = SubConfig.defaultsFor(SubTier.basic);
@@ -502,9 +514,12 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
       s.assessmentLibrary,
     ];
 
+    final isMobile = FormFactorFeatures.of(context).isMobile;
+
     return Directionality(
       textDirection: dir,
       child: Scaffold(
+        key: _scaffoldKey,
         backgroundColor: AppColors.background,
         appBar: AppBar(
           elevation: 0,
@@ -534,19 +549,66 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
           ],
         ),
         drawer: _buildNavDrawer(s, sections),
+        // ── Bottom nav (mobile only) ─────────────────────────────────────
+        bottomNavigationBar: isMobile
+            ? NavigationBar(
+                selectedIndex: _bottomNavIndex,
+                backgroundColor: Colors.white,
+                indicatorColor: AppColors.primary.withValues(alpha: 0.12),
+                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                height: 64,
+                onDestinationSelected: (pos) {
+                  if (pos == 4) {
+                    _scaffoldKey.currentState?.openDrawer();
+                  } else {
+                    final tabIdx = switch (pos) {
+                      0 => 0, // Schedule
+                      1 => 2, // Patients
+                      2 => 1, // Notes
+                      3 => 4, // Finance
+                      _ => 0,
+                    };
+                    _navigateTo(tabIdx);
+                  }
+                },
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.calendar_today_outlined),
+                    selectedIcon: Icon(Icons.calendar_today_rounded, color: AppColors.primary),
+                    label: 'Schedule',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.people_alt_outlined),
+                    selectedIcon: Icon(Icons.people_alt_rounded, color: AppColors.primary),
+                    label: 'Patients',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.description_outlined),
+                    selectedIcon: Icon(Icons.description_rounded, color: AppColors.primary),
+                    label: 'Notes',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.receipt_long_outlined),
+                    selectedIcon: Icon(Icons.receipt_long_rounded, color: AppColors.primary),
+                    label: 'Finance',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.menu_rounded),
+                    selectedIcon: Icon(Icons.menu_rounded, color: AppColors.primary),
+                    label: 'More',
+                  ),
+                ],
+              )
+            : null,
         body: IndexedStack(
           index: _currentIndex,
           children: [
             _buildScheduleTab(s),                                              // 0
-            !FormFactorFeatures.of(context).showDocumentation // 1
-                ? _buildAvailableOnDesktopScreen('Documentation')
-                : _buildDocumentationTab(s),
+            _buildDocumentationTab(s),                                         // 1
             _buildPatientsTab(s),                                              // 2
-            !FormFactorFeatures.of(context).showStatistics // 3
-                ? _buildAvailableOnDesktopScreen('Statistics')
-                : _isLocked(3)
-                    ? _buildLockedScreen('Statistics', SubTier.premium)
-                    : SessionStatsScreen(onAddAppointment: () => _navigateTo(0)),
+            _isLocked(3)                                                       // 3
+                ? _buildLockedScreen('Statistics', SubTier.premium)
+                : SessionStatsScreen(onAddAppointment: () => _navigateTo(0)),
             _isLocked(4) ? _buildLockedScreen('Income',     SubTier.premium) // 4
                          : const BillingScreen(),
             _isLocked(5) ? _buildLockedScreen('Expenses',   SubTier.premium) // 5
@@ -1285,12 +1347,6 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
         ),
       ),
     );
-  }
-
-  /// Shown instead of a desktop-only screen (e.g. Statistics) when the
-  /// doctor is using a mobile-width viewport, such as via a deep link.
-  Widget _buildAvailableOnDesktopScreen(String feature) {
-    return AvailableOnDesktopNotice(feature: feature);
   }
 
   // ════════════════════════════════════════════════════════════════════════════

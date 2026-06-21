@@ -206,6 +206,9 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
   final _painCharCtrl = TextEditingController();
   final _aggravatingCtrl = TextEditingController();
   final _relievingCtrl = TextEditingController();
+  // Chip-picker selections (kept in sync with the text controllers above)
+  final Set<String> _aggravatingSelected  = {};
+  final Set<String> _relievingSelected    = {};
   final _functionalLimitCtrl = TextEditingController();
   final _patientGoalsCtrl = TextEditingController();
   final _medHistoryCtrl = TextEditingController();
@@ -226,6 +229,9 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
   // ── Assessment controllers ──────────────────────────────────────────────
   final _clinicalImpressionCtrl = TextEditingController();
   final _severityCtrl = TextEditingController();
+  // Chip selections for severity/stage (synced to _severityCtrl)
+  String? _severitySelected; // 'Mild' | 'Moderate' | 'Severe'
+  String? _stageSelected;    // 'Acute' | 'Subacute' | 'Chronic'
   final _progressCtrl = TextEditingController();
   final _barriersCtrl = TextEditingController();
   final _responseCtrl = TextEditingController();
@@ -603,6 +609,45 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
 
   // ── Tab content ───────────────────────────────────────────────────────────
 
+  static const _kAggravatingOptions = [
+    'Sitting', 'Standing', 'Walking', 'Bending', 'Lifting',
+    'Running', 'Stairs', 'Sleeping', 'Coughing/Sneezing', 'Driving',
+  ];
+  static const _kRelievingOptions = [
+    'Rest', 'Ice', 'Heat', 'Medication', 'Positioning',
+    'Exercise', 'Massage', 'Physiotherapy', 'Elevation', 'Compression',
+  ];
+
+  void _syncAggravating() {
+    final custom = _aggravatingCtrl.text
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty && !_kAggravatingOptions.contains(s))
+        .join(', ');
+    final chips = _aggravatingSelected.join(', ');
+    _aggravatingCtrl.text =
+        [chips, if (custom.isNotEmpty) custom].join(custom.isNotEmpty && chips.isNotEmpty ? ', ' : '');
+  }
+
+  void _syncRelieving() {
+    final custom = _relievingCtrl.text
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty && !_kRelievingOptions.contains(s))
+        .join(', ');
+    final chips = _relievingSelected.join(', ');
+    _relievingCtrl.text =
+        [chips, if (custom.isNotEmpty) custom].join(custom.isNotEmpty && chips.isNotEmpty ? ', ' : '');
+  }
+
+  void _syncSeverity() {
+    final parts = [
+      if (_severitySelected != null) _severitySelected!,
+      if (_stageSelected    != null) _stageSelected!,
+    ];
+    if (parts.isNotEmpty) _severityCtrl.text = parts.join('. ');
+  }
+
   List<Widget> _subjectiveFields(Color color) => [
         _subField('Chief Complaint', 'الشكوى الرئيسية',
             _chiefComplaintCtrl, color, lines: 2),
@@ -611,10 +656,14 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
         _painSliderField(color),
         _subField('Pain Characteristics', 'خصائص الألم',
             _painCharCtrl, color),
-        _subField('Aggravating Factors', 'العوامل المؤلمة',
-            _aggravatingCtrl, color),
-        _subField('Relieving Factors', 'العوامل المؤدية للراحة',
-            _relievingCtrl, color),
+        _chipPickerField(
+          'Aggravating Factors', 'العوامل المؤلمة',
+          _kAggravatingOptions, _aggravatingSelected, _syncAggravating, color,
+        ),
+        _chipPickerField(
+          'Relieving Factors', 'العوامل المؤدية للراحة',
+          _kRelievingOptions, _relievingSelected, _syncRelieving, color,
+        ),
         _subField('Functional Limitations', 'القيود الوظيفية',
             _functionalLimitCtrl, color),
         _subField('Patient Goals', 'أهداف المريض',
@@ -675,8 +724,7 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
   List<Widget> _assessmentFields(Color color) => [
         _subField('Clinical Impression', 'الانطباع السريري',
             _clinicalImpressionCtrl, color, lines: 2),
-        _subField('Severity & Stage', 'شدة ومرحلة الحالة',
-            _severityCtrl, color),
+        _severityStageField(color),
         _subField('Progress Toward Goals', 'التقدم نحو الأهداف',
             _progressCtrl, color),
         _subField('Barriers', 'العوائق',
@@ -1017,6 +1065,204 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
                         fontSize: 12)),
               ),
             ]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Chip multi-picker (aggravating / relieving factors) ───────────────────
+
+  Widget _chipPickerField(
+    String en,
+    String ar,
+    List<String> options,
+    Set<String> selected,
+    VoidCallback onChanged,
+    Color color,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          RichText(
+            text: TextSpan(children: [
+              TextSpan(
+                text: en,
+                style: TextStyle(
+                    fontWeight: FontWeight.w600, color: color, fontSize: 13),
+              ),
+              TextSpan(
+                text: '  /  $ar',
+                style: TextStyle(
+                    color: Colors.grey.shade600, fontSize: 12),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: options.map((opt) {
+                final isSelected = selected.contains(opt);
+                return FilterChip(
+                  label: Text(opt,
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: isSelected ? color : Colors.grey.shade700,
+                          fontWeight: isSelected
+                              ? FontWeight.w600
+                              : FontWeight.w400)),
+                  selected: isSelected,
+                  onSelected: (v) => setState(() {
+                    if (v) {
+                      selected.add(opt);
+                    } else {
+                      selected.remove(opt);
+                    }
+                    onChanged();
+                  }),
+                  selectedColor: color.withValues(alpha: 0.15),
+                  checkmarkColor: color,
+                  backgroundColor: Colors.grey.shade100,
+                  side: BorderSide(
+                      color: isSelected
+                          ? color.withValues(alpha: 0.5)
+                          : Colors.grey.shade300),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 0),
+                  visualDensity: VisualDensity.compact,
+                  showCheckmark: true,
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Severity & Stage chip selectors ──────────────────────────────────────
+
+  Widget _severityStageField(Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          RichText(
+            text: TextSpan(children: [
+              TextSpan(
+                text: 'Severity & Stage',
+                style: TextStyle(
+                    fontWeight: FontWeight.w600, color: color, fontSize: 13),
+              ),
+              TextSpan(
+                text: '  /  شدة ومرحلة الحالة',
+                style: TextStyle(
+                    color: Colors.grey.shade600, fontSize: 12),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(10, 10, 10, 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Severity row
+                Text('Severity',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  children: ['Mild', 'Moderate', 'Severe'].map((opt) {
+                    final sel = _severitySelected == opt;
+                    final chipColor = switch (opt) {
+                      'Mild'     => Colors.green.shade600,
+                      'Moderate' => Colors.orange.shade700,
+                      _          => Colors.red.shade600,
+                    };
+                    return ChoiceChip(
+                      label: Text(opt,
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: sel ? chipColor : Colors.grey.shade700,
+                              fontWeight:
+                                  sel ? FontWeight.w600 : FontWeight.w400)),
+                      selected: sel,
+                      onSelected: (_) => setState(() {
+                        _severitySelected = sel ? null : opt;
+                        _syncSeverity();
+                      }),
+                      selectedColor: chipColor.withValues(alpha: 0.15),
+                      backgroundColor: Colors.grey.shade100,
+                      side: BorderSide(
+                          color: sel
+                              ? chipColor.withValues(alpha: 0.5)
+                              : Colors.grey.shade300),
+                      checkmarkColor: chipColor,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 10),
+                // Stage row
+                Text('Stage',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade600)),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  children: ['Acute', 'Subacute', 'Chronic'].map((opt) {
+                    final sel = _stageSelected == opt;
+                    return ChoiceChip(
+                      label: Text(opt,
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: sel ? color : Colors.grey.shade700,
+                              fontWeight:
+                                  sel ? FontWeight.w600 : FontWeight.w400)),
+                      selected: sel,
+                      onSelected: (_) => setState(() {
+                        _stageSelected = sel ? null : opt;
+                        _syncSeverity();
+                      }),
+                      selectedColor: color.withValues(alpha: 0.15),
+                      backgroundColor: Colors.grey.shade100,
+                      side: BorderSide(
+                          color: sel
+                              ? color.withValues(alpha: 0.5)
+                              : Colors.grey.shade300),
+                      checkmarkColor: color,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
           ),
         ],
       ),

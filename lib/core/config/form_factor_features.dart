@@ -30,9 +30,9 @@ class FormFactorFeatures {
   bool get showPatientsImportExport => !isMobile;
 
   // ── Doctor: Documentation ────────────────────────────────────────────────
-  /// The Documentation tab — its nav entry, home tile, and screen content.
-  /// Desktop only.
-  bool get showDocumentation => !isMobile;
+  /// The Documentation tab — available on all form factors.
+  /// (Import/export actions are separately gated by showDocumentationExport.)
+  bool get showDocumentation => true;
 
   /// "Export PDF" action on the Documentation tab.
   bool get showDocumentationExport => !isMobile;
@@ -43,9 +43,9 @@ class FormFactorFeatures {
   bool get showBillingImportExport => !isMobile;
 
   // ── Doctor: Statistics ────────────────────────────────────────────────────
-  /// The Statistics tab (Session Stats) — its nav entry, home tile, and
-  /// screen content. Desktop only.
-  bool get showStatistics => !isMobile;
+  /// The Statistics tab — available on all form factors.
+  /// fl_chart renders responsively at any width.
+  bool get showStatistics => true;
 
   // ── Inventory ─────────────────────────────────────────────────────────────
   /// Reserved: the inventory screen currently has no navigation entry
