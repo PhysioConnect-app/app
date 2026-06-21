@@ -267,6 +267,9 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
       _painCharCtrl.text       = g('painCharacteristics');
       _aggravatingCtrl.text    = g('aggravatingFactors');
       _relievingCtrl.text      = g('relievingFactors');
+      // Pre-select chips from saved comma-separated text
+      _restoreChips(_aggravatingCtrl.text, _aggravatingSelected, _kAggravatingOptions);
+      _restoreChips(_relievingCtrl.text,   _relievingSelected,   _kRelievingOptions);
       _functionalLimitCtrl.text = g('functionalLimitations');
       _patientGoalsCtrl.text   = g('patientGoals');
       _medHistoryCtrl.text     = g('medicalHistory');
@@ -283,6 +286,14 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
       _assistiveCtrl.text      = g('assistiveDevices');
       _clinicalImpressionCtrl.text = g('clinicalImpression');
       _severityCtrl.text       = g('severityStage');
+      // Restore severity / stage chip selections from saved text
+      final severityText = g('severityStage');
+      for (final s in ['Mild', 'Moderate', 'Severe']) {
+        if (severityText.contains(s)) { _severitySelected = s; break; }
+      }
+      for (final s in ['Acute', 'Subacute', 'Chronic']) {
+        if (severityText.contains(s)) { _stageSelected = s; break; }
+      }
       _progressCtrl.text       = g('progressTowardGoals');
       _barriersCtrl.text       = g('barriers');
       _responseCtrl.text       = g('responseToTreatment');
@@ -354,6 +365,8 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
       _painCharCtrl.text = s('painCharacteristics');
       _aggravatingCtrl.text = s('aggravatingFactors');
       _relievingCtrl.text = s('relievingFactors');
+      _restoreChips(_aggravatingCtrl.text, _aggravatingSelected, _kAggravatingOptions);
+      _restoreChips(_relievingCtrl.text,   _relievingSelected,   _kRelievingOptions);
       _functionalLimitCtrl.text = s('functionalLimitations');
       _patientGoalsCtrl.text = s('patientGoals');
       _medHistoryCtrl.text = s('medicalHistory');
@@ -370,6 +383,11 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
       _assistiveCtrl.text = s('assistiveDevices');
       _clinicalImpressionCtrl.text = s('clinicalImpression');
       _severityCtrl.text = s('severityStage');
+      final sev = s('severityStage');
+      _severitySelected = ['Mild','Moderate','Severe'].firstWhere((v) => sev.contains(v), orElse: () => '');
+      if (_severitySelected!.isEmpty) _severitySelected = null;
+      _stageSelected = ['Acute','Subacute','Chronic'].firstWhere((v) => sev.contains(v), orElse: () => '');
+      if (_stageSelected!.isEmpty) _stageSelected = null;
       _progressCtrl.text = s('progressTowardGoals');
       _barriersCtrl.text = s('barriers');
       _responseCtrl.text = s('responseToTreatment');
@@ -638,6 +656,15 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
     final chips = _relievingSelected.join(', ');
     _relievingCtrl.text =
         [chips, if (custom.isNotEmpty) custom].join(custom.isNotEmpty && chips.isNotEmpty ? ', ' : '');
+  }
+
+  /// Parses a saved comma-separated string and pre-selects any values that
+  /// appear in [knownOptions], leaving unknown values in the text controller.
+  void _restoreChips(String saved, Set<String> target, List<String> knownOptions) {
+    target.clear();
+    for (final part in saved.split(',').map((s) => s.trim())) {
+      if (knownOptions.contains(part)) target.add(part);
+    }
   }
 
   void _syncSeverity() {

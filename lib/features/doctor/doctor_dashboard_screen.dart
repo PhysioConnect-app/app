@@ -665,6 +665,7 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
       if (_sub.billing)    4,  // Revenues
       if (_sub.expenses)   5,  // Expenses
       if (showStats && _sub.statistics) 3,  // Statistics
+      6,  // My Profile
       9,  // Assessment Library
       8,  // Store
     ];
@@ -736,7 +737,7 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                       ],
                     ),
                   ),
-                  // Notification bell + language toggle
+                  // Notification bell + language toggle + logout
                   Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -747,15 +748,28 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                         onTap: () => _navigateTo(7),
                         compact: true,
                       ),
-                      TextButton(
-                        onPressed: lang.toggle,
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.white70,
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(40, 28),
-                        ),
-                        child: Text(s.language,
-                            style: const TextStyle(fontSize: 10)),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextButton(
+                            onPressed: lang.toggle,
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.white70,
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(36, 28),
+                            ),
+                            child: Text(s.language,
+                                style: const TextStyle(fontSize: 10)),
+                          ),
+                          IconButton(
+                            onPressed: () => _showLogout(),
+                            icon: const Icon(Icons.logout_rounded,
+                                color: Colors.white54, size: 18),
+                            tooltip: 'Logout',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
+                          ),
+                        ],
                       ),
                     ],
                   ),
