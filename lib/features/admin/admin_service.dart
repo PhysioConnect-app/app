@@ -43,21 +43,6 @@ class AdminService {
     });
   }
 
-  // ── Create polyclinic account ────────────────────────────────────────────────
-
-  Future<String?> createPolyclinicAccount({
-    required String name,
-    required String email,
-    required String password,
-  }) async {
-    return _invoke('admin-create-user', {
-      'email': email,
-      'password': password,
-      'role': 'polyclinic',
-      'name': name,
-    });
-  }
-
   // ── Create patient account — returns new patient UUID on success, null on failure ─
 
   Future<String?> createPatientAccount({

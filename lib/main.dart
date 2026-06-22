@@ -14,7 +14,6 @@ import 'features/auth/login_screen.dart';
 import 'features/admin/admin_dashboard_screen.dart';
 import 'features/doctor/doctor_dashboard_screen.dart';
 import 'features/patient/patient_dashboard_screen.dart';
-import 'features/polyclinic/polyclinic_dashboard_screen.dart';
 import 'features/store/store_manager_dashboard_screen.dart';
 import 'features/notifications/notification_service.dart';
 
@@ -156,8 +155,7 @@ class AuthGate extends StatelessWidget {
                   return const _WithNotificationPrompt(child: AdminDashboardScreen());
                 }
                 if (role == 'doctor') return const _WithNotificationPrompt(child: DoctorDashboardScreen());
-                if (role == 'polyclinic') return const _WithNotificationPrompt(child: PolyclinicDashboardScreen());
-                if (role == 'patient') return const _WithNotificationPrompt(child: PatientDashboardScreen());
+if (role == 'patient') return const _WithNotificationPrompt(child: PatientDashboardScreen());
                 if (role == 'store_manager') return const StoreManagerDashboardScreen();
               }
               return const LoginScreen();

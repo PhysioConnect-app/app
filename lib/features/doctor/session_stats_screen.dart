@@ -422,146 +422,241 @@ class _SessionStatsScreenState extends State<SessionStatsScreen> {
     final netSpkl  = List.generate(
         incomeSpkl.length, (i) => incomeSpkl[i] - expensesSpkl[i]);
 
+    final isMobile = MediaQuery.sizeOf(context).width < 600;
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildHeader(s),
-          // ── Section 2: KPI row ────────────────────────────────────────
+          // ── Section 2: KPI row — 4 across on desktop, 2×2 on mobile ──
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: Row(children: [
-              Expanded(child: _kpi(
-                label:          s.statsSessions,
-                value:          sessions.toString(),
-                icon:           Icons.event_note_rounded,
-                iconBg:         const Color(0xFFE3F2FD),
-                iconClr:        const Color(0xFF1565C0),
-                deltaPercent:   _showComparison
-                                    ? _delta(sessions.toDouble(),
-                                             prevSessions.toDouble())
-                                    : null,
-                sparklineData:  sessSpkl,
-                sparklineColor: const Color(0xFF1565C0),
-              )),
-              const SizedBox(width: 10),
-              Expanded(child: _kpi(
-                label:          s.statsIncome,
-                value:          '$currency ${paidIncome.toStringAsFixed(0)}',
-                icon:           Icons.trending_up_rounded,
-                iconBg:         const Color(0xFFE8F5E9),
-                iconClr:        _green,
-                deltaPercent:   _showComparison
-                                    ? _delta(paidIncome, prevPaidIncome)
-                                    : null,
-                sparklineData:  incomeSpkl,
-                sparklineColor: _green,
-              )),
-              const SizedBox(width: 10),
-              Expanded(child: _kpi(
-                label:          s.statsExpenses,
-                value:          '$currency ${paidExpenses.toStringAsFixed(0)}',
-                icon:           Icons.trending_down_rounded,
-                iconBg:         const Color(0xFFFFEBEE),
-                iconClr:        _red,
-                deltaPercent:   _showComparison
-                                    ? _delta(paidExpenses, prevPaidExpenses)
-                                    : null,
-                sparklineData:  expensesSpkl,
-                sparklineColor: _red,
-              )),
-              const SizedBox(width: 10),
-              Expanded(child: _kpi(
-                label:          s.statsNetProfit,
-                value:          '$currency ${netProfit.toStringAsFixed(0)}',
-                icon:           netProfit >= 0
-                                    ? Icons.account_balance_wallet_rounded
-                                    : Icons.warning_amber_rounded,
-                iconBg:         netProfit >= 0
-                                    ? const Color(0xFFE0F2F1)
-                                    : const Color(0xFFFFF3E0),
-                iconClr:        netProfit >= 0
-                                    ? const Color(0xFF00695C)
-                                    : _amber,
-                valueClr:       netProfit >= 0 ? _green : _red,
-                sub:            s.netProfitSublabel,
-                deltaPercent:   _showComparison
-                                    ? _delta(netProfit, prevNetProfit)
-                                    : null,
-                sparklineData:  netSpkl,
-                sparklineColor: netProfit >= 0 ? _green : _red,
-              )),
-            ]),
+            child: isMobile
+                ? Column(children: [
+                    Row(children: [
+                      Expanded(child: _kpi(
+                        label:          s.statsSessions,
+                        value:          sessions.toString(),
+                        icon:           Icons.event_note_rounded,
+                        iconBg:         const Color(0xFFE3F2FD),
+                        iconClr:        const Color(0xFF1565C0),
+                        deltaPercent:   _showComparison ? _delta(sessions.toDouble(), prevSessions.toDouble()) : null,
+                        sparklineData:  sessSpkl,
+                        sparklineColor: const Color(0xFF1565C0),
+                      )),
+                      const SizedBox(width: 10),
+                      Expanded(child: _kpi(
+                        label:          s.statsIncome,
+                        value:          '$currency ${paidIncome.toStringAsFixed(0)}',
+                        icon:           Icons.trending_up_rounded,
+                        iconBg:         const Color(0xFFE8F5E9),
+                        iconClr:        _green,
+                        deltaPercent:   _showComparison ? _delta(paidIncome, prevPaidIncome) : null,
+                        sparklineData:  incomeSpkl,
+                        sparklineColor: _green,
+                      )),
+                    ]),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(child: _kpi(
+                        label:          s.statsExpenses,
+                        value:          '$currency ${paidExpenses.toStringAsFixed(0)}',
+                        icon:           Icons.trending_down_rounded,
+                        iconBg:         const Color(0xFFFFEBEE),
+                        iconClr:        _red,
+                        deltaPercent:   _showComparison ? _delta(paidExpenses, prevPaidExpenses) : null,
+                        sparklineData:  expensesSpkl,
+                        sparklineColor: _red,
+                      )),
+                      const SizedBox(width: 10),
+                      Expanded(child: _kpi(
+                        label:          s.statsNetProfit,
+                        value:          '$currency ${netProfit.toStringAsFixed(0)}',
+                        icon:           netProfit >= 0 ? Icons.account_balance_wallet_rounded : Icons.warning_amber_rounded,
+                        iconBg:         netProfit >= 0 ? const Color(0xFFE0F2F1) : const Color(0xFFFFF3E0),
+                        iconClr:        netProfit >= 0 ? const Color(0xFF00695C) : _amber,
+                        valueClr:       netProfit >= 0 ? _green : _red,
+                        sub:            s.netProfitSublabel,
+                        deltaPercent:   _showComparison ? _delta(netProfit, prevNetProfit) : null,
+                        sparklineData:  netSpkl,
+                        sparklineColor: netProfit >= 0 ? _green : _red,
+                      )),
+                    ]),
+                  ])
+                : Row(children: [
+                    Expanded(child: _kpi(
+                      label:          s.statsSessions,
+                      value:          sessions.toString(),
+                      icon:           Icons.event_note_rounded,
+                      iconBg:         const Color(0xFFE3F2FD),
+                      iconClr:        const Color(0xFF1565C0),
+                      deltaPercent:   _showComparison ? _delta(sessions.toDouble(), prevSessions.toDouble()) : null,
+                      sparklineData:  sessSpkl,
+                      sparklineColor: const Color(0xFF1565C0),
+                    )),
+                    const SizedBox(width: 10),
+                    Expanded(child: _kpi(
+                      label:          s.statsIncome,
+                      value:          '$currency ${paidIncome.toStringAsFixed(0)}',
+                      icon:           Icons.trending_up_rounded,
+                      iconBg:         const Color(0xFFE8F5E9),
+                      iconClr:        _green,
+                      deltaPercent:   _showComparison ? _delta(paidIncome, prevPaidIncome) : null,
+                      sparklineData:  incomeSpkl,
+                      sparklineColor: _green,
+                    )),
+                    const SizedBox(width: 10),
+                    Expanded(child: _kpi(
+                      label:          s.statsExpenses,
+                      value:          '$currency ${paidExpenses.toStringAsFixed(0)}',
+                      icon:           Icons.trending_down_rounded,
+                      iconBg:         const Color(0xFFFFEBEE),
+                      iconClr:        _red,
+                      deltaPercent:   _showComparison ? _delta(paidExpenses, prevPaidExpenses) : null,
+                      sparklineData:  expensesSpkl,
+                      sparklineColor: _red,
+                    )),
+                    const SizedBox(width: 10),
+                    Expanded(child: _kpi(
+                      label:          s.statsNetProfit,
+                      value:          '$currency ${netProfit.toStringAsFixed(0)}',
+                      icon:           netProfit >= 0 ? Icons.account_balance_wallet_rounded : Icons.warning_amber_rounded,
+                      iconBg:         netProfit >= 0 ? const Color(0xFFE0F2F1) : const Color(0xFFFFF3E0),
+                      iconClr:        netProfit >= 0 ? const Color(0xFF00695C) : _amber,
+                      valueClr:       netProfit >= 0 ? _green : _red,
+                      sub:            s.netProfitSublabel,
+                      deltaPercent:   _showComparison ? _delta(netProfit, prevNetProfit) : null,
+                      sparklineData:  netSpkl,
+                      sparklineColor: netProfit >= 0 ? _green : _red,
+                    )),
+                  ]),
           ),
           // ── Section 3: Revenue trend + Payment collection ─────────────
           const SizedBox(height: 16),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: _revenueTrendCard(
-                    incomeData:   incomeSpkl,
-                    expensesData: expensesSpkl,
-                    currency:     currency,
-                    s:            s,
+            child: isMobile
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _revenueTrendCard(
+                        incomeData:   incomeSpkl,
+                        expensesData: expensesSpkl,
+                        currency:     currency,
+                        s:            s,
+                      ),
+                      const SizedBox(height: 12),
+                      _paymentCollectionCard(
+                        paidIncome:    paidIncome,
+                        pendingIncome: pendingIncome,
+                        overdueIncome: overdueIncome,
+                        currency:      currency,
+                        s:             s,
+                      ),
+                    ],
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: _revenueTrendCard(
+                          incomeData:   incomeSpkl,
+                          expensesData: expensesSpkl,
+                          currency:     currency,
+                          s:            s,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: _paymentCollectionCard(
+                          paidIncome:    paidIncome,
+                          pendingIncome: pendingIncome,
+                          overdueIncome: overdueIncome,
+                          currency:      currency,
+                          s:             s,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: _paymentCollectionCard(
-                    paidIncome:    paidIncome,
-                    pendingIncome: pendingIncome,
-                    overdueIncome: overdueIncome,
-                    currency:      currency,
-                    s:             s,
-                  ),
-                ),
-              ],
-            ),
           ),
-          // ── Section 4: Patient Insight row ───────────────────────────
+          // ── Section 4: Patient Insight row — 4 across on desktop, 2×2 on mobile ──
           const SizedBox(height: 16),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(children: [
-              Expanded(child: _insightCard(
-                icon:    Icons.person_add_rounded,
-                iconBg:  const Color(0xFFE3F2FD),
-                iconClr: const Color(0xFF1565C0),
-                label:   s.statsNewPatients,
-                value:   '$newPatients',
-              )),
-              const SizedBox(width: 10),
-              Expanded(child: _insightCard(
-                icon:    Icons.attach_money_rounded,
-                iconBg:  const Color(0xFFE8F5E9),
-                iconClr: _green,
-                label:   s.statsAvgSession,
-                value:   avgSessionValue != null
-                             ? '$currency ${avgSessionValue.toStringAsFixed(0)}'
-                             : '—',
-              )),
-              const SizedBox(width: 10),
-              Expanded(child: _insightCard(
-                icon:    Icons.repeat_rounded,
-                iconBg:  const Color(0xFFE0F2F1),
-                iconClr: const Color(0xFF00897B),
-                label:   s.statsRetention,
-                value:   '${retentionRate.toStringAsFixed(0)}%',
-              )),
-              const SizedBox(width: 10),
-              Expanded(child: _insightCard(
-                icon:    Icons.cancel_outlined,
-                iconBg:  const Color(0xFFFFEBEE),
-                iconClr: _red,
-                label:   s.statsCancellation,
-                value:   '${cancellationRate.toStringAsFixed(0)}%',
-              )),
-            ]),
+            child: isMobile
+                ? Column(children: [
+                    Row(children: [
+                      Expanded(child: _insightCard(
+                        icon:    Icons.person_add_rounded,
+                        iconBg:  const Color(0xFFE3F2FD),
+                        iconClr: const Color(0xFF1565C0),
+                        label:   s.statsNewPatients,
+                        value:   '$newPatients',
+                      )),
+                      const SizedBox(width: 10),
+                      Expanded(child: _insightCard(
+                        icon:    Icons.attach_money_rounded,
+                        iconBg:  const Color(0xFFE8F5E9),
+                        iconClr: _green,
+                        label:   s.statsAvgSession,
+                        value:   avgSessionValue != null ? '$currency ${avgSessionValue.toStringAsFixed(0)}' : '—',
+                      )),
+                    ]),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(child: _insightCard(
+                        icon:    Icons.repeat_rounded,
+                        iconBg:  const Color(0xFFE0F2F1),
+                        iconClr: const Color(0xFF00897B),
+                        label:   s.statsRetention,
+                        value:   '${retentionRate.toStringAsFixed(0)}%',
+                      )),
+                      const SizedBox(width: 10),
+                      Expanded(child: _insightCard(
+                        icon:    Icons.cancel_outlined,
+                        iconBg:  const Color(0xFFFFEBEE),
+                        iconClr: _red,
+                        label:   s.statsCancellation,
+                        value:   '${cancellationRate.toStringAsFixed(0)}%',
+                      )),
+                    ]),
+                  ])
+                : Row(children: [
+                    Expanded(child: _insightCard(
+                      icon:    Icons.person_add_rounded,
+                      iconBg:  const Color(0xFFE3F2FD),
+                      iconClr: const Color(0xFF1565C0),
+                      label:   s.statsNewPatients,
+                      value:   '$newPatients',
+                    )),
+                    const SizedBox(width: 10),
+                    Expanded(child: _insightCard(
+                      icon:    Icons.attach_money_rounded,
+                      iconBg:  const Color(0xFFE8F5E9),
+                      iconClr: _green,
+                      label:   s.statsAvgSession,
+                      value:   avgSessionValue != null ? '$currency ${avgSessionValue.toStringAsFixed(0)}' : '—',
+                    )),
+                    const SizedBox(width: 10),
+                    Expanded(child: _insightCard(
+                      icon:    Icons.repeat_rounded,
+                      iconBg:  const Color(0xFFE0F2F1),
+                      iconClr: const Color(0xFF00897B),
+                      label:   s.statsRetention,
+                      value:   '${retentionRate.toStringAsFixed(0)}%',
+                    )),
+                    const SizedBox(width: 10),
+                    Expanded(child: _insightCard(
+                      icon:    Icons.cancel_outlined,
+                      iconBg:  const Color(0xFFFFEBEE),
+                      iconClr: _red,
+                      label:   s.statsCancellation,
+                      value:   '${cancellationRate.toStringAsFixed(0)}%',
+                    )),
+                  ]),
           ),
           // ── Section 5: Top Services + Top Diagnoses ───────────────────
           const SizedBox(height: 16),

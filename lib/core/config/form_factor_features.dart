@@ -30,9 +30,9 @@ class FormFactorFeatures {
   bool get showPatientsImportExport => !isMobile;
 
   // ── Doctor: Documentation ────────────────────────────────────────────────
-  /// The Documentation tab — available on all form factors.
+  /// The Documentation tab — desktop only.
   /// (Import/export actions are separately gated by showDocumentationExport.)
-  bool get showDocumentation => true;
+  bool get showDocumentation => !isMobile;
 
   /// "Export PDF" action on the Documentation tab.
   bool get showDocumentationExport => !isMobile;

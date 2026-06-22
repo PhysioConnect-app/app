@@ -56,7 +56,6 @@ class _NavItem {
 const _kAdminNavItems = [
   _NavItem(Icons.dashboard_rounded, 'Overview'),
   _NavItem(Icons.people_rounded, 'Doctors'),
-  _NavItem(Icons.business_rounded, 'Polyclinics'),
   _NavItem(Icons.person_add_rounded, 'Register'),
   _NavItem(Icons.notifications_rounded, 'Requests'),
   _NavItem(Icons.personal_injury_rounded, 'Patients'),
@@ -147,12 +146,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final _specCtrl  = TextEditingController();
   bool _processing    = false;
   bool _obscure       = true;
-  bool _isPolyclinic  = false;   // toggle between doctor / polyclinic registration
 
   // Doctors list
   String _searchQuery = '';
-  // Polyclinics list
-  String _polySearchQuery = '';
   // Patients list
   String _patientSearchQuery = '';
   final Set<String> _selectedPatientIds = {};
@@ -1429,10 +1425,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           child: switch (_currentIndex) {
             0 => _overviewTab(),
             1 => _doctorsTab(),
-            2 => _polyclinicsTab(),
-            3 => _registerTab(),
-            4 => _notificationsTab(),
-            5 => _patientsTab(),
+            2 => _registerTab(),
+            3 => _notificationsTab(),
+            4 => _patientsTab(),
             _ => _notesTab(),
           },
         ),
@@ -1448,24 +1443,41 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [_kSlate, _kInk],
+          colors: [Color(0xFF1A237E), Color(0xFF283593), Color(0xFF37474F)],
+          stops: [0.0, 0.55, 1.0],
         ),
+        boxShadow: [
+          BoxShadow(color: Color(0x33000000), blurRadius: 12, offset: Offset(0, 3)),
+        ],
       ),
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 12, 18),
-          child: Row(children: [
+          padding: const EdgeInsets.fromLTRB(20, 14, 16, 16),
+          child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
+            // Shield badge
             Container(
-              width: 44, height: 44,
+              width: 48, height: 48,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF3F51B5), Color(0xFF1A237E)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.25), width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.25),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3)),
+                ],
               ),
               child: const Icon(Icons.admin_panel_settings_rounded,
-                  color: Colors.white, size: 22),
+                  color: Colors.white, size: 24),
             ),
             const SizedBox(width: 14),
+            // Title block
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1474,20 +1486,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   const Text('Admin Portal',
                       style: TextStyle(
                           color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold)),
-                  Text('PhysioConnect',
-                      style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.6),
-                          fontSize: 12)),
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.3)),
+                  const SizedBox(height: 3),
+                  Row(children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+                      ),
+                      child: const Text('PhysioConnect',
+                          style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500)),
+                    ),
+                  ]),
                 ],
               ),
             ),
+            // Actions
             IconButton(
               icon: const Icon(Icons.logout_rounded, size: 20),
-              color: Colors.white.withValues(alpha: 0.8),
+              color: Colors.white.withValues(alpha: 0.75),
               tooltip: 'Sign Out',
               onPressed: () => Supabase.instance.client.auth.signOut(),
+              style: IconButton.styleFrom(
+                backgroundColor: Colors.white.withValues(alpha: 0.10),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
             ),
           ]),
         ),
@@ -1497,51 +1527,52 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _navBar() {
     return Container(
-      color: _kSlate,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(
-          children: [
-            for (var i = 0; i < _kAdminNavItems.length; i++)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: _navButton(i, _kAdminNavItems[i]),
-              ),
-          ],
-        ),
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (var i = 0; i < _kAdminNavItems.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: _navButton(i, _kAdminNavItems[i]),
+                  ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, thickness: 1, color: Color(0xFFE8EAED)),
+        ],
       ),
     );
   }
 
   Widget _navButton(int index, _NavItem item) {
     final selected = _currentIndex == index;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: () => setState(() => _currentIndex = index),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: selected ? Colors.white.withValues(alpha: 0.12) : null,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-                color: selected ? Colors.white : Colors.white24),
-          ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Icon(item.icon,
-                size: 16,
-                color: selected ? Colors.white : Colors.white38),
-            const SizedBox(width: 6),
-            Text(item.label,
-                style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                    color: selected ? Colors.white : Colors.white38)),
-          ]),
+    return GestureDetector(
+      onTap: () => setState(() => _currentIndex = index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        margin: const EdgeInsets.only(bottom: 6),
+        decoration: BoxDecoration(
+          color: selected ? _kInk : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
         ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(item.icon,
+              size: 15,
+              color: selected ? Colors.white : AppColors.textSecondary),
+          const SizedBox(width: 6),
+          Text(item.label,
+              style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  color: selected ? Colors.white : AppColors.textSecondary)),
+        ]),
       ),
     );
   }
@@ -1586,19 +1617,34 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // ── Stat cards ─────────────────────────────────────────────────
-            Row(children: [
-              Expanded(child: _kpiCard(
-                  all.length.toString(), 'Total Doctors',
-                  Icons.people_rounded, _kSlate)),
-              const SizedBox(width: 10),
-              Expanded(child: _kpiCard(
-                  basic.toString(), 'Basic',
-                  Icons.star_border_rounded, SubTier.basic.color)),
-            ]),
-            const SizedBox(height: 10),
-            _kpiCard(premium.toString(), 'Premium',
-                Icons.star_rounded, SubTier.premium.color),
+            // ── Stat cards — 3-up on wide, 2+1 on narrow ─────────────────
+            LayoutBuilder(builder: (ctx, c) {
+              final wide = c.maxWidth > 380;
+              if (wide) {
+                return Row(children: [
+                  Expanded(child: _kpiCard(all.length.toString(), 'Total Doctors',
+                      Icons.people_rounded, _kInk)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _kpiCard(basic.toString(), 'Basic Plan',
+                      Icons.star_border_rounded, SubTier.basic.color)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _kpiCard(premium.toString(), 'Premium',
+                      Icons.star_rounded, SubTier.premium.color)),
+                ]);
+              }
+              return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Row(children: [
+                  Expanded(child: _kpiCard(all.length.toString(), 'Total Doctors',
+                      Icons.people_rounded, _kInk)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _kpiCard(basic.toString(), 'Basic',
+                      Icons.star_border_rounded, SubTier.basic.color)),
+                ]),
+                const SizedBox(height: 10),
+                _kpiCard(premium.toString(), 'Premium',
+                    Icons.star_rounded, SubTier.premium.color),
+              ]);
+            }),
 
             const SizedBox(height: 24),
 
@@ -1631,46 +1677,50 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _kpiCard(String value, String label, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE8EAED)),
+        border: Border(
+          left:   BorderSide(color: color, width: 4),
+          top:    const BorderSide(color: Color(0xFFE8EAED)),
+          right:  const BorderSide(color: Color(0xFFE8EAED)),
+          bottom: const BorderSide(color: Color(0xFFE8EAED)),
+        ),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
+              color: color.withValues(alpha: 0.07),
+              blurRadius: 10,
+              offset: const Offset(0, 3)),
         ],
       ),
-      child: Row(children: [
-        Container(
-          width: 42, height: 42,
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(11),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36, height: 36,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: color),
           ),
-          child: Icon(icon, size: 20, color: color),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(value,
-                  style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      color: color,
-                      height: 1)),
-              Text(label,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 12)),
-            ],
-          ),
-        ),
-      ]),
+          const SizedBox(height: 10),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w800,
+                  color: color,
+                  height: 1)),
+          const SizedBox(height: 2),
+          Text(label,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500)),
+        ],
+      ),
     );
   }
 
@@ -2281,117 +2331,44 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // ════════════════════════════════════════════════════════════════════════════
 
   Widget _registerTab() {
-    final isPolyclinic = _isPolyclinic;
-    final accentColor  = isPolyclinic ? const Color(0xFF00695C) : _kSlate;
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Type selector ───────────────────────────────────────────────
-          Row(children: [
-            Expanded(
-              child: GestureDetector(
-                onTap: () => setState(() => _isPolyclinic = false),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    color: !isPolyclinic ? _kSlate : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: !isPolyclinic ? _kSlate : AppColors.cardBorder),
-                  ),
-                  child: Column(children: [
-                    Icon(Icons.person_rounded,
-                        size: 22,
-                        color: !isPolyclinic ? Colors.white : _kSlate),
-                    const SizedBox(height: 4),
-                    Text('Doctor',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: !isPolyclinic ? Colors.white : _kSlate)),
-                  ]),
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: GestureDetector(
-                onTap: () => setState(() => _isPolyclinic = true),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    color: isPolyclinic ? const Color(0xFF00695C) : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: isPolyclinic
-                            ? const Color(0xFF00695C)
-                            : AppColors.cardBorder),
-                  ),
-                  child: Column(children: [
-                    Icon(Icons.business_rounded,
-                        size: 22,
-                        color: isPolyclinic ? Colors.white : const Color(0xFF00695C)),
-                    const SizedBox(height: 4),
-                    Text('Polyclinic',
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: isPolyclinic
-                                ? Colors.white
-                                : const Color(0xFF00695C))),
-                  ]),
-                ),
-              ),
-            ),
-          ]),
-          const SizedBox(height: 16),
-
           // Banner
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: accentColor.withValues(alpha: 0.06),
+              color: _kSlate.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: accentColor.withValues(alpha: 0.12)),
+              border: Border.all(color: _kSlate.withValues(alpha: 0.12)),
             ),
             child: Row(children: [
               Container(
                 width: 42, height: 42,
                 decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.1),
+                  color: _kSlate.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(11),
                 ),
-                child: Icon(
-                    isPolyclinic
-                        ? Icons.business_rounded
-                        : Icons.person_add_rounded,
-                    color: accentColor, size: 20),
+                child: const Icon(Icons.person_add_rounded,
+                    color: _kSlate, size: 20),
               ),
               const SizedBox(width: 14),
-              Expanded(
+              const Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                        isPolyclinic
-                            ? 'Register New Polyclinic'
-                            : 'Register New Doctor',
-                        style: const TextStyle(
+                    Text('Register New Doctor',
+                        style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14,
                             color: AppColors.textPrimary)),
-                    const SizedBox(height: 2),
+                    SizedBox(height: 2),
                     Text(
-                        isPolyclinic
-                            ? 'Polyclinic accounts can link doctors and view per-doctor income.'
-                            : 'New accounts start on the Basic plan. Upgrade via the Doctors tab.',
-                        style: const TextStyle(
+                        'New accounts start on the Basic plan. Upgrade via the Doctors tab.',
+                        style: TextStyle(
                             fontSize: 12,
                             color: AppColors.textSecondary)),
                   ],
@@ -2417,22 +2394,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _formSection(isPolyclinic ? 'Clinic Info' : 'Personal Info'),
+                _formSection('Personal Info'),
                 const SizedBox(height: 14),
-                _field(_nameCtrl,
-                    isPolyclinic ? 'Clinic Name' : 'Doctor Full Name',
-                    isPolyclinic ? Icons.business_rounded : Icons.badge_rounded),
-                if (!isPolyclinic) ...[
-                  const SizedBox(height: 12),
-                  _field(_specCtrl, 'Specialization',
-                      Icons.medical_services_rounded),
-                ],
+                _field(_nameCtrl, 'Doctor Full Name', Icons.badge_rounded),
+                const SizedBox(height: 12),
+                _field(_specCtrl, 'Specialization',
+                    Icons.medical_services_rounded),
                 const SizedBox(height: 22),
                 _formSection('Login Credentials'),
                 const SizedBox(height: 14),
-                _field(_emailCtrl,
-                    isPolyclinic ? 'Clinic Email' : 'Professional Email',
-                    Icons.email_rounded,
+                _field(_emailCtrl, 'Professional Email', Icons.email_rounded,
                     type: TextInputType.emailAddress),
                 const SizedBox(height: 12),
                 TextField(
@@ -2455,7 +2426,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         borderRadius: BorderRadius.circular(12)),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: accentColor, width: 2),
+                      borderSide: const BorderSide(color: _kSlate, width: 2),
                     ),
                   ),
                 ),
@@ -2467,7 +2438,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ? const Center(child: CircularProgressIndicator())
                       : ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: accentColor,
+                            backgroundColor: _kSlate,
                             foregroundColor: Colors.white,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
@@ -2475,538 +2446,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           ),
                           icon: const Icon(Icons.check_circle_rounded,
                               size: 20),
-                          label: Text(
-                              isPolyclinic
-                                  ? 'Create Polyclinic Account'
-                                  : 'Create Doctor Account',
-                              style: const TextStyle(
+                          label: const Text('Create Doctor Account',
+                              style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold)),
-                          onPressed: isPolyclinic
-                              ? _registerPolyclinic
-                              : _registerDoctor,
+                          onPressed: _registerDoctor,
                         ),
                 ),
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  // ── Register Polyclinic ────────────────────────────────────────────────────
-
-  Future<void> _registerPolyclinic() async {
-    final name  = _nameCtrl.text.trim();
-    final email = _emailCtrl.text.trim();
-    final pass  = _passCtrl.text.trim();
-    if (name.isEmpty || email.isEmpty || pass.length < 6) {
-      _snack('Fill all fields. Password must be at least 6 characters.');
-      return;
-    }
-    setState(() => _processing = true);
-    final error = await _adminService.createPolyclinicAccount(
-      name: name, email: email, password: pass,
-    );
-    if (!mounted) return;
-    if (error == null) {
-      _snack('Polyclinic account created!', color: AppColors.success);
-      _nameCtrl.clear(); _emailCtrl.clear(); _passCtrl.clear();
-      setState(() => _currentIndex = 2);
-    } else {
-      _snack('Error: $error', color: AppColors.error);
-    }
-    setState(() => _processing = false);
-  }
-
-  // ════════════════════════════════════════════════════════════════════════════
-  // Polyclinics Tab
-  // ════════════════════════════════════════════════════════════════════════════
-
-  Widget _polyclinicsTab() {
-    return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: _supabase.from('users').stream(primaryKey: ['id']).eq('role', 'polyclinic'),
-      builder: (context, snap) {
-        if (snap.hasError) {
-          return Center(
-              child: Text('Error: ${snap.error}',
-                  style: const TextStyle(color: AppColors.error)));
-        }
-        if (!snap.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        final all = List<Map<String, dynamic>>.from(snap.data!)
-          ..sort((a, b) {
-            final ta = a['created_at'] as String?;
-            final tb = b['created_at'] as String?;
-            if (ta == null && tb == null) return 0;
-            if (ta == null) return 1;
-            if (tb == null) return -1;
-            return tb.compareTo(ta);
-          });
-
-        final filtered = _polySearchQuery.isEmpty
-            ? all
-            : all.where((d) {
-                final n = (d['name']  ?? '').toString().toLowerCase();
-                final e = (d['email'] ?? '').toString().toLowerCase();
-                return n.contains(_polySearchQuery) ||
-                    e.contains(_polySearchQuery);
-              }).toList();
-
-        return CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: Column(children: [
-                  _polyclinicsSummaryCard(all.length),
-                  const SizedBox(height: 14),
-                  TextField(
-                    onChanged: (v) =>
-                        setState(() => _polySearchQuery = v.toLowerCase()),
-                    decoration: InputDecoration(
-                      hintText: 'Search polyclinic name or email...',
-                      hintStyle: const TextStyle(
-                          color: AppColors.textSecondary, fontSize: 13),
-                      prefixIcon: const Icon(Icons.search_rounded,
-                          size: 20, color: AppColors.textSecondary),
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(
-                          vertical: 0, horizontal: 16),
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(13),
-                          borderSide:
-                              const BorderSide(color: AppColors.cardBorder)),
-                      enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(13),
-                          borderSide:
-                              const BorderSide(color: AppColors.cardBorder)),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  if (filtered.isNotEmpty)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                          '${filtered.length} polyclinic${filtered.length != 1 ? 's' : ''}',
-                          style: const TextStyle(
-                              color: AppColors.textSecondary, fontSize: 12)),
-                    ),
-                ]),
-              ),
-            ),
-            if (filtered.isEmpty)
-              SliverFillRemaining(
-                child: Center(
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Container(
-                      width: 76, height: 76,
-                      decoration: BoxDecoration(
-                          color: const Color(0xFF00695C).withValues(alpha: 0.07),
-                          shape: BoxShape.circle),
-                      child: Icon(Icons.business_outlined,
-                          size: 36,
-                          color: const Color(0xFF00695C).withValues(alpha: 0.35)),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                        _polySearchQuery.isEmpty
-                            ? 'No polyclinic accounts yet'
-                            : 'No results for "$_polySearchQuery"',
-                        style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15)),
-                    const SizedBox(height: 6),
-                    Text(
-                        _polySearchQuery.isEmpty
-                            ? 'Use the Register tab to add a polyclinic.'
-                            : 'Try a different search term.',
-                        style: const TextStyle(
-                            color: AppColors.textSecondary, fontSize: 13)),
-                  ]),
-                ),
-              )
-            else
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 32),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (_, i) => _polyclinicCard(filtered[i]),
-                    childCount: filtered.length,
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _polyclinicsSummaryCard(int total) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF00695C), Color(0xFF004D40)],
-        ),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(children: [
-        Container(
-          width: 52, height: 52,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: const Icon(Icons.business_rounded,
-              color: Colors.white, size: 28),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('$total',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 30,
-                    fontWeight: FontWeight.bold,
-                    height: 1)),
-            Text('Polyclinic${total != 1 ? 's' : ''} Registered',
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.7), fontSize: 13)),
-          ]),
-        ),
-        GestureDetector(
-          onTap: () => setState(() => _currentIndex = 3),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(22),
-            ),
-            child: const Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(Icons.add_rounded, color: Colors.white, size: 16),
-              SizedBox(width: 4),
-              Text('New',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600)),
-            ]),
-          ),
-        ),
-      ]),
-    );
-  }
-
-  Widget _polyclinicCard(Map<String, dynamic> doc) {
-    final data      = doc;
-    final name      = (data['name']  ?? 'Unknown') as String;
-    final email     = (data['email'] ?? '')         as String;
-    final isEnabled = (data['is_enabled'] as bool?)  ?? true;
-    final linkedIds = (data['linked_doctor_ids'] as List?)?.length ?? 0;
-    final ac        = _avatarColor(name);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE8EAED)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2)),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => _openPolyclinicManageSheet(doc),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 10, 12),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                width: 48, height: 48,
-                decoration: BoxDecoration(
-                  color: ac.withValues(alpha: 0.13),
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: Center(
-                  child: Text(_initials(name),
-                      style: TextStyle(
-                          color: ac,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 17)),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(name,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          color: AppColors.textPrimary)),
-                  const SizedBox(height: 2),
-                  Text(email,
-                      style: const TextStyle(
-                          color: AppColors.textSecondary, fontSize: 12),
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 6),
-                  Row(children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: isEnabled
-                            ? const Color(0xFFE8F5E9)
-                            : const Color(0xFFFFEBEE),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                          isEnabled ? 'Active' : 'Disabled',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                              color: isEnabled
-                                  ? const Color(0xFF2E7D32)
-                                  : AppColors.error)),
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(Icons.people_outline_rounded,
-                        size: 13, color: AppColors.textSecondary),
-                    const SizedBox(width: 4),
-                    Text('$linkedIds linked doctor${linkedIds != 1 ? 's' : ''}',
-                        style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary)),
-                  ]),
-                ]),
-              ),
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert_rounded,
-                    color: AppColors.textSecondary, size: 18),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                onSelected: (v) {
-                  if (v == 'manage') _openPolyclinicManageSheet(doc);
-                  if (v == 'delete') _confirmDeletePolyclinic(doc['id'] as String, name);
-                },
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                    value: 'manage',
-                    child: Row(children: [
-                      Icon(Icons.manage_accounts_rounded,
-                          color: _kSlate, size: 18),
-                      SizedBox(width: 10),
-                      Text('Manage Account'),
-                    ]),
-                  ),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Row(children: [
-                      Container(
-                        width: 28, height: 28,
-                        decoration: BoxDecoration(
-                            color: AppColors.error.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8)),
-                        child: const Icon(Icons.delete_rounded,
-                            color: AppColors.error, size: 16),
-                      ),
-                      const SizedBox(width: 10),
-                      const Text('Remove Account',
-                          style: TextStyle(color: AppColors.error)),
-                    ]),
-                  ),
-                ],
-              ),
-            ]),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _confirmDeletePolyclinic(String docId, String name) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(children: [
-          Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(
-                color: AppColors.error.withValues(alpha: 0.1),
-                shape: BoxShape.circle),
-            child: const Icon(Icons.delete_rounded,
-                color: AppColors.error, size: 18),
-          ),
-          const SizedBox(width: 12),
-          const Text('Remove Polyclinic'),
-        ]),
-        content: Text(
-            'Remove "$name" from the system?\nThis action cannot be undone.'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.error,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10))),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    final err = await _adminService.deleteUserAccount(docId);
-    if (!mounted) return;
-    _snack(err == null ? 'Polyclinic account removed.' : 'Error: $err',
-        color: err == null ? null : AppColors.error);
-  }
-
-  void _openPolyclinicManageSheet(Map<String, dynamic> doc) {
-    final data      = doc;
-    final ac        = _avatarColor((data['name'] ?? '') as String);
-    final nameCtrl  = TextEditingController(
-        text: data['name'] as String? ?? '');
-    bool isEnabled  = (data['is_enabled'] as bool?) ?? true;
-    bool saving     = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocal) => Padding(
-          padding: EdgeInsets.only(
-              left: 20, right: 20, top: 12,
-              bottom: MediaQuery.of(ctx).viewInsets.bottom + 28),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36, height: 4,
-                    margin: const EdgeInsets.only(bottom: 20),
-                    decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
-                        borderRadius: BorderRadius.circular(2)),
-                  ),
-                ),
-                Row(children: [
-                  Container(
-                    width: 54, height: 54,
-                    decoration: BoxDecoration(
-                        color: ac.withValues(alpha: 0.13),
-                        borderRadius: BorderRadius.circular(15)),
-                    child: Center(
-                      child: Text(_initials(nameCtrl.text),
-                          style: TextStyle(
-                              color: ac,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 20)),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      Text(nameCtrl.text,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 17,
-                              color: AppColors.textPrimary)),
-                      const SizedBox(height: 2),
-                      Text((data['email'] as String?) ?? '',
-                          style: const TextStyle(
-                              color: AppColors.textSecondary, fontSize: 13)),
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                            color: const Color(0xFF00695C).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(20)),
-                        child: const Text('Polyclinic',
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF00695C),
-                                fontWeight: FontWeight.w600)),
-                      ),
-                    ]),
-                  ),
-                ]),
-                const SizedBox(height: 24),
-                _sheetSectionLabel('Clinic Info'),
-                const SizedBox(height: 10),
-                _adminField(nameCtrl, 'Clinic Name', Icons.business_rounded),
-                const SizedBox(height: 24),
-                _sheetSectionLabel('Account Settings'),
-                const SizedBox(height: 10),
-                _adminToggleTile(
-                  icon: Icons.power_settings_new_rounded,
-                  color: const Color(0xFF2E7D32),
-                  title: 'Account Enabled',
-                  subtitle: 'Polyclinic can use the app',
-                  value: isEnabled,
-                  onChanged: (v) => setLocal(() => isEnabled = v),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity, height: 52,
-                  child: saving
-                      ? const Center(child: CircularProgressIndicator())
-                      : ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF00695C),
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14))),
-                          icon: const Icon(Icons.check_circle_rounded, size: 20),
-                          label: const Text('Apply Changes',
-                              style: TextStyle(
-                                  fontSize: 15, fontWeight: FontWeight.bold)),
-                          onPressed: () async {
-                            setLocal(() => saving = true);
-                            await _supabase.from('users').update({
-                              'name':       nameCtrl.text.trim(),
-                              'is_enabled': isEnabled,
-                            }).eq('id', doc['id'] as String);
-                            if (!ctx.mounted) return;
-                            Navigator.pop(ctx);
-                            _snack('Updated for ${nameCtrl.text.trim()}!',
-                                color: AppColors.success);
-                          },
-                        ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

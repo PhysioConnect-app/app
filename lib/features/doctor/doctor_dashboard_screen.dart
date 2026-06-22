@@ -93,15 +93,14 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   bool _showHome = true; // landing home screen
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
-  // Bottom nav (mobile) — 5 positions → section tab indices
-  // 0=Schedule  1=Patients  2=Notes/Docs  3=Finance  4=More(opens drawer)
+  // Bottom nav (mobile) — 4 positions → section tab indices
+  // 0=Schedule  1=Patients  2=Finance  3=More(opens drawer)
   int get _bottomNavIndex {
     switch (_currentIndex) {
       case 0: return 0;
       case 2: return 1;
-      case 1: return 2;
-      case 4: return 3;
-      default: return 4; // "More" catches all other tabs
+      case 4: return 2;
+      default: return 3; // "More" catches all other tabs (incl. Documentation, which is drawer-only on mobile)
     }
   }
 
@@ -535,14 +534,13 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                 labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
                 height: 64,
                 onDestinationSelected: (pos) {
-                  if (pos == 4) {
+                  if (pos == 3) {
                     _scaffoldKey.currentState?.openDrawer();
                   } else {
                     final tabIdx = switch (pos) {
                       0 => 0, // Schedule
                       1 => 2, // Patients
-                      2 => 1, // Notes
-                      3 => 4, // Finance
+                      2 => 4, // Finance
                       _ => 0,
                     };
                     _navigateTo(tabIdx);
@@ -558,11 +556,6 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                     icon: Icon(Icons.people_alt_outlined),
                     selectedIcon: Icon(Icons.people_alt_rounded, color: AppColors.primary),
                     label: 'Patients',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.description_outlined),
-                    selectedIcon: Icon(Icons.description_rounded, color: AppColors.primary),
-                    label: 'Notes',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.receipt_long_outlined),
@@ -631,19 +624,13 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
     ];
 
     // Fixed 4×2 grid layout.
-    // Row 1: My Patients | Schedule | Documentation | Assessment Library
-    // Row 2: Revenues    | Expenses | Statistics    | PhysioGate
+    // Row 1: My Patients | Schedule | Documentation/Notifications | Assessment Library
+    // Row 2: Revenues    | Expenses | Statistics                  | PhysioGate
     // My Profile lives in the header only (not in the grid).
-    const primaryIndices = [
-      2,  // My Patients
-      0,  // Schedule
-      1,  // Documentation
-      9,  // Assessment Library
-      4,  // Revenues
-      5,  // Expenses
-      3,  // Statistics
-      8,  // PhysioGate
-    ];
+    // On mobile, Documentation is desktop-only so Notifications fills that slot.
+    final primaryIndices = FormFactorFeatures.of(context).showDocumentation
+        ? const [2, 0, 1, 9, 4, 5, 3, 8]   // desktop: Documentation at pos 2
+        : const [2, 0, 7, 9, 4, 5, 3, 8];  // mobile:  Notifications at pos 2
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

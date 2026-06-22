@@ -1005,66 +1005,78 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       color: _kAccent)),
             ]),
             const SizedBox(height: 16),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                SizedBox(
-                  height: 180,
-                  width: 180,
-                  child: PieChart(
-                    PieChartData(
-                      sections: categories.asMap().entries.map((e) {
-                        final pct = total > 0 ? (e.value.value / total * 100) : 0.0;
-                        return PieChartSectionData(
-                          value: e.value.value,
-                          title: '${pct.toStringAsFixed(0)}%',
+            LayoutBuilder(builder: (ctx, bc) {
+              final legend = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: categories.asMap().entries.map((e) {
+                  final pct = total > 0 ? (e.value.value / total * 100) : 0.0;
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(children: [
+                      Container(
+                        width: 12, height: 12,
+                        decoration: BoxDecoration(
                           color: _catColors[e.key % _catColors.length],
-                          radius: 70,
-                          titleStyle: const TextStyle(
-                              fontSize: 11,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(e.value.key,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12)),
+                      ),
+                      Text('${pct.toStringAsFixed(0)}%',
+                          style: const TextStyle(
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white),
-                        );
-                      }).toList(),
-                      sectionsSpace: 2,
-                      centerSpaceRadius: 32,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: categories.asMap().entries.map((e) {
+                              color: _kAccent)),
+                    ]),
+                  );
+                }).toList(),
+              );
+              final pie = SizedBox(
+                height: 180,
+                width: 180,
+                child: PieChart(
+                  PieChartData(
+                    sections: categories.asMap().entries.map((e) {
                       final pct = total > 0 ? (e.value.value / total * 100) : 0.0;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Row(children: [
-                          Container(
-                            width: 12, height: 12,
-                            decoration: BoxDecoration(
-                              color: _catColors[e.key % _catColors.length],
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(e.value.key,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 12)),
-                          ),
-                          Text('${pct.toStringAsFixed(0)}%',
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: _kAccent)),
-                        ]),
+                      return PieChartSectionData(
+                        value: e.value.value,
+                        title: '${pct.toStringAsFixed(0)}%',
+                        color: _catColors[e.key % _catColors.length],
+                        radius: 70,
+                        titleStyle: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white),
                       );
                     }).toList(),
+                    sectionsSpace: 2,
+                    centerSpaceRadius: 32,
                   ),
                 ),
-              ],
-            ),
+              );
+              if (bc.maxWidth < 400) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(child: pie),
+                    const SizedBox(height: 16),
+                    legend,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  pie,
+                  const SizedBox(width: 20),
+                  Expanded(child: legend),
+                ],
+              );
+            }),
           ],
         ),
       ),
