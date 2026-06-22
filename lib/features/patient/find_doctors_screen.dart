@@ -40,8 +40,10 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
 
   Set<String> _linkedDoctorIds = {};
 
-  // Guest-mode doctors: loaded once via REST (no auth required — anon policy).
+  // Guest-mode doctors: loaded once via REST after anonymous sign-in.
   List<Map<String, dynamic>>? _guestDoctors;
+  // True when we created the anon session ourselves so we can sign out on leave.
+  bool _ownedAnonSession = false;
 
   @override
   void initState() {
@@ -55,11 +57,19 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
 
   Future<void> _loadGuestDoctors() async {
     try {
+      // The users table has RLS policies requiring auth.uid() to be set.
+      // An anonymous Supabase session satisfies that without creating a real
+      // account — it is signed out again when the guest leaves this screen.
+      if (_supabase.auth.currentUser == null) {
+        await _supabase.auth.signInAnonymously();
+        _ownedAnonSession = true;
+      }
       final data = await _supabase
           .from('users')
           .select()
-          .eq('role', 'doctor')
-          .eq('show_in_search', true);
+          .eq('role', 'doctor');
+      // _filter() applies show_in_search consistently (null defaults to shown),
+      // matching authenticated-patient behaviour — so no DB-level pre-filter.
       if (mounted) setState(() => _guestDoctors = List<Map<String, dynamic>>.from(data));
     } catch (e) {
       if (mounted) {
@@ -88,6 +98,9 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
   void dispose() {
     _searchCtrl.dispose();
     _mapController.dispose();
+    // Clean up the anonymous session we created so the login screen
+    // doesn't inherit an unexpected auth state.
+    if (_ownedAnonSession) _supabase.auth.signOut();
     super.dispose();
   }
 
