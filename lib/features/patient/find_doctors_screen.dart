@@ -56,20 +56,22 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
   }
 
   Future<void> _loadGuestDoctors() async {
-    try {
-      // The users table has RLS policies requiring auth.uid() to be set.
-      // An anonymous Supabase session satisfies that without creating a real
-      // account — it is signed out again when the guest leaves this screen.
-      if (_supabase.auth.currentUser == null) {
+    // Try an anonymous Supabase session so RLS policies that require
+    // auth.uid() (role = 'authenticated') are satisfied without creating a
+    // real account. If anonymous auth is disabled in the Supabase project
+    // this will throw — we swallow it and fall through to the query anyway,
+    // which may still succeed if the table has an anon-role read policy.
+    if (_supabase.auth.currentUser == null) {
+      try {
         await _supabase.auth.signInAnonymously();
         _ownedAnonSession = true;
-      }
+      } catch (_) {}
+    }
+    try {
       final data = await _supabase
           .from('users')
           .select()
           .eq('role', 'doctor');
-      // _filter() applies show_in_search consistently (null defaults to shown),
-      // matching authenticated-patient behaviour — so no DB-level pre-filter.
       if (mounted) setState(() => _guestDoctors = List<Map<String, dynamic>>.from(data));
     } catch (e) {
       if (mounted) {
