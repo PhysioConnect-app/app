@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
@@ -39,10 +40,35 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
 
   Set<String> _linkedDoctorIds = {};
 
+  // Guest-mode doctors: loaded once via REST (no auth required — anon policy).
+  List<Map<String, dynamic>>? _guestDoctors;
+
   @override
   void initState() {
     super.initState();
-    if (!widget.isGuest) _loadLinkedDoctors();
+    if (widget.isGuest) {
+      _loadGuestDoctors();
+    } else {
+      _loadLinkedDoctors();
+    }
+  }
+
+  Future<void> _loadGuestDoctors() async {
+    try {
+      final data = await _supabase
+          .from('users')
+          .select()
+          .eq('role', 'doctor')
+          .eq('show_in_search', true);
+      if (mounted) setState(() => _guestDoctors = List<Map<String, dynamic>>.from(data));
+    } catch (e) {
+      if (mounted) {
+        setState(() => _guestDoctors = []);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load therapists: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _loadLinkedDoctors() async {
@@ -193,9 +219,7 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
     }
 
     result = result.where((data) {
-      final sub          = (data['subscription'] as String?) ?? 'basic';
-      final showInSearch = (data['show_in_search'] as bool?) ?? true;
-      return sub == 'premium' && showInSearch;
+      return (data['show_in_search'] as bool?) ?? true;
     }).toList();
 
     if (_nearbyMode && _myPosition != null) {
@@ -320,20 +344,22 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
           ),
 
           Expanded(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _supabase
-                  .from('users')
-                  .stream(primaryKey: ['id'])
-                  .eq('role', 'doctor'),
-              builder: (context, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final docs = _filter(snap.data ?? []);
-                if (_showMap) return _buildMapView(docs, s);
-                return _buildListView(docs, s);
-              },
-            ),
+            child: widget.isGuest
+                ? _buildGuestDoctorList(s)
+                : StreamBuilder<List<Map<String, dynamic>>>(
+                    stream: _supabase
+                        .from('users')
+                        .stream(primaryKey: ['id'])
+                        .eq('role', 'doctor'),
+                    builder: (context, snap) {
+                      if (snap.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final docs = _filter(snap.data ?? []);
+                      if (_showMap) return _buildMapView(docs, s);
+                      return _buildListView(docs, s);
+                    },
+                  ),
           ),
         ],
       ),
@@ -373,6 +399,17 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
         ]),
       ),
     );
+  }
+
+  // ── Guest doctor list (no auth — uses pre-loaded REST data) ─────────────
+
+  Widget _buildGuestDoctorList(AppStrings s) {
+    if (_guestDoctors == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final docs = _filter(_guestDoctors!);
+    if (_showMap) return _buildMapView(docs, s);
+    return _buildListView(docs, s);
   }
 
   // ── Map view ──────────────────────────────────────────────────────────────
@@ -469,91 +506,234 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
     ]);
   }
 
-  void _showDoctorSheet(Map<String, dynamic> data, AppStrings s) {
-    final name = data['name'] ?? 'Therapist';
-    final spec = data['specialization'] ?? '';
-    final bio = data['bio'] ?? '';
-    final photo = data['profile_photo_url'] ?? '';
-    final homeVisit = data['offers_home_visit'] ?? false;
-    final docId = data['id'] as String;
-    final isLinked = _linkedDoctorIds.contains(docId);
-    final showDrSheet = (data['show_dr_prefix'] as bool?) ?? false;
+  // ── Full doctor detail sheet ──────────────────────────────────────────────
+  // Shown when a user taps any doctor card (list or map). Works for both
+  // authenticated patients and guests — the Add-to-List button routes
+  // guests to the sign-in prompt via _handleAddToList.
 
+  void _showDoctorSheet(Map<String, dynamic> data, AppStrings s) =>
+      _showFullDoctorSheet(data, s);
+
+  void _showFullDoctorSheet(Map<String, dynamic> data, AppStrings s) {
+    final docId        = data['id'] as String;
+    final name         = data['name'] as String? ?? 'Therapist';
+    final spec         = data['specialization'] as String? ?? '';
+    final bio          = data['bio'] as String? ?? '';
+    final photo        = data['profile_photo_url'] as String? ?? '';
+    final clinic       = data['clinic_name'] as String? ?? '';
+    final address      = data['clinic_address'] as String? ?? '';
+    final phone        = data['phone'] as String? ?? '';
+    final workingHours = (data['working_hours'] as String? ?? '').trim();
+    final homeVisit    = (data['offers_home_visit'] as bool?) ?? false;
+    final exp          = data['experience'] as String? ?? '';
+    final cert         = data['certifications'] as String? ?? '';
+    final showDr       = (data['show_dr_prefix'] as bool?) ?? false;
+    final isLinked     = _linkedDoctorIds.contains(docId);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.80,
+        maxChildSize: 0.95,
+        minChildSize: 0.4,
+        builder: (_, ctrl) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: ListView(
+            controller: ctrl,
+            padding: const EdgeInsets.all(20),
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Center(
+                child: CircleAvatar(
+                  radius: 44,
+                  backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                  backgroundImage:
+                      photo.isNotEmpty ? NetworkImage(photo) : null,
+                  child: photo.isEmpty
+                      ? const Icon(Icons.person_rounded,
+                          size: 44, color: AppColors.primary)
+                      : null,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Center(
+                child: Text(
+                  showDr && name.isNotEmpty ? 'Dr. $name' : name,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 20),
+                ),
+              ),
+              if (spec.isNotEmpty)
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(spec,
+                        style: const TextStyle(
+                            color: AppColors.primary, fontSize: 13)),
+                  ),
+                ),
+              const SizedBox(height: 20),
+              if (clinic.isNotEmpty)
+                _detailRow(Icons.business_rounded, clinic),
+              if (address.isNotEmpty)
+                _detailRow(Icons.location_on_rounded, address),
+              if (phone.isNotEmpty)
+                _detailRow(Icons.phone_rounded, phone,
+                    color: AppColors.primary,
+                    onTap: () => _openPhone(phone)),
+              if (exp.isNotEmpty)
+                _detailRow(Icons.work_history_rounded, '$exp experience'),
+              if (cert.isNotEmpty)
+                _detailRow(Icons.military_tech_rounded, cert),
+              if (homeVisit)
+                _detailRow(Icons.home_rounded, 'Home visits available',
+                    color: Colors.green),
+              if (workingHours.isNotEmpty)
+                _detailRow(Icons.access_time_rounded, workingHours,
+                    color: const Color(0xFF1565C0)),
+              if (bio.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                const Text('About',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary)),
+                const SizedBox(height: 6),
+                Text(bio,
+                    style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                        height: 1.5)),
+              ],
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: Icon(
+                    isLinked
+                        ? Icons.check_circle_rounded
+                        : Icons.person_add_rounded,
+                    size: 16,
+                  ),
+                  label: Text(
+                      isLinked ? 'Added to My List' : 'Add to My List'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor:
+                        isLinked ? Colors.green : AppColors.primary,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: isLinked
+                      ? null
+                      : () {
+                          Navigator.pop(ctx);
+                          _handleAddToList(docId);
+                        },
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(IconData icon, String text,
+      {Color color = AppColors.textSecondary, VoidCallback? onTap}) {
+    if (text.isEmpty) return const SizedBox.shrink();
+    Widget row = Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(children: [
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 10),
+        Expanded(
+            child:
+                Text(text, style: TextStyle(color: color, fontSize: 13))),
+        if (onTap != null)
+          const Icon(Icons.open_in_new_rounded,
+              size: 14, color: AppColors.primary),
+      ]),
+    );
+    if (onTap != null) return GestureDetector(onTap: onTap, child: row);
+    return row;
+  }
+
+  void _openPhone(String phone) {
+    if (phone.isEmpty) return;
+    final cleaned = phone.replaceAll(RegExp(r'[\s\-()+]'), '');
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                backgroundImage:
-                    photo.isNotEmpty ? NetworkImage(photo) : null,
-                child: photo.isEmpty
-                    ? const Icon(Icons.person_rounded,
-                        color: AppColors.primary, size: 28)
-                    : null,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(showDrSheet && name.isNotEmpty ? 'Dr. $name' : name,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 17)),
-                    Text(spec,
-                        style: const TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.w500)),
-                    if (homeVisit as bool)
-                      const Text('Home visits available',
-                          style: TextStyle(
-                              color: AppColors.success, fontSize: 12)),
-                  ],
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Text(phone,
+                style: const TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _phoneAction(
+                  Icons.phone_rounded,
+                  'Call',
+                  const Color(0xFF00695C),
+                  () => launchUrl(Uri.parse('tel:$cleaned')),
                 ),
-              ),
-            ]),
-            if (bio.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text(bio,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 13)),
-            ],
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                icon: Icon(
-                  isLinked
-                      ? Icons.check_circle_rounded
-                      : Icons.person_add_rounded,
-                  size: 16,
+                _phoneAction(
+                  Icons.chat_rounded,
+                  'WhatsApp',
+                  const Color(0xFF25D366),
+                  () => launchUrl(
+                      Uri.parse('https://wa.me/$cleaned'),
+                      mode: LaunchMode.externalApplication),
                 ),
-                label: Text(isLinked ? 'Added to My List' : 'Add to My List'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      isLinked ? Colors.green : AppColors.primary,
-                ),
-                onPressed: isLinked
-                    ? null
-                    : () {
-                        Navigator.pop(ctx);
-                        _handleAddToList(docId);
-                      },
-              ),
+              ],
             ),
-          ],
+            const SizedBox(height: 8),
+          ]),
         ),
       ),
+    );
+  }
+
+  Widget _phoneAction(
+      IconData icon, String label, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 26),
+        ),
+        const SizedBox(height: 6),
+        Text(label,
+            style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w600)),
+      ]),
     );
   }
 
@@ -617,6 +797,7 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
           isLinked: isLinked,
           showDrPrefix: showDr,
           onAddToList: () => _handleAddToList(docId),
+          onTap: () => _showFullDoctorSheet(data, s),
         );
       },
     );
@@ -641,6 +822,7 @@ class _DoctorListCard extends StatelessWidget {
   final bool isLinked;
   final bool showDrPrefix;
   final VoidCallback onAddToList;
+  final VoidCallback? onTap;
 
   const _DoctorListCard({
     required this.s,
@@ -658,11 +840,14 @@ class _DoctorListCard extends StatelessWidget {
     required this.isLinked,
     required this.showDrPrefix,
     required this.onAddToList,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return GestureDetector(
+      onTap: onTap,
+      child: Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 2,
@@ -798,7 +983,8 @@ class _DoctorListCard extends StatelessWidget {
           ),
         ]),
       ),
-    );
+    ),    // Card
+    );    // GestureDetector
   }
 
   Widget _infoBadge(
