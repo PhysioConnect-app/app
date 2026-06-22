@@ -6,6 +6,8 @@
 // If any of these ever fails after a change, the desktop code path was
 // accidentally altered — revert the change rather than re-recording the
 // golden.
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:clinic_telehealth_app/features/auth/login_screen.dart';
@@ -238,9 +240,49 @@ void main() {
   testWidgets('BillingScreen — desktop', (tester) async {
     await ensureSupabaseInitialized();
     await signInFakeUser();
-    await pumpAtSize(tester, const BillingScreen(), size: desktopSize);
+
+    // Inject deterministic invoices so the golden exercises the fixed
+    // table-body path (Expanded(ListView) inside Material → Column).
+    // Without injected data the Supabase WebSocket never connects in tests,
+    // leaving the stream in an error state and the table body empty — which
+    // cannot catch a regression of the RenderFlex fix (commit b93a9bc).
+    final controller = StreamController<List<Map<String, dynamic>>>();
+    addTearDown(controller.close);
+
+    await pumpAtSize(
+      tester,
+      BillingScreen(invoiceStream: controller.stream),
+      size: desktopSize,
+    );
+
+    // Emit 5 invoices dated today so _inPeriod (monthly window) keeps them.
+    final now = DateTime.now().toIso8601String();
+    controller.add(List.generate(5, (i) => <String, dynamic>{
+      'id':           'inv-$i',
+      'doctor_id':    'test-user-id',
+      'patient_id':   'pat-$i',
+      'patient_name': 'Test Patient ${i + 1}',
+      'service':      'PT Session',
+      'amount':       (i + 1) * 50.0,
+      'currency':     'USD',
+      'status':       'paid',
+      'invoice_date': now,
+      'created_at':   now,
+    }));
+
     await _settle(tester);
     _drainExceptions(tester);
+
+    // Regression guard: all 5 rows must be present in the widget tree.
+    // If the table body collapses to 0 height these finders will fail.
+    for (var i = 1; i <= 5; i++) {
+      expect(
+        find.text('Test Patient $i'),
+        findsOneWidget,
+        reason: 'Row $i absent — Expanded table body collapsed (RenderFlex regression)',
+      );
+    }
+
     await _golden(tester, 'billing_screen');
   });
 

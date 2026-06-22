@@ -55,7 +55,13 @@ extension _InvStatusX on _InvStatus {
 // ── Screen ─────────────────────────────────────────────────────────────────
 
 class BillingScreen extends StatefulWidget {
-  const BillingScreen({super.key});
+  const BillingScreen({super.key, this.invoiceStream});
+
+  /// Overrides the Supabase realtime stream. Provided in tests to inject
+  /// deterministic invoice data without a live Supabase connection.
+  @visibleForTesting
+  final Stream<List<Map<String, dynamic>>>? invoiceStream;
+
   @override
   State<BillingScreen> createState() => _BillingScreenState();
 }
@@ -74,10 +80,18 @@ class _BillingScreenState extends State<BillingScreen> {
   String   _patientFilter = '';
   String?  _statusFilter;
 
+  final _searchCtrl = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     _syncPastAppointments();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _syncPastAppointments() async {
@@ -1036,19 +1050,20 @@ class _BillingScreenState extends State<BillingScreen> {
                   style: TextStyle(fontWeight: FontWeight.bold)),
             ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
-        stream: _supabase
-            .from('invoices')
-            .stream(primaryKey: ['id'])
-            .eq('doctor_id', _uid)
-            .map((list) {
-              final sorted = List<Map<String, dynamic>>.from(list);
-              sorted.sort((a, b) {
-                final aStr = a['created_at'] as String? ?? '';
-                final bStr = b['created_at'] as String? ?? '';
-                return bStr.compareTo(aStr);
-              });
-              return sorted;
-            }),
+        stream: widget.invoiceStream ??
+            _supabase
+                .from('invoices')
+                .stream(primaryKey: ['id'])
+                .eq('doctor_id', _uid)
+                .map((list) {
+                  final sorted = List<Map<String, dynamic>>.from(list);
+                  sorted.sort((a, b) {
+                    final aStr = a['created_at'] as String? ?? '';
+                    final bStr = b['created_at'] as String? ?? '';
+                    return bStr.compareTo(aStr);
+                  });
+                  return sorted;
+                }),
         builder: (ctx, snap) {
           if (snap.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -1219,6 +1234,7 @@ class _BillingScreenState extends State<BillingScreen> {
           Row(children: [
             Expanded(
               child: TextField(
+                controller: _searchCtrl,
                 onChanged: (v) => setState(() => _patientFilter = v),
                 decoration: InputDecoration(
                   hintText: 'Search patient...',
