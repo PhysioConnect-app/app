@@ -1299,7 +1299,7 @@ class _BillingScreenState extends State<BillingScreen> {
                       BorderRadius.vertical(top: Radius.circular(14)),
                 ),
                 padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 12),
+                    horizontal: 16, vertical: 10),
                 child: Row(children: [
                   _th('Patient Name', flex: 3),
                   _th('Date',         flex: 2),
@@ -1432,12 +1432,12 @@ class _BillingScreenState extends State<BillingScreen> {
 
     return Container(
       color: bg,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(children: [
         Expanded(flex: 3,
           child: Text(name,
               style: const TextStyle(
-                  fontWeight: FontWeight.bold, fontSize: 14))),
+                  fontWeight: FontWeight.bold, fontSize: 13))),
         Expanded(flex: 2,
           child: Text(date,
               style: const TextStyle(
@@ -1966,20 +1966,20 @@ class _BillingScreenState extends State<BillingScreen> {
             if (isDesktop) ...[
               SizedBox(
                 width: double.infinity,
-                height: 56,
+                height: 44,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _kAccent,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                        borderRadius: BorderRadius.circular(10)),
                     elevation: 3,
                     shadowColor: _kAccent.withValues(alpha: 0.35),
                   ),
-                  icon: const Icon(Icons.add_circle_rounded, size: 24),
+                  icon: const Icon(Icons.add_circle_rounded, size: 20),
                   label: const Text('+ Add Income',
                       style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 17)),
+                          fontWeight: FontWeight.bold, fontSize: 14)),
                   onPressed: () => _showAddInvoice(s),
                 ),
               ),
@@ -2181,7 +2181,7 @@ class _BillingScreenState extends State<BillingScreen> {
     String? sublabel,
   }) =>
       Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: tint,
           borderRadius: BorderRadius.circular(12),
@@ -2195,14 +2195,14 @@ class _BillingScreenState extends State<BillingScreen> {
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
                     color: accent.withValues(alpha: 0.8))),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
               child: Text(
                 _fmtAmt(amount),
                 style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 15,
                     fontWeight: FontWeight.bold,
                     color: accent),
               ),
