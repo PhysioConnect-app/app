@@ -39,8 +39,8 @@ interface Prompt {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const GROQ_URL       = 'https://api.groq.com/openai/v1/chat/completions'
-const PRIMARY_MODEL  = 'llama-3.1-70b-versatile'
-const FALLBACK_MODEL = 'mixtral-8x7b-32768'
+const PRIMARY_MODEL  = 'llama-3.3-70b-versatile'
+const FALLBACK_MODEL = 'llama-3.1-8b-instant'
 const DEFAULT_LIMIT  = 100
 
 const VALID_TASKS: TaskType[] = [
