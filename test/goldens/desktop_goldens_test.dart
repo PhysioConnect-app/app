@@ -10,6 +10,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:clinic_telehealth_app/features/auth/login_screen.dart';
 import 'package:clinic_telehealth_app/features/patient/patient_dashboard_screen.dart';
 import 'package:clinic_telehealth_app/features/patient/find_doctors_screen.dart';
@@ -243,21 +244,12 @@ void main() {
 
     // Inject deterministic invoices so the golden exercises the fixed
     // table-body path (Expanded(ListView) inside Material → Column).
-    // Without injected data the Supabase WebSocket never connects in tests,
-    // leaving the stream in an error state and the table body empty — which
-    // cannot catch a regression of the RenderFlex fix (commit b93a9bc).
-    final controller = StreamController<List<Map<String, dynamic>>>();
-    addTearDown(controller.close);
-
-    await pumpAtSize(
-      tester,
-      BillingScreen(invoiceStream: controller.stream),
-      size: desktopSize,
-    );
-
-    // Emit 5 invoices dated today so _inPeriod (monthly window) keeps them.
+    // Stream.value() schedules the single emission as a microtask during
+    // pumpWidget, so the data is in the tree by the time pumpAtSize's
+    // first pump runs — more reliable than StreamController.add() after
+    // pumpAtSize which races against LayoutBuilder constraint passes.
     final now = DateTime.now().toIso8601String();
-    controller.add(List.generate(5, (i) => <String, dynamic>{
+    final testInvoices = List.generate(5, (i) => <String, dynamic>{
       'id':           'inv-$i',
       'doctor_id':    'test-user-id',
       'patient_id':   'pat-$i',
@@ -268,8 +260,18 @@ void main() {
       'status':       'paid',
       'invoice_date': now,
       'created_at':   now,
-    }));
+    });
 
+    // DateFormat('MMM yyyy') in _rangeLabel (_filterBar) is locale-sensitive.
+    // Once the stream delivers data the filter bar builds and calls DateFormat,
+    // which throws LocaleDataException if locale data was never initialized.
+    await initializeDateFormatting('en_US');
+
+    await pumpAtSize(
+      tester,
+      BillingScreen(invoiceStream: Stream.value(testInvoices)),
+      size: desktopSize,
+    );
     await _settle(tester);
     _drainExceptions(tester);
 
