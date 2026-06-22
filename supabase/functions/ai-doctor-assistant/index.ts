@@ -58,7 +58,7 @@ const VALID_TASKS: TaskType[] = [
 
 // Maximum Groq output tokens per task type
 const MAX_TOKENS: Record<TaskType, number> = {
-  SOAP_GENERATION:         800,
+  SOAP_GENERATION:         1400,
   PATIENT_HISTORY_SUMMARY: 1200,
   REVENUE_SUMMARY:         600,
   EXPENSE_SUMMARY:         600,
@@ -99,25 +99,66 @@ function buildPrompt(taskType: TaskType, ctx: Record<string, unknown>): Prompt {
       const notes   = cap(str(ctx.sessionNotes), 2500)
 
       return {
-        system: `You are a documentation assistant for a licensed physical therapist.
-Your ONLY role is to organise the therapist's session notes into standard SOAP format.
+        system: `You are a documentation assistant for a licensed physical therapist (PhysioConnect).
+Your ONLY role is to extract and organise information from the therapist's session notes into the PhysioConnect SOAP template fields.
 You do NOT diagnose, prescribe exercises, recommend treatments, or make clinical decisions.
-You only restructure information the therapist already provided.
-Respond with valid JSON only — no extra text, no markdown fences.`,
+You ONLY restructure and extract information the therapist already provided.
 
-        user: `Organise these session notes into SOAP format.
+CRITICAL RULES:
+1. Never fabricate ROM values, strength grades, special test results, medical history, medications, or pain levels.
+2. If information for a field is NOT present in the notes, return null or "Not Documented" — never invent it.
+3. Extract information into the most specific applicable field. Do NOT dump everything into chiefComplaint.
+4. Respond with valid JSON only — no markdown fences, no extra text.`,
+
+        user: `Extract and organise these session notes into the PhysioConnect SOAP template.
 
 Patient: ${patient}${age}${dx ? `\nDiagnosis: ${dx}` : ''}${date}
 
 Therapist notes:
 ${notes}
 
-Return exactly this JSON:
+Return exactly this JSON structure (use null for fields with no available information):
 {
-  "subjective": "patient-reported symptoms, pain level, functional limitations",
-  "objective": "measurable findings: ROM, strength, special tests, gait, posture",
-  "assessment": "therapist's clinical impression and reasoning from the notes",
-  "plan": "treatment approach, interventions, frequency, HEP, follow-up"
+  "subjective": {
+    "chiefComplaint": "primary reason for visit in patient's own words",
+    "onsetDuration": "when it started and how long it has been present",
+    "painLevel": "numeric pain score e.g. 7/10 — null if not mentioned",
+    "painCharacteristics": "quality of pain e.g. sharp, dull, burning — null if not mentioned",
+    "aggravatingFactors": "what makes it worse — null if not mentioned",
+    "relievingFactors": "what makes it better — null if not mentioned",
+    "functionalLimitations": "what activities are limited — null if not mentioned",
+    "patientGoals": "what the patient wants to achieve — null if not mentioned",
+    "medicalSurgicalHistory": "relevant past medical/surgical history — null if not mentioned",
+    "medications": "current medications — null if not mentioned",
+    "socialOccupationalContext": "occupation, living situation, activity level — null if not mentioned"
+  },
+  "objective": {
+    "observation": "posture, gait, appearance, guarding — null if not mentioned",
+    "palpation": "tenderness, swelling, tissue texture — null if not mentioned",
+    "rangeOfMotion": "ROM measurements with degrees if given — null if not mentioned",
+    "strengthTesting": "muscle strength grades — null if not mentioned",
+    "neurologicalExam": "sensation, reflexes, neural tension tests — null if not mentioned",
+    "balanceCoordination": "balance and coordination findings — null if not mentioned",
+    "specialTests": "named clinical special tests and results — null if not mentioned",
+    "functionalTests": "functional movement assessments — null if not mentioned",
+    "assistiveDevices": "any devices used e.g. crutches, walker — null if not mentioned"
+  },
+  "assessment": {
+    "clinicalImpression": "therapist's clinical summary and reasoning",
+    "severityStage": "severity (Mild/Moderate/Severe) and stage (Acute/Subacute/Chronic) — null if not mentioned",
+    "progressTowardGoals": "progress toward established goals — null if not mentioned",
+    "barriers": "barriers to recovery — null if not mentioned",
+    "responseToTreatment": "how patient responded to treatment — null if not mentioned",
+    "prognosis": "expected outcome — null if not mentioned"
+  },
+  "plan": {
+    "treatmentFocus": "primary focus of treatment",
+    "interventions": "specific interventions performed or planned",
+    "frequencyDuration": "treatment frequency and duration e.g. 3x/week x 4 weeks — null if not mentioned",
+    "homeExerciseProgram": "home exercise instructions — null if not mentioned",
+    "referrals": "referrals to other providers — null if not mentioned",
+    "followUp": "next appointment or follow-up plan — null if not mentioned"
+  }
 }`,
 
         maxTokens: MAX_TOKENS.SOAP_GENERATION,
@@ -457,8 +498,24 @@ async function getUsage(
     .eq('user_id', userId)
     .maybeSingle()
 
-  const enabled      = (cfg?.enabled      as boolean | undefined) ?? true
-  const monthlyLimit = (cfg?.monthly_limit as number  | undefined) ?? DEFAULT_LIMIT
+  let enabled      = (cfg?.enabled      as boolean | undefined) ?? true
+  let monthlyLimit = (cfg?.monthly_limit as number  | undefined) ?? DEFAULT_LIMIT
+
+  // If no ai_config row, fall back to users.features (admin-controlled via manage sheet)
+  if (!cfg) {
+    const { data: userRow } = await admin
+      .from('users')
+      .select('features')
+      .eq('id', userId)
+      .maybeSingle()
+    const features = (userRow?.features as Record<string, unknown> | null) ?? {}
+    if (features.ai_enabled !== undefined && features.ai_enabled !== null) {
+      enabled = features.ai_enabled as boolean
+    }
+    if (features.ai_monthly_limit !== undefined && features.ai_monthly_limit !== null) {
+      monthlyLimit = features.ai_monthly_limit as number
+    }
+  }
 
   const { data: rows } = await admin
     .from('ai_usage')

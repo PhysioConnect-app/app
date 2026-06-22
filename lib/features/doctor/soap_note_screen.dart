@@ -649,15 +649,15 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
     );
   }
 
-  /// Step 2: preview the generated S/O/A/P and let the therapist apply or discard.
+  /// Step 2: preview the generated SOAP and let the therapist apply or discard.
   void _showAiResultSheet(SoapResult soap, AiUsage? usage) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        maxChildSize: 0.95,
+        initialChildSize: 0.88,
+        maxChildSize: 0.96,
         minChildSize: 0.5,
         builder: (_, ctrl) => Container(
           decoration: const BoxDecoration(
@@ -711,10 +711,54 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
                 style: TextStyle(color: Color(0xFFE65100), fontSize: 11),
               ),
               const SizedBox(height: 20),
-              _aiSoapSection('S – Subjective', soap.subjective, Colors.blue),
-              _aiSoapSection('O – Objective',  soap.objective,  Colors.green),
-              _aiSoapSection('A – Assessment', soap.assessment, Colors.orange),
-              _aiSoapSection('P – Plan',       soap.plan,       Colors.purple),
+
+              // S – Subjective
+              _aiSoapGroupHeader('S – Subjective', Colors.blue),
+              _aiField('Chief Complaint',        soap.chiefComplaint,          Colors.blue),
+              _aiField('Onset & Duration',        soap.onsetDuration,           Colors.blue),
+              _aiField('Pain Level',              soap.painLevel,               Colors.blue),
+              _aiField('Pain Characteristics',    soap.painCharacteristics,     Colors.blue),
+              _aiField('Aggravating Factors',     soap.aggravatingFactors,      Colors.blue),
+              _aiField('Relieving Factors',       soap.relievingFactors,        Colors.blue),
+              _aiField('Functional Limitations',  soap.functionalLimitations,   Colors.blue),
+              _aiField('Patient Goals',           soap.patientGoals,            Colors.blue),
+              _aiField('Medical/Surgical History',soap.medicalSurgicalHistory,  Colors.blue),
+              _aiField('Medications',             soap.medications,             Colors.blue),
+              _aiField('Social/Occupational',     soap.socialOccupationalContext, Colors.blue),
+              const SizedBox(height: 16),
+
+              // O – Objective
+              _aiSoapGroupHeader('O – Objective', Colors.green),
+              _aiField('Observation',         soap.observation,       Colors.green),
+              _aiField('Palpation',           soap.palpation,         Colors.green),
+              _aiField('Range of Motion',     soap.rangeOfMotion,     Colors.green),
+              _aiField('Strength Testing',    soap.strengthTesting,   Colors.green),
+              _aiField('Neurological Exam',   soap.neurologicalExam,  Colors.green),
+              _aiField('Balance/Coordination',soap.balanceCoordination,Colors.green),
+              _aiField('Special Tests',       soap.specialTests,      Colors.green),
+              _aiField('Functional Tests',    soap.functionalTests,   Colors.green),
+              _aiField('Assistive Devices',   soap.assistiveDevices,  Colors.green),
+              const SizedBox(height: 16),
+
+              // A – Assessment
+              _aiSoapGroupHeader('A – Assessment', Colors.orange),
+              _aiField('Clinical Impression',   soap.clinicalImpression,  Colors.orange),
+              _aiField('Severity & Stage',      soap.severityStage,       Colors.orange),
+              _aiField('Progress Toward Goals', soap.progressTowardGoals, Colors.orange),
+              _aiField('Barriers',              soap.barriers,            Colors.orange),
+              _aiField('Response to Treatment', soap.responseToTreatment, Colors.orange),
+              _aiField('Prognosis',             soap.prognosis,           Colors.orange),
+              const SizedBox(height: 16),
+
+              // P – Plan
+              _aiSoapGroupHeader('P – Plan', Colors.purple),
+              _aiField('Treatment Focus',    soap.treatmentFocus,     Colors.purple),
+              _aiField('Interventions',      soap.interventions,      Colors.purple),
+              _aiField('Frequency/Duration', soap.frequencyDuration,  Colors.purple),
+              _aiField('Home Exercise',      soap.homeExerciseProgram,Colors.purple),
+              _aiField('Referrals',          soap.referrals,          Colors.purple),
+              _aiField('Follow-Up',          soap.followUp,           Colors.purple),
+
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -757,38 +801,99 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
     );
   }
 
-  Widget _aiSoapSection(String title, String content, Color color) {
-    if (content.isEmpty) return const SizedBox.shrink();
+  Widget _aiSoapGroupHeader(String title, Color color) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(10),
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title,
-            style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-                color: color)),
-        const SizedBox(height: 6),
-        Text(content,
-            style: const TextStyle(fontSize: 13, height: 1.5)),
+      child: Text(title,
+          style: TextStyle(
+              fontWeight: FontWeight.w700, fontSize: 13, color: color)),
+    );
+  }
+
+  Widget _aiField(String label, String? value, Color color) {
+    if (value == null || value.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFE8EAED)),
+      ),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        SizedBox(
+          width: 130,
+          child: Text(label,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: color)),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(value,
+              style: const TextStyle(fontSize: 12, height: 1.4)),
+        ),
       ]),
     );
   }
 
-  /// Maps S/O/A/P → the four most representative form fields.
+  /// Maps all AI SOAP fields to the corresponding form controllers.
   void _applyAiSoap(SoapResult soap) {
+    void set(TextEditingController ctrl, String? value) {
+      if (value != null && value.isNotEmpty) ctrl.text = value;
+    }
     setState(() {
-      if (soap.subjective.isNotEmpty) _chiefComplaintCtrl.text = soap.subjective;
-      if (soap.objective.isNotEmpty)  _observationCtrl.text    = soap.objective;
-      if (soap.assessment.isNotEmpty) _clinicalImpressionCtrl.text = soap.assessment;
-      if (soap.plan.isNotEmpty)       _interventionsCtrl.text  = soap.plan;
+      // Subjective
+      set(_chiefComplaintCtrl, soap.chiefComplaint);
+      set(_onsetDurationCtrl,  soap.onsetDuration);
+      if (soap.painLevel != null) {
+        final match = RegExp(r'\d+').firstMatch(soap.painLevel!);
+        if (match != null) {
+          final n = int.tryParse(match.group(0)!);
+          if (n != null && n >= 0 && n <= 10) _painLevel = n;
+        }
+      }
+      set(_painCharCtrl,        soap.painCharacteristics);
+      set(_aggravatingCtrl,     soap.aggravatingFactors);
+      set(_relievingCtrl,       soap.relievingFactors);
+      set(_functionalLimitCtrl, soap.functionalLimitations);
+      set(_patientGoalsCtrl,    soap.patientGoals);
+      set(_medHistoryCtrl,      soap.medicalSurgicalHistory);
+      set(_medicationsCtrl,     soap.medications);
+      set(_socialContextCtrl,   soap.socialOccupationalContext);
+      // Objective
+      set(_observationCtrl,    soap.observation);
+      set(_palpationCtrl,      soap.palpation);
+      set(_romCtrl,            soap.rangeOfMotion);
+      set(_strengthCtrl,       soap.strengthTesting);
+      set(_neuroCtrl,          soap.neurologicalExam);
+      set(_balanceCtrl,        soap.balanceCoordination);
+      set(_specialTestsCtrl,   soap.specialTests);
+      set(_functionalTestsCtrl, soap.functionalTests);
+      set(_assistiveCtrl,      soap.assistiveDevices);
+      // Assessment
+      set(_clinicalImpressionCtrl, soap.clinicalImpression);
+      set(_severityCtrl,           soap.severityStage);
+      set(_progressCtrl,           soap.progressTowardGoals);
+      set(_barriersCtrl,           soap.barriers);
+      set(_responseCtrl,           soap.responseToTreatment);
+      set(_prognosisCtrl,          soap.prognosis);
+      // Plan
+      set(_treatmentFocusCtrl, soap.treatmentFocus);
+      set(_interventionsCtrl,  soap.interventions);
+      set(_freqDurationCtrl,   soap.frequencyDuration);
+      set(_hepCtrl,            soap.homeExerciseProgram);
+      set(_referralsCtrl,      soap.referrals);
+      set(_followUpCtrl,       soap.followUp);
     });
-    // Jump to the Subjective tab so the therapist can start reviewing immediately
+    // Jump to the Subjective tab so the therapist can start reviewing
     _tabController.animateTo(0);
   }
 

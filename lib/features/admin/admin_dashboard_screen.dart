@@ -63,9 +63,10 @@ const _kAdminNavItems = [
 ];
 
 const _kFeats = [
-  _FeatDef('statistics', 'Statistics', 'Session & revenue analytics', Icons.bar_chart_rounded,    Color(0xFF00695C)),
-  _FeatDef('billing',    'Income',     'Invoices & income tracking',  Icons.receipt_long_rounded, Color(0xFFF57F17)),
-  _FeatDef('expenses',   'Expenses',   'Expense management & reports',Icons.receipt_rounded,      Color(0xFF00796B)),
+  _FeatDef('statistics', 'Statistics', 'Session & revenue analytics',  Icons.bar_chart_rounded,    Color(0xFF00695C)),
+  _FeatDef('billing',    'Income',     'Invoices & income tracking',   Icons.receipt_long_rounded, Color(0xFFF57F17)),
+  _FeatDef('expenses',   'Expenses',   'Expense management & reports', Icons.receipt_rounded,      Color(0xFF00796B)),
+  _FeatDef('ai_enabled', 'AI Agent',   'AI Doctor Assistant access',   Icons.smart_toy_rounded,    Color(0xFF6A1B9A)),
 ];
 
 // ── Avatar color ─────────────────────────────────────────────────────────────
@@ -591,6 +592,117 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               size: 18, color: AppColors.textSecondary),
                         ),
                     ]),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+                // ── AI Doctor Assistant ───────────────────────────────────────
+                _sheetSectionLabel('AI Doctor Assistant'),
+                const SizedBox(height: 4),
+                const Text(
+                  'Control access to AI features and set the monthly request limit.',
+                  style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
+                const SizedBox(height: 10),
+                _adminToggleTile(
+                  icon: Icons.smart_toy_rounded,
+                  color: const Color(0xFF6A1B9A),
+                  title: 'AI Agent Enabled',
+                  subtitle: 'Doctor can use the AI Doctor Assistant',
+                  value: config.aiEnabled,
+                  onChanged: (v) =>
+                      setLocal(() => config = config.copyWith(aiEnabled: v)),
+                ),
+                const SizedBox(height: 10),
+                // Monthly limit picker
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: config.aiEnabled
+                        ? const Color(0xFFF3E5F5)
+                        : const Color(0xFFF8F9FA),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: config.aiEnabled
+                          ? const Color(0xFF6A1B9A).withValues(alpha: 0.25)
+                          : AppColors.cardBorder,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Container(
+                          width: 36, height: 36,
+                          decoration: BoxDecoration(
+                            color: config.aiEnabled
+                                ? const Color(0xFF6A1B9A).withValues(alpha: 0.12)
+                                : Colors.grey.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(Icons.auto_awesome_rounded,
+                              size: 18,
+                              color: config.aiEnabled
+                                  ? const Color(0xFF6A1B9A)
+                                  : Colors.grey.shade400),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Monthly Request Limit',
+                                  style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14)),
+                              Text(
+                                '${config.aiMonthlyLimit} requests / month',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: config.aiEnabled
+                                        ? const Color(0xFF6A1B9A)
+                                        : AppColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ]),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 8,
+                        children: [25, 50, 100, 200, 500].map((limit) {
+                          final sel = config.aiMonthlyLimit == limit;
+                          return GestureDetector(
+                            onTap: () => setLocal(
+                                () => config = config.copyWith(
+                                    aiMonthlyLimit: limit)),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: sel
+                                    ? const Color(0xFF6A1B9A)
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: sel
+                                      ? const Color(0xFF6A1B9A)
+                                      : AppColors.cardBorder,
+                                ),
+                              ),
+                              child: Text('$limit',
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: sel
+                                          ? Colors.white
+                                          : AppColors.textSecondary)),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
                   ),
                 ),
 

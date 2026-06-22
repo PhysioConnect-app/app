@@ -41,30 +41,153 @@ class AiUsage {
 }
 
 // ── SOAP result (Feature 1) ────────────────────────────────────────────────────
+//
+// Matches the PhysioConnect SOAP template field-by-field.
+// Null means "Not Documented" — never fabricated by the AI.
 
 class SoapResult {
-  final String subjective;
-  final String objective;
-  final String assessment;
-  final String plan;
+  // Subjective
+  final String? chiefComplaint;
+  final String? onsetDuration;
+  final String? painLevel;
+  final String? painCharacteristics;
+  final String? aggravatingFactors;
+  final String? relievingFactors;
+  final String? functionalLimitations;
+  final String? patientGoals;
+  final String? medicalSurgicalHistory;
+  final String? medications;
+  final String? socialOccupationalContext;
+
+  // Objective
+  final String? observation;
+  final String? palpation;
+  final String? rangeOfMotion;
+  final String? strengthTesting;
+  final String? neurologicalExam;
+  final String? balanceCoordination;
+  final String? specialTests;
+  final String? functionalTests;
+  final String? assistiveDevices;
+
+  // Assessment
+  final String? clinicalImpression;
+  final String? severityStage;
+  final String? progressTowardGoals;
+  final String? barriers;
+  final String? responseToTreatment;
+  final String? prognosis;
+
+  // Plan
+  final String? treatmentFocus;
+  final String? interventions;
+  final String? frequencyDuration;
+  final String? homeExerciseProgram;
+  final String? referrals;
+  final String? followUp;
 
   const SoapResult({
-    required this.subjective,
-    required this.objective,
-    required this.assessment,
-    required this.plan,
+    this.chiefComplaint,
+    this.onsetDuration,
+    this.painLevel,
+    this.painCharacteristics,
+    this.aggravatingFactors,
+    this.relievingFactors,
+    this.functionalLimitations,
+    this.patientGoals,
+    this.medicalSurgicalHistory,
+    this.medications,
+    this.socialOccupationalContext,
+    this.observation,
+    this.palpation,
+    this.rangeOfMotion,
+    this.strengthTesting,
+    this.neurologicalExam,
+    this.balanceCoordination,
+    this.specialTests,
+    this.functionalTests,
+    this.assistiveDevices,
+    this.clinicalImpression,
+    this.severityStage,
+    this.progressTowardGoals,
+    this.barriers,
+    this.responseToTreatment,
+    this.prognosis,
+    this.treatmentFocus,
+    this.interventions,
+    this.frequencyDuration,
+    this.homeExerciseProgram,
+    this.referrals,
+    this.followUp,
   });
 
-  factory SoapResult.fromJson(Map<String, dynamic> j) => SoapResult(
-    subjective: j['subjective'] as String? ?? '',
-    objective:  j['objective']  as String? ?? '',
-    assessment: j['assessment'] as String? ?? '',
-    plan:       j['plan']       as String? ?? '',
-  );
+  static String? _field(Map<String, dynamic> j, String key) {
+    final v = j[key];
+    if (v == null) return null;
+    final s = v.toString().trim();
+    if (s == 'null' || s == 'Not Documented' || s.isEmpty) return null;
+    return s;
+  }
+
+  factory SoapResult.fromJson(Map<String, dynamic> j) {
+    // Support nested structure {"subjective":{...},"objective":{...},...}
+    // as well as flat top-level keys for backward compat.
+    Map<String, dynamic> sub  = {};
+    Map<String, dynamic> obj  = {};
+    Map<String, dynamic> ass  = {};
+    Map<String, dynamic> plan = {};
+
+    final rawSub  = j['subjective'];
+    final rawObj  = j['objective'];
+    final rawAss  = j['assessment'];
+    final rawPlan = j['plan'];
+
+    if (rawSub  is Map) sub  = rawSub.cast<String, dynamic>();
+    if (rawObj  is Map) obj  = rawObj.cast<String, dynamic>();
+    if (rawAss  is Map) ass  = rawAss.cast<String, dynamic>();
+    if (rawPlan is Map) plan = rawPlan.cast<String, dynamic>();
+
+    String? f(Map<String, dynamic> m, String k) => _field(m, k) ?? _field(j, k);
+
+    return SoapResult(
+      chiefComplaint:         f(sub,  'chiefComplaint'),
+      onsetDuration:          f(sub,  'onsetDuration'),
+      painLevel:              f(sub,  'painLevel'),
+      painCharacteristics:    f(sub,  'painCharacteristics'),
+      aggravatingFactors:     f(sub,  'aggravatingFactors'),
+      relievingFactors:       f(sub,  'relievingFactors'),
+      functionalLimitations:  f(sub,  'functionalLimitations'),
+      patientGoals:           f(sub,  'patientGoals'),
+      medicalSurgicalHistory: f(sub,  'medicalSurgicalHistory'),
+      medications:            f(sub,  'medications'),
+      socialOccupationalContext: f(sub, 'socialOccupationalContext'),
+      observation:            f(obj,  'observation'),
+      palpation:              f(obj,  'palpation'),
+      rangeOfMotion:          f(obj,  'rangeOfMotion'),
+      strengthTesting:        f(obj,  'strengthTesting'),
+      neurologicalExam:       f(obj,  'neurologicalExam'),
+      balanceCoordination:    f(obj,  'balanceCoordination'),
+      specialTests:           f(obj,  'specialTests'),
+      functionalTests:        f(obj,  'functionalTests'),
+      assistiveDevices:       f(obj,  'assistiveDevices'),
+      clinicalImpression:     f(ass,  'clinicalImpression'),
+      severityStage:          f(ass,  'severityStage'),
+      progressTowardGoals:    f(ass,  'progressTowardGoals'),
+      barriers:               f(ass,  'barriers'),
+      responseToTreatment:    f(ass,  'responseToTreatment'),
+      prognosis:              f(ass,  'prognosis'),
+      treatmentFocus:         f(plan, 'treatmentFocus'),
+      interventions:          f(plan, 'interventions'),
+      frequencyDuration:      f(plan, 'frequencyDuration'),
+      homeExerciseProgram:    f(plan, 'homeExerciseProgram'),
+      referrals:              f(plan, 'referrals'),
+      followUp:               f(plan, 'followUp'),
+    );
+  }
 
   bool get isEmpty =>
-      subjective.isEmpty && objective.isEmpty &&
-      assessment.isEmpty && plan.isEmpty;
+      chiefComplaint == null && clinicalImpression == null &&
+      interventions == null && observation == null;
 }
 
 // ── Patient history summary (Feature 2) ───────────────────────────────────────

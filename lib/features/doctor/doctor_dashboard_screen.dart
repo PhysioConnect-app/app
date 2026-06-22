@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../ai/ai_service.dart';
-
+import '../ai/clinic_analytics_sheet.dart';
 
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -162,6 +162,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
             if (newName.isNotEmpty) _nameCtrl.text = newName;
             if (!_sub.allowHomeVisit) _homeVisit = false;
           });
+          _checkExpiryNotification();
         }
       });
       _patientsListener = _service.getAssignedPatients().listen((list) {
@@ -347,6 +348,187 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   void _goHome() => setState(() => _showHome = true);
 
   bool _isLocked(int index) => _sub.isLocked(index);
+
+  // ── AI Doctor Assistant header action ─────────────────────────────────────
+
+  void _showAiAssistantSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 36, height: 4,
+                decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6A1B9A).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.auto_awesome_rounded,
+                    color: Color(0xFF6A1B9A), size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('AI Doctor Assistant',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: AppColors.textPrimary)),
+                  Text('What would you like help with?',
+                      style: TextStyle(
+                          color: AppColors.textSecondary, fontSize: 12)),
+                ],
+              ),
+            ]),
+            const SizedBox(height: 20),
+            _aiActionTile(
+              ctx: ctx,
+              icon: Icons.description_rounded,
+              color: const Color(0xFF2E7D32),
+              title: 'Generate SOAP Documentation',
+              subtitle: 'AI-assisted clinical note for a patient',
+              onTap: () {
+                Navigator.pop(ctx);
+                _navigateTo(1); // Documentation tab
+              },
+            ),
+            const SizedBox(height: 10),
+            _aiActionTile(
+              ctx: ctx,
+              icon: Icons.receipt_long_rounded,
+              color: const Color(0xFFF57F17),
+              title: 'Analyze Revenue & Expenses',
+              subtitle: 'AI insights on your clinic finances',
+              onTap: () {
+                Navigator.pop(ctx);
+                showClinicAnalyticsSheet(context);
+              },
+            ),
+            const SizedBox(height: 10),
+            _aiActionTile(
+              ctx: ctx,
+              icon: Icons.bar_chart_rounded,
+              color: const Color(0xFF00695C),
+              title: 'Statistics & Performance',
+              subtitle: 'Business analytics and session trends',
+              onTap: () {
+                Navigator.pop(ctx);
+                showClinicAnalyticsSheet(context);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _aiActionTile({
+    required BuildContext ctx,
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) =>
+      InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
+          ),
+          child: Row(children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: Icon(icon, size: 20, color: color),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                          color: AppColors.textPrimary)),
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded,
+                color: color.withValues(alpha: 0.6), size: 20),
+          ]),
+        ),
+      );
+
+  // ── Expiry notification (5-day warning, once per day) ─────────────────────
+
+  Future<void> _checkExpiryNotification() async {
+    final expires = _sub.expiresAt;
+    if (expires == null) return;
+    final now = DateTime.now();
+    final daysLeft = expires.difference(now).inDays;
+    if (daysLeft < 0 || daysLeft > 5) return;
+
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) return;
+
+    // Check if we already sent a reminder today
+    final todayStr = DateFormat('yyyy-MM-dd').format(now);
+    try {
+      final existing = await Supabase.instance.client
+          .from('notifications')
+          .select('id')
+          .eq('recipient_id', uid)
+          .eq('type', 'subscription_expiry')
+          .gte('created_at', '${todayStr}T00:00:00')
+          .limit(1);
+      if ((existing as List).isNotEmpty) return; // already sent today
+
+      final body = daysLeft == 0
+          ? 'Your subscription expires today. Contact your administrator to renew.'
+          : 'Your subscription expires in $daysLeft day${daysLeft == 1 ? '' : 's'}. Contact your administrator to renew.';
+
+      await Supabase.instance.client.from('notifications').insert({
+        'recipient_id': uid,
+        'title':        'Subscription Expiring Soon',
+        'body':         body,
+        'type':         'subscription_expiry',
+        'read':         false,
+      });
+    } catch (_) {
+      // Non-fatal — silently ignore if notifications table has different schema
+    }
+  }
 
   void _changeCalMonth(int delta) {
     setState(() {
@@ -625,13 +807,11 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
     ];
 
     // Fixed 4×2 grid layout.
-    // Row 1: My Patients | Schedule | Documentation/Notifications | Assessment Library
-    // Row 2: Revenues    | Expenses | Statistics                  | PhysioGate
+    // Row 1: My Patients | Schedule | Documentation | Assessment Library
+    // Row 2: Revenues    | Expenses | Statistics    | PhysioGate
     // My Profile lives in the header only (not in the grid).
-    // On mobile, Documentation is desktop-only so Notifications fills that slot.
-    final primaryIndices = FormFactorFeatures.of(context).showDocumentation
-        ? const [2, 0, 1, 9, 4, 5, 3, 8]   // desktop: Documentation at pos 2
-        : const [2, 0, 7, 9, 4, 5, 3, 8];  // mobile:  Notifications at pos 2
+    // Documentation is shown on all form factors; notification bell is in the header.
+    const primaryIndices = [2, 0, 1, 9, 4, 5, 3, 8];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -728,16 +908,38 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                       ],
                     ),
                   ),
-                  // Notification bell + language toggle + logout
+                  // Action buttons: AI, Notifications, language, logout
                   Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _buildHeaderNavButton(
-                        icon: Icons.notifications_rounded,
-                        label: s.notifications,
-                        badge: _doctorUnreadCount > 0 ? _doctorUnreadCount : null,
-                        onTap: () => _navigateTo(7),
-                        compact: true,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // AI Doctor Assistant button
+                          if (_sub.aiEnabled)
+                            GestureDetector(
+                              onTap: () => _showAiAssistantSheet(),
+                              child: Container(
+                                width: 34, height: 34,
+                                margin: const EdgeInsets.only(right: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.18),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                      color: Colors.white.withValues(alpha: 0.3)),
+                                ),
+                                child: const Icon(Icons.auto_awesome_rounded,
+                                    color: Colors.white, size: 17),
+                              ),
+                            ),
+                          _buildHeaderNavButton(
+                            icon: Icons.notifications_rounded,
+                            label: s.notifications,
+                            badge: _doctorUnreadCount > 0 ? _doctorUnreadCount : null,
+                            onTap: () => _navigateTo(7),
+                            compact: true,
+                          ),
+                        ],
                       ),
                       Row(
                         mainAxisSize: MainAxisSize.min,
@@ -792,16 +994,16 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                 const SizedBox(height: 8),
                 Expanded(
                   child: LayoutBuilder(builder: (ctx, constraints) {
-                    const cols    = 4;
-                    const rows    = 2;
-                    const spacing = 8.0;
+                    const spacing = 10.0;
+                    // 3 columns on mobile, 4 on desktop
+                    final isMob = FormFactorFeatures.of(ctx).isMobile;
+                    final cols  = isMob ? 3 : 4;
+                    final rows  = (primaryIndices.length / cols).ceil();
                     final tileW = (constraints.maxWidth - (cols - 1) * spacing) / cols;
-                    // On portrait/narrow screens the available height is much larger
-                    // than the width, which would make tiles very tall and their
-                    // content tiny. Cap tileH so childAspectRatio = tileW/tileH
-                    // stays ≥ 0.82 (tiles no taller than ~1.22× their width).
+                    // Cap tile height so tiles don't grow taller than ~1.22× their
+                    // width on tall/narrow screens (keeps icon + label readable).
                     final rawTileH = (constraints.maxHeight - (rows - 1) * spacing) / rows;
-                    final tileH   = rawTileH.clamp(0.0, tileW / 0.82);
+                    final tileH   = rawTileH.clamp(0.0, tileW / 0.78);
                     final ratio   = tileW / tileH;
                     return GridView.count(
                       crossAxisCount: cols,
@@ -816,10 +1018,8 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                     );
                   }),
                 ),
-                if (_sub.expiresAt != null) ...[
-                  const SizedBox(height: 8),
-                  _buildSubStatusBar(),
-                ],
+                const SizedBox(height: 8),
+                _buildSubStatusBar(),
               ],
             ),
           ),
@@ -830,18 +1030,43 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
 
   Widget _buildSubStatusBar() {
     final expired = _sub.isExpired;
-    final expiringSoon = !expired &&
-        _sub.expiresAt!.isBefore(DateTime.now().add(const Duration(days: 30)));
-    final color = expired
-        ? AppColors.error
-        : expiringSoon
-            ? AppColors.warning
-            : AppColors.textSecondary;
-    final text = expired
-        ? 'Subscription expired — contact admin to renew'
-        : expiringSoon
-            ? 'Expires ${DateFormat("MMM d, yyyy").format(_sub.expiresAt!)}'
-            : '${_sub.tier.label} plan · Expires ${DateFormat("MMM d, yyyy").format(_sub.expiresAt!)}';
+    final now = DateTime.now();
+    final expiresAt = _sub.expiresAt;
+    final expiringSoon = expiresAt != null && !expired &&
+        expiresAt.isBefore(now.add(const Duration(days: 30)));
+    final expiringVerySoon = expiresAt != null && !expired &&
+        expiresAt.isBefore(now.add(const Duration(days: 5)));
+
+    final Color color;
+    final IconData icon;
+    final String text;
+
+    final fmtDate = expiresAt != null
+        ? DateFormat('MMM d, yyyy').format(expiresAt)
+        : '';
+
+    if (expired) {
+      color = AppColors.error;
+      icon  = Icons.timer_off_rounded;
+      text  = '${_sub.tier.label} plan — Expired $fmtDate';
+    } else if (expiringVerySoon) {
+      color = AppColors.error;
+      icon  = Icons.warning_rounded;
+      text  = '${_sub.tier.label} plan — Expires $fmtDate';
+    } else if (expiringSoon) {
+      color = AppColors.warning;
+      icon  = Icons.info_outline_rounded;
+      text  = '${_sub.tier.label} plan — Expires $fmtDate';
+    } else if (expiresAt != null) {
+      color = AppColors.textSecondary;
+      icon  = Icons.workspace_premium_rounded;
+      text  = '${_sub.tier.label} plan · Expires $fmtDate';
+    } else {
+      color = AppColors.textSecondary;
+      icon  = Icons.workspace_premium_rounded;
+      text  = '${_sub.tier.label} plan · No expiry set';
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
@@ -850,12 +1075,12 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
         border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Row(children: [
-        Icon(expired ? Icons.timer_off_rounded : Icons.info_outline_rounded,
-            color: color, size: 16),
+        Icon(icon, color: color, size: 16),
         const SizedBox(width: 8),
         Expanded(
           child: Text(text,
-              style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500)),
+              style: TextStyle(
+                  color: color, fontSize: 12, fontWeight: FontWeight.w500)),
         ),
         TextButton(
           onPressed: () => _showLogout(),
@@ -2371,375 +2596,706 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // Keep only SOAP / clinical documentation notes
           final soapNotes = (snap.data ?? []).where((doc) {
-            final d = doc;
-            return d['note_type'] == 'soap' ||
-                d.containsKey('chiefComplaint') ||
-                (d.containsKey('subjective') && d['subjective'] != null);
+            return doc['note_type'] == 'soap' ||
+                doc.containsKey('chiefComplaint') ||
+                (doc.containsKey('subjective') && doc['subjective'] != null);
           }).toList();
 
+          final isMobile = FormFactorFeatures.of(context).isMobile;
+
           if (soapNotes.isEmpty) {
-            return Center(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.description_outlined,
-                    size: 60, color: Colors.grey.shade300),
-                const SizedBox(height: 14),
-                Text(s.noDocumentation,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, height: 1.5)),
-              ]),
-            );
+            return Column(children: [
+              if (isMobile) _buildDocMobileHeader(s, []),
+              Expanded(
+                child: Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.description_outlined,
+                        size: 60, color: Colors.grey.shade300),
+                    const SizedBox(height: 14),
+                    Text(s.noDocumentation,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                            color: AppColors.textSecondary, height: 1.5)),
+                    const SizedBox(height: 20),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.add_rounded),
+                      label: const Text('Add First Note'),
+                      onPressed: () => _showPickPatientForDoc(s),
+                    ),
+                  ]),
+                ),
+              ),
+            ]);
           }
 
-          String selectedPatient = '';
+          String selectedPatient  = '';
           String selectedCondition = '';
-          String searchQuery = '';
-          return StatefulBuilder(
-            builder: (context, setState) {
+          String searchQuery       = '';
 
-              // Get unique patients and conditions
-              final patientSet = <String>{};
-              final conditionSet = <String>{};
-              final allNotes = soapNotes.toList();
+          return StatefulBuilder(builder: (context, setDoc) {
+            final allNotes     = soapNotes.toList();
+            final patientSet   = <String>{};
+            final conditionSet = <String>{};
 
-              for (final note in allNotes) {
-                final d = note;
-                final patName =
-                    (d['patient_name'] as String?) ?? 'Unknown';
-                final condition = (d['primary_diagnosis'] as String?) ??
-                    (d['chiefComplaint'] as String?) ??
-                    'General';
-                patientSet.add(patName);
-                conditionSet.add(condition);
-              }
+            for (final note in allNotes) {
+              patientSet.add((note['patient_name'] as String?) ?? 'Unknown');
+              conditionSet.add(
+                (note['primary_diagnosis'] as String?) ??
+                (note['chiefComplaint']    as String?) ?? 'General',
+              );
+            }
 
-              final filteredNotes = allNotes.where((note) {
-                final d = note;
-                final patName =
-                    (d['patient_name'] as String?) ?? '';
-                final condition = (d['primary_diagnosis'] as String?) ??
-                    (d['chiefComplaint'] as String?) ??
-                    '';
-
-                final matchesSearch = searchQuery.isEmpty ||
-                    patName.toLowerCase().contains(searchQuery.toLowerCase()) ||
-                    condition.toLowerCase().contains(searchQuery.toLowerCase());
-                final matchesPatient = selectedPatient.isEmpty ||
-                    patName == selectedPatient;
-                final matchesCondition = selectedCondition.isEmpty ||
-                    condition == selectedCondition;
-
-                return matchesSearch &&
-                    matchesPatient &&
-                    matchesCondition;
-              }).toList();
-
-              // Sort by date
-              filteredNotes.sort((a, b) {
-                final ta = a['created_at'] != null ? DateTime.parse(a['created_at'] as String) : DateTime(2000);
-                final tb = b['created_at'] != null ? DateTime.parse(b['created_at'] as String) : DateTime(2000);
+            final filteredNotes = allNotes.where((note) {
+              final pat = (note['patient_name']    as String?) ?? '';
+              final cond = (note['primary_diagnosis'] as String?) ??
+                  (note['chiefComplaint'] as String?) ?? '';
+              return (searchQuery.isEmpty ||
+                      pat.toLowerCase().contains(searchQuery.toLowerCase()) ||
+                      cond.toLowerCase().contains(searchQuery.toLowerCase())) &&
+                  (selectedPatient.isEmpty   || pat  == selectedPatient) &&
+                  (selectedCondition.isEmpty || cond == selectedCondition);
+            }).toList()
+              ..sort((a, b) {
+                final ta = a['created_at'] != null
+                    ? DateTime.parse(a['created_at'] as String)
+                    : DateTime(2000);
+                final tb = b['created_at'] != null
+                    ? DateTime.parse(b['created_at'] as String)
+                    : DateTime(2000);
                 return tb.compareTo(ta);
               });
 
-              // Get recent updates
-              final recentUpdates = allNotes
-                  .take(3)
-                  .map((note) {
-                    final d = note;
-                    final patName =
-                        (d['patient_name'] as String?) ?? 'Patient';
-                    final patId =
-                        (d['patient_id'] as String?) ?? '';
-                    final ts = ((d['created_at'] as String?) != null ? DateTime.parse(d['created_at'] as String) : null);
-                    return {
-                      'name': patName,
-                      'patientId': patId,
-                      'noteId': note['id'] as String,
-                      'noteData': d,
-                      'date': ts,
-                      'action': 'Note Updated',
-                    };
-                  })
-                  .toList();
+            // ── Mobile layout ───────────────────────────────────────────────
+            if (isMobile) {
+              return Column(children: [
+                // Sticky header
+                Container(
+                  color: AppColors.primary,
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        const Expanded(
+                          child: Text('Documentation',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold)),
+                        ),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: AppColors.primary,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                            elevation: 0,
+                          ),
+                          icon: const Icon(Icons.add_rounded, size: 16),
+                          label: const Text('Add Note',
+                              style: TextStyle(fontSize: 13)),
+                          onPressed: () => _showPickPatientForDoc(s),
+                        ),
+                      ]),
+                      const SizedBox(height: 10),
+                      // Search bar
+                      TextField(
+                        onChanged: (v) =>
+                            setDoc(() => searchQuery = v),
+                        decoration: InputDecoration(
+                          hintText: 'Search patients or conditions…',
+                          prefixIcon: const Icon(Icons.search_rounded,
+                              size: 18, color: AppColors.primary),
+                          border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 10),
+                          isDense: true,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // Filter chips row
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(children: [
+                          _docFilterChip(
+                            label: 'All patients',
+                            selected: selectedPatient.isEmpty,
+                            onTap: () =>
+                                setDoc(() => selectedPatient = ''),
+                          ),
+                          ...patientSet.map((p) => _docFilterChip(
+                                label: p,
+                                selected: selectedPatient == p,
+                                onTap: () =>
+                                    setDoc(() => selectedPatient = p),
+                              )),
+                        ]),
+                      ),
+                    ],
+                  ),
+                ),
+                // Note count
+                if (filteredNotes.isNotEmpty)
+                  Padding(
+                    padding:
+                        const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${filteredNotes.length} note${filteredNotes.length == 1 ? '' : 's'}',
+                        style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12),
+                      ),
+                    ),
+                  ),
+                // Card list
+                Expanded(
+                  child: filteredNotes.isEmpty
+                      ? Center(
+                          child: Text('No notes found',
+                              style: TextStyle(
+                                  color: Colors.grey.shade500)))
+                      : ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(
+                              12, 10, 12, 24),
+                          itemCount: filteredNotes.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 8),
+                          itemBuilder: (_, i) =>
+                              _buildDocNoteCard(filteredNotes[i], s),
+                        ),
+                ),
+              ]);
+            }
 
-              return Column(
-                children: [
-                  // Header
+            // ── Desktop layout (unchanged) ──────────────────────────────────
+            final recentUpdates = allNotes.take(3).map((note) {
+              final patName =
+                  (note['patient_name'] as String?) ?? 'Patient';
+              final patId   = (note['patient_id'] as String?) ?? '';
+              final ts      = note['created_at'] != null
+                  ? DateTime.parse(note['created_at'] as String)
+                  : null;
+              return {
+                'name':     patName,
+                'patientId': patId,
+                'noteId':   note['id'] as String,
+                'noteData': note,
+                'date':     ts,
+                'action':   'Note Updated',
+              };
+            }).toList();
+
+            return Column(children: [
+              // Header
+              Container(
+                color: AppColors.primary,
+                padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Documentation Center',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 16),
+                    Row(children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: AppColors.primary,
+                          ),
+                          icon: const Icon(Icons.add_rounded),
+                          label: const Text('Add Note'),
+                          onPressed: () => _showPickPatientForDoc(s),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          onChanged: (v) =>
+                              setDoc(() => searchQuery = v),
+                          decoration: InputDecoration(
+                            hintText: 'Search Records',
+                            prefixIcon: const Icon(Icons.search_rounded,
+                                color: AppColors.primary),
+                            border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8)),
+                            filled: true,
+                            fillColor: Colors.white,
+                            contentPadding:
+                                const EdgeInsets.symmetric(vertical: 10),
+                          ),
+                        ),
+                      ),
+                      if (FormFactorFeatures.of(context)
+                          .showDocumentationExport) ...[
+                        const SizedBox(width: 10),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: AppColors.primary,
+                          ),
+                          icon: const Icon(Icons.download_rounded),
+                          label: const Text('Export PDF'),
+                          onPressed: () =>
+                              _showExportPdfPatientPicker(s, allNotes),
+                        ),
+                      ],
+                    ]),
+                  ],
+                ),
+              ),
+              // Main content
+              Expanded(
+                child: Row(children: [
+                  // Left sidebar
                   Container(
-                    color: AppColors.primary,
-                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+                    width: 240,
+                    color: Colors.white,
+                    padding: const EdgeInsets.all(16),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        const Text('Documentation Center',
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                          ),
+                          icon: const Icon(Icons.edit_rounded),
+                          label: const Text('Add New Note'),
+                          onPressed: () => _showPickPatientForDoc(s),
+                        ),
+                        const SizedBox(height: 20),
+                        const Text('Recent Updates:',
                             style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: AppColors.primary,
-                                ),
-                                icon: const Icon(Icons.add_rounded),
-                                label: const Text('Add Note'),
-                                onPressed: () =>
-                                    _showPickPatientForDoc(s),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: TextField(
-                                onChanged: (v) =>
-                                    setState(() => searchQuery = v),
-                                decoration: InputDecoration(
-                                  hintText: 'Search Records',
-                                  prefixIcon: const Icon(
-                                      Icons.search_rounded,
-                                      color: AppColors.primary),
-                                  border: OutlineInputBorder(
-                                    borderRadius:
-                                        BorderRadius.circular(8),
-                                  ),
-                                  filled: true,
-                                  fillColor: Colors.white,
-                                  contentPadding:
-                                      const EdgeInsets.symmetric(
-                                          vertical: 10),
-                                ),
-                              ),
-                            ),
-                            if (FormFactorFeatures.of(context)
-                                .showDocumentationExport) ...[
-                              const SizedBox(width: 10),
-                              ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: AppColors.primary,
-                                ),
-                                icon: const Icon(Icons.download_rounded),
-                                label: const Text('Export PDF'),
-                                onPressed: () =>
-                                    _showExportPdfPatientPicker(s, allNotes),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Main content
-                  Expanded(
-                    child: Row(
-                      children: [
-                        // Left sidebar
-                        Container(
-                          width: 240,
-                          color: Colors.white,
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              ElevatedButton.icon(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.white,
-                                ),
-                                icon: const Icon(Icons.edit_rounded),
-                                label: const Text('Add New Note'),
-                                onPressed: () =>
-                                    _showPickPatientForDoc(s),
-                              ),
-                              const SizedBox(height: 20),
-                              const Text('Recent Updates:',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 10),
-                              Expanded(
-                                child: ListView.builder(
-                                  itemCount: recentUpdates.length,
-                                  itemBuilder: (_, i) {
-                                    final update = recentUpdates[i];
-                                    final patId = update['patientId'] as String;
-                                    final patName = update['name'] as String;
-                                    final noteId = update['noteId'] as String;
-                                    final noteData = update['noteData'] as Map<String, dynamic>;
-                                    return Padding(
-                                      padding:
-                                          const EdgeInsets.only(bottom: 12),
-                                      child: InkWell(
-                                        borderRadius:
-                                            BorderRadius.circular(8),
-                                        onTap: () => Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => SoapNoteScreen(
-                                              patientId: patId,
-                                              patientName: patName,
-                                              noteId: noteId,
-                                              initialData: noteData,
-                                            ),
-                                          ),
-                                        ),
-                                        child: Container(
-                                          padding: const EdgeInsets.all(8),
-                                          decoration: BoxDecoration(
-                                            color: const Color(0xFFF5F5F5),
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                            border: Border.all(
-                                                color: AppColors.primary
-                                                    .withValues(alpha: 0.12)),
-                                          ),
-                                          child: Row(children: [
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(patName,
-                                                      style: const TextStyle(
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 12)),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                      '${update['action']} ${update['date'] != null ? DateFormat('dd/MM/yyyy').format(update['date'] as DateTime) : ''}',
-                                                      style: const TextStyle(
-                                                          fontSize: 11,
-                                                          color: AppColors
-                                                              .textSecondary)),
-                                                ],
-                                              ),
-                                            ),
-                                            const Icon(
-                                                Icons.arrow_forward_ios_rounded,
-                                                size: 12,
-                                                color: AppColors.primary),
-                                          ]),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Right content area
+                                fontSize: 14, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 10),
                         Expanded(
-                          child: Container(
-                            color: const Color(0xFFF5F5F5),
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Filters
-                                Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(8),
+                          child: ListView.builder(
+                            itemCount: recentUpdates.length,
+                            itemBuilder: (_, i) {
+                              final update = recentUpdates[i];
+                              final patId   = update['patientId'] as String;
+                              final patName = update['name']      as String;
+                              final noteId  = update['noteId']    as String;
+                              final noteData =
+                                  update['noteData'] as Map<String, dynamic>;
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(8),
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => SoapNoteScreen(
+                                        patientId:   patId,
+                                        patientName: patName,
+                                        noteId:      noteId,
+                                        initialData: noteData,
+                                      ),
+                                    ),
                                   ),
-                                  child: Row(
-                                    children: [
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF5F5F5),
+                                      borderRadius:
+                                          BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: AppColors.primary
+                                              .withValues(alpha: 0.12)),
+                                    ),
+                                    child: Row(children: [
                                       Expanded(
-                                        child: DropdownButtonFormField<
-                                            String>(
-                                          initialValue: selectedPatient.isEmpty
-                                              ? ''
-                                              : selectedPatient,
-                                          decoration: InputDecoration(
-                                            labelText: 'Patient Name',
-                                            border:
-                                                OutlineInputBorder(
-                                              borderRadius:
-                                                  BorderRadius
-                                                      .circular(8),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(patName,
+                                                style: const TextStyle(
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                    fontSize: 12)),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              '${update['action']} '
+                                              '${update['date'] != null ? DateFormat('dd/MM/yyyy').format(update['date'] as DateTime) : ''}',
+                                              style: const TextStyle(
+                                                  fontSize: 11,
+                                                  color: AppColors
+                                                      .textSecondary),
                                             ),
-                                          ),
-                                          items: [
-                                            const DropdownMenuItem(
-                                              value: '',
-                                              child: Text('All Patients'),
-                                            ),
-                                            ...patientSet.map((p) =>
-                                                DropdownMenuItem(
-                                                  value: p,
-                                                  child: Text(p),
-                                                )),
                                           ],
-                                          onChanged: (v) => setState(() =>
-                                              selectedPatient = v ?? ''),
                                         ),
                                       ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: DropdownButtonFormField<
-                                            String>(
-                                          initialValue: selectedCondition.isEmpty
-                                              ? ''
-                                              : selectedCondition,
-                                          decoration: InputDecoration(
-                                            labelText: 'Condition',
-                                            border:
-                                                OutlineInputBorder(
-                                              borderRadius:
-                                                  BorderRadius
-                                                      .circular(8),
-                                            ),
-                                          ),
-                                          items: [
-                                            const DropdownMenuItem(
-                                              value: '',
-                                              child: Text('All Conditions'),
-                                            ),
-                                            ...conditionSet.map((c) =>
-                                                DropdownMenuItem(
-                                                  value: c,
-                                                  child: Text(c),
-                                                )),
-                                          ],
-                                          onChanged: (v) => setState(() =>
-                                              selectedCondition = v ?? ''),
-                                        ),
-                                      ),
-                                    ],
+                                      const Icon(
+                                          Icons.arrow_forward_ios_rounded,
+                                          size: 12,
+                                          color: AppColors.primary),
+                                    ]),
                                   ),
                                 ),
-                                const SizedBox(height: 16),
-                                // Documentation table
-                                Expanded(
-                                  child: filteredNotes.isEmpty
-                                      ? Center(
-                                          child: Text(
-                                              'No documentation found',
-                                              style: TextStyle(
-                                                  color: Colors.grey
-                                                      .shade600)),
-                                        )
-                                      : _buildDocumentationTable(
-                                          filteredNotes, s),
-                                ),
-                              ],
-                            ),
+                              );
+                            },
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
-              );
-            },
-          );
+                  // Right content area
+                  Expanded(
+                    child: Container(
+                      color: const Color(0xFFF5F5F5),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Filters
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8)),
+                            child: Row(children: [
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: selectedPatient.isEmpty
+                                      ? ''
+                                      : selectedPatient,
+                                  decoration: InputDecoration(
+                                    labelText: 'Patient Name',
+                                    border: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(8)),
+                                  ),
+                                  items: [
+                                    const DropdownMenuItem(
+                                        value: '',
+                                        child: Text('All Patients')),
+                                    ...patientSet.map((p) =>
+                                        DropdownMenuItem(
+                                            value: p, child: Text(p))),
+                                  ],
+                                  onChanged: (v) => setDoc(
+                                      () => selectedPatient = v ?? ''),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: selectedCondition.isEmpty
+                                      ? ''
+                                      : selectedCondition,
+                                  decoration: InputDecoration(
+                                    labelText: 'Condition',
+                                    border: OutlineInputBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(8)),
+                                  ),
+                                  items: [
+                                    const DropdownMenuItem(
+                                        value: '',
+                                        child: Text('All Conditions')),
+                                    ...conditionSet.map((c) =>
+                                        DropdownMenuItem(
+                                            value: c, child: Text(c))),
+                                  ],
+                                  onChanged: (v) => setDoc(
+                                      () => selectedCondition = v ?? ''),
+                                ),
+                              ),
+                            ]),
+                          ),
+                          const SizedBox(height: 16),
+                          Expanded(
+                            child: filteredNotes.isEmpty
+                                ? Center(
+                                    child: Text('No documentation found',
+                                        style: TextStyle(
+                                            color: Colors.grey.shade600)))
+                                : _buildDocumentationTable(
+                                    filteredNotes, s),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ]),
+              ),
+            ]);
+          });
         },
+      ),
+    );
+  }
+
+  // ── Mobile: horizontal patient filter chip ────────────────────────────────
+
+  Widget _docFilterChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) =>
+      GestureDetector(
+        onTap: onTap,
+        child: Container(
+          margin: const EdgeInsets.only(right: 6),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+          decoration: BoxDecoration(
+            color: selected
+                ? Colors.white
+                : Colors.white.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: selected
+                  ? AppColors.primary
+                  : Colors.white.withValues(alpha: 0.4),
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight:
+                  selected ? FontWeight.bold : FontWeight.normal,
+              color: selected ? AppColors.primary : Colors.white,
+            ),
+          ),
+        ),
+      );
+
+  // Unused desktop header helper (kept for consistency)
+  Widget _buildDocMobileHeader(AppStrings s, List notes) =>
+      const SizedBox.shrink();
+
+  // ── Mobile: note card ──────────────────────────────────────────────────────
+
+  Widget _buildDocNoteCard(Map<String, dynamic> note, AppStrings s) {
+    final patName  = (note['patient_name']    as String?) ?? 'Patient';
+    final patId    = (note['patient_id']      as String?) ?? '';
+    final condition = (note['primary_diagnosis'] as String?) ??
+        (note['chiefComplaint'] as String?) ?? 'General';
+    final ts = note['created_at'] != null
+        ? DateTime.tryParse(note['created_at'] as String)
+        : null;
+    final date = ts != null
+        ? DateFormat('dd MMM yyyy').format(ts)
+        : '—';
+
+    // Brief preview from chiefComplaint or subjective text
+    final soapData = note['soap_data'] as Map<String, dynamic>?;
+    final preview = (soapData?['chiefComplaint'] as String?) ??
+        (note['chiefComplaint'] as String?) ??
+        (note['subjective'] as String?) ?? '';
+    final displayPreview = preview.length > 80
+        ? '${preview.substring(0, 80)}…'
+        : preview;
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      clipBehavior: Clip.hardEdge,
+      child: InkWell(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => SoapNoteScreen(
+              patientId:   patId,
+              patientName: patName,
+              noteId:      note['id'] as String,
+              initialData: note,
+            ),
+          ),
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFE8EAED)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.all(14),
+          child: Row(children: [
+            // Avatar
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: AppColors.primary.withValues(alpha: 0.12),
+              child: Text(
+                patName.isNotEmpty ? patName[0].toUpperCase() : '?',
+                style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16),
+              ),
+            ),
+            const SizedBox(width: 12),
+            // Content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Expanded(
+                      child: Text(patName,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: AppColors.textPrimary),
+                          overflow: TextOverflow.ellipsis),
+                    ),
+                    Text(date,
+                        style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary)),
+                  ]),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color:
+                          AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      condition,
+                      style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (displayPreview.isNotEmpty) ...[
+                    const SizedBox(height: 5),
+                    Text(displayPreview,
+                        style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                            height: 1.3),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Actions
+            PopupMenuButton<String>(
+              icon: Icon(Icons.more_vert_rounded,
+                  size: 18, color: Colors.grey.shade400),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              onSelected: (action) async {
+                if (action == 'edit') {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SoapNoteScreen(
+                        patientId:   patId,
+                        patientName: patName,
+                        noteId:      note['id'] as String,
+                        initialData: note,
+                      ),
+                    ),
+                  );
+                } else if (action == 'delete') {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                      title: const Text('Delete Note?'),
+                      content: Text(
+                          'Delete this note for $patName? This cannot be undone.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () =>
+                              Navigator.pop(context, false),
+                          child: const Text('Cancel'),
+                        ),
+                        ElevatedButton(
+                          onPressed: () =>
+                              Navigator.pop(context, true),
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.error,
+                              foregroundColor: Colors.white),
+                          child: const Text('Delete'),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (ok != true || !mounted) return;
+                  try {
+                    await Supabase.instance.client
+                        .from('clinical_notes')
+                        .delete()
+                        .eq('id', note['id'] as String);
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Note deleted'),
+                          backgroundColor: AppColors.success),
+                    );
+                  } catch (_) {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Error deleting note'),
+                          backgroundColor: AppColors.error),
+                    );
+                  }
+                }
+              },
+              itemBuilder: (_) => [
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: Row(children: [
+                    Icon(Icons.edit_rounded,
+                        size: 16, color: Colors.orange),
+                    SizedBox(width: 10),
+                    Text('Edit Note'),
+                  ]),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Row(children: [
+                    Icon(Icons.delete_rounded,
+                        size: 16, color: AppColors.error),
+                    SizedBox(width: 10),
+                    Text('Delete',
+                        style: TextStyle(color: AppColors.error)),
+                  ]),
+                ),
+              ],
+            ),
+          ]),
+        ),
       ),
     );
   }

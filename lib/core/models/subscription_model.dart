@@ -28,6 +28,9 @@ class SubConfig {
   final bool showInSearch;
   final bool allowHomeVisit;
   final DateTime? expiresAt;
+  // AI Doctor Assistant settings
+  final bool aiEnabled;
+  final int  aiMonthlyLimit;
 
   const SubConfig({
     required this.tier,
@@ -38,6 +41,8 @@ class SubConfig {
     this.showInSearch = true,
     this.allowHomeVisit = true,
     this.expiresAt,
+    this.aiEnabled      = true,
+    this.aiMonthlyLimit = 100,
   });
 
   bool get isExpired =>
@@ -62,6 +67,8 @@ class SubConfig {
       showInSearch: data['show_in_search'] as bool? ?? true,
       allowHomeVisit: data['allow_home_visit'] as bool? ?? true,
       expiresAt:    expiresStr != null ? DateTime.parse(expiresStr) : null,
+      aiEnabled:      features['ai_enabled']      as bool? ?? true,
+      aiMonthlyLimit: (features['ai_monthly_limit'] as num?)?.toInt() ?? 100,
     );
   }
 
@@ -78,10 +85,12 @@ class SubConfig {
     return const SubConfig(tier: SubTier.basic);
   }
 
-  Map<String, bool> toFeaturesMap() => {
-    'statistics': statistics,
-    'billing':    billing,
-    'expenses':   expenses,
+  Map<String, dynamic> toFeaturesMap() => {
+    'statistics':       statistics,
+    'billing':          billing,
+    'expenses':         expenses,
+    'ai_enabled':       aiEnabled,
+    'ai_monthly_limit': aiMonthlyLimit,
   };
 
   static const _keep = Object();
@@ -95,6 +104,8 @@ class SubConfig {
     bool? showInSearch,
     bool? allowHomeVisit,
     Object? expiresAt = _keep,
+    bool? aiEnabled,
+    int?  aiMonthlyLimit,
   }) =>
       SubConfig(
         tier:         tier         ?? this.tier,
@@ -107,6 +118,8 @@ class SubConfig {
         expiresAt: identical(expiresAt, _keep)
             ? this.expiresAt
             : expiresAt as DateTime?,
+        aiEnabled:      aiEnabled      ?? this.aiEnabled,
+        aiMonthlyLimit: aiMonthlyLimit ?? this.aiMonthlyLimit,
       );
 
   // Returns true when the given dashboard tab index should be locked.
@@ -122,6 +135,7 @@ class SubConfig {
     if (key == 'statistics') return statistics;
     if (key == 'billing')    return billing;
     if (key == 'expenses')   return expenses;
+    if (key == 'ai_enabled') return aiEnabled;
     return false;
   }
 }
