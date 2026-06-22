@@ -1273,11 +1273,70 @@ class _BillingScreenState extends State<BillingScreen> {
   }
 
   // ── Desktop table (full-width, no sidebar) ───────────────────────────────
+  //
+  // Layout: Material (elevation + clip) → Column → [teal header, Expanded(body)].
+  // The Expanded sits inside the Column that is directly inside Padding, which
+  // receives a tight height from the outer Expanded in build(). This avoids the
+  // unbounded-height RenderFlex error that occurred when Expanded was nested
+  // inside a Card's internal Column (Card adds a Container(margin:…) wrapper
+  // that can break tight-constraint propagation).
 
   Widget _desktopTable(List<Map<String, dynamic>> filtered, AppStrings s) =>
       Padding(
         padding: const EdgeInsets.all(16),
-        child: _invoiceTable(filtered, s, scrollable: true),
+        child: Material(
+          elevation: 2,
+          borderRadius: BorderRadius.circular(14),
+          clipBehavior: Clip.antiAlias,
+          color: Colors.white,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  color: _kAccent,
+                  borderRadius:
+                      BorderRadius.vertical(top: Radius.circular(14)),
+                ),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 12),
+                child: Row(children: [
+                  _th('Patient Name', flex: 3),
+                  _th('Date',         flex: 2),
+                  _th('Service',      flex: 3),
+                  _th('Amount',       flex: 2),
+                  _th('Status',       flex: 2),
+                  const SizedBox(width: 32),
+                ]),
+              ),
+              if (filtered.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.receipt_long_outlined,
+                            size: 50, color: Colors.grey.shade300),
+                        const SizedBox(height: 10),
+                        Text(s.noData,
+                            style: const TextStyle(
+                                color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, color: Color(0xFFF0F4FA)),
+                    itemBuilder: (_, i) => _tableRow(filtered[i], i, s),
+                  ),
+                ),
+            ],
+          ),
+        ),
       );
 
   // ── Narrow layout (mobile compact cards) ─────────────────────────────────
@@ -1347,71 +1406,6 @@ class _BillingScreenState extends State<BillingScreen> {
           ],
         ],
       ],
-    );
-  }
-
-  // ── Invoice table ─────────────────────────────────────────────────────────
-
-  Widget _invoiceTable(List<Map<String, dynamic>> docs, AppStrings s,
-      {bool scrollable = false}) {
-    final header = Container(
-      decoration: const BoxDecoration(
-        color: _kAccent,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(children: [
-        _th('Patient Name', flex: 3),
-        _th('Date', flex: 2),
-        _th('Service', flex: 3),
-        _th('Amount', flex: 2),
-        _th('Status', flex: 2),
-        const SizedBox(width: 32),
-      ]),
-    );
-
-    Widget body;
-    if (docs.isEmpty) {
-      body = Padding(
-        padding: const EdgeInsets.all(32),
-        child: Center(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(Icons.receipt_long_outlined,
-                size: 50, color: Colors.grey.shade300),
-            const SizedBox(height: 10),
-            Text(s.noData,
-                style: const TextStyle(color: AppColors.textSecondary)),
-          ]),
-        ),
-      );
-      if (scrollable) body = Expanded(child: Center(child: body));
-    } else if (scrollable) {
-      body = Expanded(
-        child: ListView.separated(
-          itemCount: docs.length,
-          separatorBuilder: (_, __) =>
-              const Divider(height: 1, color: Color(0xFFF0F4FA)),
-          itemBuilder: (_, i) => _tableRow(docs[i], i, s),
-        ),
-      );
-    } else {
-      body = ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: docs.length,
-        separatorBuilder: (_, __) =>
-            const Divider(height: 1, color: Color(0xFFF0F4FA)),
-        itemBuilder: (_, i) => _tableRow(docs[i], i, s),
-      );
-    }
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [header, body],
-      ),
     );
   }
 
