@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../ai/ai_service.dart';
 
 
 import 'package:image_picker/image_picker.dart';
@@ -3989,6 +3990,30 @@ void _showPickPatientForDoc(AppStrings s) {
                           );
                         }),
                       ],
+                      const SizedBox(height: 20),
+                      const Divider(height: 1),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.primary,
+                          side: const BorderSide(color: AppColors.primary),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: const Icon(
+                            Icons.auto_awesome_rounded, size: 18),
+                        label: const Text(
+                          'Summarize History with AI Doctor Assistant',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _showAiPatientHistorySummary(
+                              patientId, patientName, diagnosis);
+                        },
+                      ),
                     ],
                   );
                 },
@@ -3997,6 +4022,235 @@ void _showPickPatientForDoc(AppStrings s) {
           ],
         ),
       ),
+    );
+  }
+
+  // ── AI Patient History Summary ─────────────────────────────────────────────
+
+  Future<void> _showAiPatientHistorySummary(
+      String patientId, String patientName, String diagnosis) async {
+    final uid = Supabase.instance.client.auth.currentUser!.id;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: AlertDialog(
+          content: Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Flexible(
+                  child: Text(
+                      'AI Doctor Assistant is summarising patient history…')),
+            ]),
+          ),
+        ),
+      ),
+    );
+
+    try {
+      // Fetch up to 8 recent SOAP notes; strip heavy fields before sending
+      final notesSnap = await Supabase.instance.client
+          .from('clinical_notes')
+          .select()
+          .eq('patient_id', patientId)
+          .eq('doctor_id', uid)
+          .order('created_at', ascending: false)
+          .limit(8);
+
+      final notes = List<Map<String, dynamic>>.from(notesSnap);
+      String cap(String s, int max) =>
+          s.length > max ? s.substring(0, max) : s;
+
+      final slim = notes.map((n) {
+        final src = (n['soap_data'] as Map<String, dynamic>?) ?? n;
+        return {
+          'date': (n['created_at'] as String? ?? '').split('T').first,
+          'chiefComplaint': cap(
+              src['chiefComplaint'] as String? ??
+                  src['subjective'] as String? ??
+                  '',
+              200),
+          'interventions': cap(
+              src['interventions'] as String? ?? src['plan'] as String? ?? '',
+              200),
+          'progress': cap(
+              src['progressTowardGoals'] as String? ??
+                  src['assessment'] as String? ??
+                  '',
+              150),
+        };
+      }).toList();
+
+      final result = await AiDoctorAssistantService.summarizePatientHistory(
+        patientName: patientName,
+        noteCount: notes.length,
+        recentNotes: slim,
+      );
+
+      if (!mounted) return;
+      if (Navigator.canPop(context)) Navigator.pop(context);
+
+      if (!result.isSuccess) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(result.error ?? 'Summary generation failed'),
+          backgroundColor: AppColors.error,
+        ));
+        return;
+      }
+
+      final summary = result.data!;
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) => DraggableScrollableSheet(
+          initialChildSize: 0.80,
+          maxChildSize: 0.95,
+          minChildSize: 0.4,
+          builder: (_, ctrl) => Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: ListView(
+              controller: ctrl,
+              padding: const EdgeInsets.all(20),
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                        color: Colors.grey.shade300,
+                        borderRadius: BorderRadius.circular(2)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.auto_awesome_rounded,
+                        color: AppColors.primary, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('$patientName — AI Summary',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 16)),
+                        if (result.usage != null)
+                          Text(result.usage!.label,
+                              style: const TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 6),
+                const Text(
+                  '⚠ AI summarises existing documentation only.',
+                  style: TextStyle(color: Color(0xFFE65100), fontSize: 11),
+                ),
+                const SizedBox(height: 16),
+                if (summary.patientSummary.isNotEmpty) ...[
+                  _aiSummarySection('Patient Overview',
+                      summary.patientSummary, AppColors.primary),
+                  const SizedBox(height: 12),
+                ],
+                if (summary.progressNotes.isNotEmpty) ...[
+                  _aiSummarySection('Progress Notes',
+                      summary.progressNotes, AppColors.success),
+                  const SizedBox(height: 12),
+                ],
+                if (summary.documentationSummary.isNotEmpty) ...[
+                  _aiSummarySection('Documentation Status',
+                      summary.documentationSummary, AppColors.textSecondary),
+                  const SizedBox(height: 12),
+                ],
+                if (summary.visitTimeline.isNotEmpty) ...[
+                  const Text('Visit Milestones',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  ...summary.visitTimeline.map((item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('• ',
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          Expanded(
+                              child: Text(item,
+                                  style: const TextStyle(fontSize: 13))),
+                        ]),
+                  )),
+                  const SizedBox(height: 12),
+                ],
+                if (summary.importantRecords.isNotEmpty) ...[
+                  const Text('Notable Findings',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  ...summary.importantRecords.map((item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.flag_rounded,
+                              size: 14, color: AppColors.warning),
+                          const SizedBox(width: 6),
+                          Expanded(
+                              child: Text(item,
+                                  style: const TextStyle(fontSize: 13))),
+                        ]),
+                  )),
+                ],
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      if (Navigator.canPop(context)) Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('AI error: $e'),
+        backgroundColor: AppColors.error,
+      ));
+    }
+  }
+
+  Widget _aiSummarySection(String title, String content, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+        Text(title,
+            style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+                color: color)),
+        const SizedBox(height: 6),
+        Text(content,
+            style: const TextStyle(fontSize: 13, height: 1.5)),
+      ]),
     );
   }
 

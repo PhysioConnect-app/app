@@ -5,6 +5,8 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
 import 'doctor_service.dart';
+import '../ai/ai_service.dart';
+import '../ai/ai_models.dart';
 
 // ── Template model ─────────────────────────────────────────────────────────
 
@@ -197,7 +199,8 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
     with SingleTickerProviderStateMixin {
   final _doctorService = DoctorService();
   late final TabController _tabController;
-  bool _saving = false;
+  bool _saving    = false;
+  bool _aiLoading = false;
 
   // ── Subjective controllers ──────────────────────────────────────────────
   final _chiefComplaintCtrl = TextEditingController();
@@ -516,6 +519,279 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
     );
   }
 
+  // ── AI Doctor Assistant ────────────────────────────────────────────────────
+
+  /// Step 1: collect free-text session notes from the therapist.
+  void _showAiInputSheet(AppStrings s) {
+    final notesCtrl = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (ctx) {
+        bool generating = false;
+        return StatefulBuilder(
+          builder: (ctx, setSheet) => Padding(
+            padding: EdgeInsets.only(
+              left: 20, right: 20, top: 20,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.auto_awesome_rounded,
+                        color: AppColors.primary, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('AI SOAP Assistant',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 16)),
+                        Text('Type rough session notes — AI structures them into S/O/A/P.',
+                            style: TextStyle(
+                                color: AppColors.textSecondary, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 6),
+                const Text(
+                  '⚠ Review and edit all AI output before saving.',
+                  style: TextStyle(color: Color(0xFFE65100), fontSize: 11),
+                ),
+                const SizedBox(height: 14),
+                TextField(
+                  controller: notesCtrl,
+                  maxLines: 5,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText:
+                        'e.g. Patient reports LBP 7/10, worse with sitting. '
+                        'ROM: flex 40°, ext 10°. Did manual therapy and '
+                        'McKenzie. Plan to progress core exercises next visit.',
+                    hintStyle: TextStyle(
+                        color: Colors.grey.shade400, fontSize: 12),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFB),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: generating
+                        ? const SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.auto_awesome_rounded, size: 18),
+                    label: Text(generating
+                        ? 'Generating…'
+                        : 'Generate SOAP with AI Doctor Assistant'),
+                    onPressed: generating
+                        ? null
+                        : () async {
+                            final notes = notesCtrl.text.trim();
+                            if (notes.isEmpty) return;
+                            setSheet(() => generating = true);
+                            setState(() => _aiLoading = true);
+                            Navigator.pop(ctx);
+
+                            final result =
+                                await AiDoctorAssistantService.generateSoap(
+                              patientName: widget.patientName,
+                              sessionNotes: notes,
+                            );
+
+                            if (!mounted) return;
+                            setState(() => _aiLoading = false);
+
+                            if (!result.isSuccess) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(result.error ??
+                                      'AI generation failed'),
+                                  backgroundColor: AppColors.error,
+                                ),
+                              );
+                              return;
+                            }
+                            _showAiResultSheet(result.data!, result.usage);
+                          },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Step 2: preview the generated S/O/A/P and let the therapist apply or discard.
+  void _showAiResultSheet(SoapResult soap, AiUsage? usage) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        maxChildSize: 0.95,
+        minChildSize: 0.5,
+        builder: (_, ctrl) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: ListView(
+            controller: ctrl,
+            padding: const EdgeInsets.all(20),
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.auto_awesome_rounded,
+                      color: AppColors.primary, size: 20),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('AI Generated SOAP',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16)),
+                      if (usage != null)
+                        Text(usage.label,
+                            style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 11)),
+                    ],
+                  ),
+                ),
+              ]),
+              const SizedBox(height: 6),
+              const Text(
+                '⚠ AI assists with documentation only. '
+                'Always review and edit before saving.',
+                style: TextStyle(color: Color(0xFFE65100), fontSize: 11),
+              ),
+              const SizedBox(height: 20),
+              _aiSoapSection('S – Subjective', soap.subjective, Colors.blue),
+              _aiSoapSection('O – Objective',  soap.objective,  Colors.green),
+              _aiSoapSection('A – Assessment', soap.assessment, Colors.orange),
+              _aiSoapSection('P – Plan',       soap.plan,       Colors.purple),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: const Icon(Icons.check_rounded, size: 20),
+                  label: const Text('Apply to Form',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 15)),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _applyAiSoap(soap);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                            'AI content applied — review each section before saving.'),
+                        backgroundColor: AppColors.primary,
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Discard',
+                    style: TextStyle(color: AppColors.textSecondary)),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _aiSoapSection(String title, String content, Color color) {
+    if (content.isEmpty) return const SizedBox.shrink();
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(title,
+            style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+                color: color)),
+        const SizedBox(height: 6),
+        Text(content,
+            style: const TextStyle(fontSize: 13, height: 1.5)),
+      ]),
+    );
+  }
+
+  /// Maps S/O/A/P → the four most representative form fields.
+  void _applyAiSoap(SoapResult soap) {
+    setState(() {
+      if (soap.subjective.isNotEmpty) _chiefComplaintCtrl.text = soap.subjective;
+      if (soap.objective.isNotEmpty)  _observationCtrl.text    = soap.objective;
+      if (soap.assessment.isNotEmpty) _clinicalImpressionCtrl.text = soap.assessment;
+      if (soap.plan.isNotEmpty)       _interventionsCtrl.text  = soap.plan;
+    });
+    // Jump to the Subjective tab so the therapist can start reviewing immediately
+    _tabController.animateTo(0);
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = AppStrings(context.watch<LanguageProvider>().isArabic);
@@ -540,6 +816,27 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
           ],
         ),
         actions: [
+          // AI Doctor Assistant — triggers input sheet or shows spinner
+          if (_aiLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+              child: SizedBox(
+                width: 18, height: 18,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
+              ),
+            )
+          else
+            TextButton.icon(
+              onPressed: () => _showAiInputSheet(s),
+              icon: const Icon(Icons.auto_awesome_rounded,
+                  color: Colors.white, size: 18),
+              label: const Text('AI',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold)),
+            ),
           TextButton.icon(
             onPressed: () => _showTemplates(s),
             icon: const Icon(Icons.library_books_rounded,

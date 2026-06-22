@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/breakpoints.dart';
 import '../../core/config/form_factor_features.dart';
+import '../ai/ai_service.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
 import '../../core/utils/file_saver.dart';
@@ -70,6 +71,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   DateTime _refDate = DateTime.now();
   String _categoryFilter = '';
   String? _statusFilter;
+  bool _aiLoading = false;
 
   // ── Period helpers ──────────────────────────────────────────────────────
 
@@ -657,6 +659,143 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     await downloadExcel(Uint8List.fromList(bytes), 'expenses_${_period}_export.xlsx');
   }
 
+  // ── AI Expense Analysis ───────────────────────────────────────────────────
+
+  Future<void> _showAiExpenseSheet(
+      List<Map<String, dynamic>> docs, AppStrings s) async {
+    setState(() => _aiLoading = true);
+    // Strip note/id fields — send only what AI needs
+    final slim = docs.map((d) => {
+          'date': (d['expense_date'] as String? ?? d['created_at'] as String? ?? '').split('T').first,
+          'category': d['category'],
+          'amount': d['amount'],
+          'desc': (d['description'] as String? ?? '').toString().substring(
+              0, ((d['description'] as String? ?? '').length).clamp(0, 60)),
+        }).toList();
+
+    final result = await AiDoctorAssistantService.analyzeExpenses(
+      dateRange: _rangeLabel,
+      currency: 'USD',
+      expenses: slim,
+    );
+    if (!mounted) return;
+    setState(() => _aiLoading = false);
+
+    if (!result.isSuccess) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result.error ?? 'Expense analysis failed'),
+        backgroundColor: AppColors.error,
+      ));
+      return;
+    }
+
+    final summary = result.data!;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        maxChildSize: 0.92,
+        minChildSize: 0.4,
+        builder: (_, ctrl) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: ListView(
+            controller: ctrl,
+            padding: const EdgeInsets.all(20),
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _kAccent.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.auto_awesome_rounded, color: _kAccent, size: 20),
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Expense Analysis',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  if (result.usage != null)
+                    Text(result.usage!.label,
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                ])),
+              ]),
+              const SizedBox(height: 16),
+              if (summary.totalExpenses.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(children: [
+                    const Expanded(child: Text('Total Expenses',
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13))),
+                    Text(summary.totalExpenses,
+                        style: TextStyle(fontWeight: FontWeight.w700,
+                            color: _kAccent, fontSize: 14)),
+                  ]),
+                ),
+              if (summary.expenseCategories.isNotEmpty) ...[
+                const Text('By Category',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                const SizedBox(height: 8),
+                ...summary.expenseCategories.map((cat) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(children: [
+                    Expanded(child: Text(cat['category'] ?? '',
+                        style: const TextStyle(fontSize: 13))),
+                    Text('${cat['amount'] ?? ''} (${cat['percentage'] ?? ''})',
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 12)),
+                  ]),
+                )),
+              ],
+              if (summary.monthlySummary.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: _kAccent.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _kAccent.withValues(alpha: 0.2)),
+                  ),
+                  child: Text(summary.monthlySummary,
+                      style: const TextStyle(fontSize: 13, height: 1.5)),
+                ),
+              ],
+              if (summary.keyInsights.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                const Text('Key Insights',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                const SizedBox(height: 8),
+                ...summary.keyInsights.map((insight) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Expanded(child: Text(insight,
+                        style: const TextStyle(fontSize: 13))),
+                  ]),
+                )),
+              ],
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -1151,6 +1290,34 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                       label: const Text('Export Report',
                           style: TextStyle(fontSize: 13)),
                       onPressed: () => _showExport(docs, s),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  // AI Expense Analysis — user-triggered, desktop only
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _kAccent,
+                        side: BorderSide(color: _kAccent),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      icon: _aiLoading
+                          ? const SizedBox(
+                              width: 14, height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.auto_awesome_rounded, size: 16),
+                      label: Text(
+                        _aiLoading ? 'Analyzing…' : 'Analyze Expenses with AI',
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      onPressed: (_aiLoading || docs.isEmpty)
+                          ? null
+                          : () => _showAiExpenseSheet(docs, s),
                     ),
                   ),
                 ],

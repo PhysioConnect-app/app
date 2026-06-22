@@ -10,6 +10,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../core/config/form_factor_features.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/breakpoints.dart';
+import '../ai/ai_service.dart';
 import '../../core/widgets/patient_search_field.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
@@ -79,6 +80,7 @@ class _BillingScreenState extends State<BillingScreen> {
   DateTime _refDate = DateTime.now();
   String   _patientFilter = '';
   String?  _statusFilter;
+  bool     _aiLoading = false;
 
   final _searchCtrl = TextEditingController();
 
@@ -1968,6 +1970,135 @@ class _BillingScreenState extends State<BillingScreen> {
     );
   }
 
+  // ── AI Revenue Analysis ───────────────────────────────────────────────────
+
+  Future<void> _showAiRevenueSheet(
+      List<Map<String, dynamic>> filtered, AppStrings s) async {
+    setState(() => _aiLoading = true);
+    final currency = 'USD';
+    final totalInvoiced = filtered
+        .where((d) => (d['status'] as String?) != 'cancelled')
+        .fold<double>(
+            0, (sum, d) => sum + ((d['amount'] as num?)?.toDouble() ?? 0));
+    // Strip patient PII — send only date, amount, status
+    final slim = filtered.map((d) => {
+          'date': (d['invoice_date'] as String? ?? d['created_at'] as String? ?? '').split('T').first,
+          'amount': d['amount'],
+          'status': d['status'],
+        }).toList();
+
+    final result = await AiDoctorAssistantService.analyzeRevenue(
+      dateRange: _rangeLabel,
+      currency: currency,
+      totalInvoiced: totalInvoiced,
+      invoices: slim,
+    );
+    if (!mounted) return;
+    setState(() => _aiLoading = false);
+
+    if (!result.isSuccess) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(result.error ?? 'Revenue analysis failed'),
+        backgroundColor: AppColors.error,
+      ));
+      return;
+    }
+
+    final summary = result.data!;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        maxChildSize: 0.92,
+        minChildSize: 0.4,
+        builder: (_, ctrl) => Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: ListView(
+            controller: ctrl,
+            padding: const EdgeInsets.all(20),
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _kSuccess.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.auto_awesome_rounded, color: _kSuccess, size: 20),
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('Revenue Analysis',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  if (result.usage != null)
+                    Text(result.usage!.label,
+                        style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                ])),
+              ]),
+              const SizedBox(height: 16),
+              _aiStatRow('Total Revenue',  summary.totalRevenue,    _kSuccess),
+              _aiStatRow('Paid Sessions',  summary.paidSessions,   _kSuccess),
+              _aiStatRow('Unpaid Sessions',summary.unpaidSessions,  _kWarning),
+              if (summary.financialSummary.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0FBF9),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _kAccent.withValues(alpha: 0.2)),
+                  ),
+                  child: Text(summary.financialSummary,
+                      style: const TextStyle(fontSize: 13, height: 1.5)),
+                ),
+              ],
+              if (summary.keyInsights.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                const Text('Key Insights',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                const SizedBox(height: 8),
+                ...summary.keyInsights.map((insight) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
+                    Expanded(child: Text(insight, style: const TextStyle(fontSize: 13))),
+                  ]),
+                )),
+              ],
+              const SizedBox(height: 16),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _aiStatRow(String label, String value, Color color) {
+    if (value.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(children: [
+        Expanded(child: Text(label,
+            style: const TextStyle(color: AppColors.textSecondary, fontSize: 13))),
+        Text(value, style: TextStyle(fontWeight: FontWeight.w700, color: color, fontSize: 13)),
+      ]),
+    );
+  }
+
   // ── Bottom action bar ─────────────────────────────────────────────────────
 
   Widget _bottomBar(AppStrings s,
@@ -1997,6 +2128,36 @@ class _BillingScreenState extends State<BillingScreen> {
                       style: TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 14)),
                   onPressed: () => _showAddInvoice(s),
+                ),
+              ),
+              const SizedBox(height: 6),
+              // AI Revenue Analysis — desktop only, user-triggered
+              SizedBox(
+                width: double.infinity,
+                height: 38,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _kAccent,
+                    side: BorderSide(color: _kAccent),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  icon: _aiLoading
+                      ? const SizedBox(
+                          width: 14, height: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.auto_awesome_rounded, size: 16),
+                  label: Text(
+                    _aiLoading ? 'Analyzing…' : 'Analyze Revenue with AI',
+                    style: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  onPressed: (_aiLoading || filtered.isEmpty)
+                      ? null
+                      : () => _showAiRevenueSheet(filtered, s),
                 ),
               ),
               const SizedBox(height: 8),
