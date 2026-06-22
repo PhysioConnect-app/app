@@ -99,6 +99,61 @@ class AiDoctorAssistantService {
         fromJson: ExpenseSummary.fromJson,
       );
 
+  // ── Feature 5: Financial AI Chat ──────────────────────────────────────────
+  //
+  // Call when the user sends a message in the Financial AI Chat panel.
+  // Pass only aggregated context (never raw record lists for write operations).
+  // For read requests, the Flutter client executes the tool and calls this
+  // again with `toolResult` to get the final human-readable response.
+
+  static Future<AiResult<FinancialChatResult>> financialChat({
+    required String userMessage,
+    required Map<String, dynamic> revenueContext,
+    required Map<String, dynamic> expenseContext,
+    List<Map<String, dynamic>> conversationHistory = const [],
+    Map<String, dynamic>? toolResult,
+    String? executedTool,
+  }) =>
+      _invoke(
+        taskType: 'FINANCIAL_CHAT',
+        context: {
+          'userMessage':          userMessage,
+          'currentDate':          DateTime.now().toIso8601String().split('T').first,
+          'revenueContext':       revenueContext,
+          'expenseContext':       expenseContext,
+          'conversationHistory':  conversationHistory,
+          if (toolResult    != null) 'toolResult':    toolResult,
+          if (executedTool  != null) 'executedTool':  executedTool,
+        },
+        fromJson: FinancialChatResult.fromJson,
+      );
+
+  // ── Feature 6: Clinic Business Analytics ──────────────────────────────────
+  //
+  // Call when the doctor requests a clinic performance analysis.
+  // Pass aggregated totals and per-therapist breakdowns, not raw records.
+
+  static Future<AiResult<ClinicAnalyticsResult>> analyzeClinicPerformance({
+    required String period,
+    required String dateRange,
+    required Map<String, dynamic> revenue,
+    required Map<String, dynamic> expenses,
+    required Map<String, dynamic> sessions,
+    String? userPrompt,
+  }) =>
+      _invoke(
+        taskType: 'CLINIC_ANALYTICS',
+        context: {
+          'period':    period,
+          'dateRange': dateRange,
+          'revenue':   revenue,
+          'expenses':  expenses,
+          'sessions':  sessions,
+          if (userPrompt != null && userPrompt.isNotEmpty) 'userPrompt': userPrompt,
+        },
+        fromJson: ClinicAnalyticsResult.fromJson,
+      );
+
   // ── Core invocation ───────────────────────────────────────────────────────
 
   static Future<AiResult<T>> _invoke<T>({

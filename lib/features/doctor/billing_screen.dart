@@ -11,6 +11,8 @@ import '../../core/config/form_factor_features.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/breakpoints.dart';
 import '../ai/ai_service.dart';
+import '../ai/financial_ai_chat_screen.dart';
+import '../ai/clinic_analytics_sheet.dart';
 import '../../core/widgets/patient_search_field.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
@@ -1043,13 +1045,42 @@ class _BillingScreenState extends State<BillingScreen> {
       backgroundColor: const Color(0xFFEBF2FB),
       floatingActionButton: isDesktop
           ? null
-          : FloatingActionButton.extended(
-              onPressed: () => _showAddInvoice(s),
-              backgroundColor: _kAccent,
-              foregroundColor: Colors.white,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('New Invoice',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'billing_fab_analytics',
+                  backgroundColor: Colors.white,
+                  foregroundColor: _kAccent,
+                  elevation: 2,
+                  onPressed: () => showClinicAnalyticsSheet(context),
+                  tooltip: 'Business Analytics',
+                  child: const Icon(Icons.insights_rounded, size: 20),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton.small(
+                  heroTag: 'billing_fab_chat',
+                  backgroundColor: Colors.white,
+                  foregroundColor: _kAccent,
+                  elevation: 2,
+                  onPressed: () => Navigator.push(context,
+                      MaterialPageRoute(
+                          builder: (_) => const FinancialAiChatScreen())),
+                  tooltip: 'AI Financial Assistant',
+                  child: const Icon(Icons.chat_rounded, size: 20),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton.extended(
+                  heroTag: 'billing_fab_add',
+                  onPressed: () => _showAddInvoice(s),
+                  backgroundColor: _kAccent,
+                  foregroundColor: Colors.white,
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('New Invoice',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
             ),
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: widget.invoiceStream ??
@@ -2160,6 +2191,49 @@ class _BillingScreenState extends State<BillingScreen> {
                       : () => _showAiRevenueSheet(filtered, s),
                 ),
               ),
+              const SizedBox(height: 6),
+              // AI Financial Chat — opens full chat screen
+              Row(children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _kAccent,
+                      side: BorderSide(color: _kAccent),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    icon: const Icon(Icons.chat_rounded, size: 16),
+                    label: const Text('AI Chat',
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600)),
+                    onPressed: () => Navigator.push(context,
+                        MaterialPageRoute(
+                            builder: (_) => const FinancialAiChatScreen())),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _kAccent,
+                      side: BorderSide(color: _kAccent),
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    icon: const Icon(Icons.insights_rounded, size: 16),
+                    label: const Text('Analytics',
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600)),
+                    onPressed: () => showClinicAnalyticsSheet(context),
+                  ),
+                ),
+              ]),
               const SizedBox(height: 8),
             ],
             if (FormFactorFeatures.of(context).showBillingImportExport)

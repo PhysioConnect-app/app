@@ -145,6 +145,134 @@ class ExpenseSummary {
   );
 }
 
+// ── Financial chat result (Feature 5) ─────────────────────────────────────────
+
+enum FinancialResponseType { text, action, clarification }
+
+class FinancialActionData {
+  final String type;
+  final String description;
+  final String? recordId;
+  final Map<String, dynamic>? filters;
+  final Map<String, dynamic>? data;
+
+  const FinancialActionData({
+    required this.type,
+    required this.description,
+    this.recordId,
+    this.filters,
+    this.data,
+  });
+
+  factory FinancialActionData.fromJson(Map<String, dynamic> j) =>
+      FinancialActionData(
+        type:        j['type']        as String? ?? '',
+        description: j['description'] as String? ?? '',
+        recordId:    j['recordId']    as String?,
+        filters:     (j['filters'] as Map?)?.cast<String, dynamic>(),
+        data:        (j['data']    as Map?)?.cast<String, dynamic>(),
+      );
+
+  bool get isReadOnly =>
+      type == 'getRevenueRecords' ||
+      type == 'getExpenseRecords' ||
+      type == 'getClinicSummary';
+
+  bool get isRevenue =>
+      type.contains('Revenue') || type.contains('revenue');
+
+  bool get isExpense =>
+      type.contains('Expense') || type.contains('expense');
+}
+
+class FinancialChatResult {
+  final FinancialResponseType responseType;
+  final String message;
+  final FinancialActionData? action;
+
+  const FinancialChatResult({
+    required this.responseType,
+    required this.message,
+    this.action,
+  });
+
+  factory FinancialChatResult.fromJson(Map<String, dynamic> j) {
+    final typeStr = j['responseType'] as String? ?? 'text';
+    final rt = switch (typeStr) {
+      'action'        => FinancialResponseType.action,
+      'clarification' => FinancialResponseType.clarification,
+      _               => FinancialResponseType.text,
+    };
+    final actionMap = j['action'] as Map?;
+    return FinancialChatResult(
+      responseType: rt,
+      message:      j['message'] as String? ?? '',
+      action:       actionMap != null
+          ? FinancialActionData.fromJson(actionMap.cast<String, dynamic>())
+          : null,
+    );
+  }
+}
+
+// ── Chat message model ─────────────────────────────────────────────────────────
+
+enum ChatRole { user, assistant, system }
+
+class AiChatMessage {
+  final ChatRole role;
+  final String content;
+  final DateTime timestamp;
+  final bool isLoading;
+  final FinancialActionData? pendingAction;
+
+  AiChatMessage({
+    required this.role,
+    required this.content,
+    DateTime? timestamp,
+    this.isLoading = false,
+    this.pendingAction,
+  }) : timestamp = timestamp ?? DateTime.now();
+
+  Map<String, dynamic> toHistoryMap() => {
+    'role':    role == ChatRole.user ? 'user' : 'assistant',
+    'content': content,
+  };
+}
+
+// ── Clinic analytics result (Feature 6) ───────────────────────────────────────
+
+class ClinicAnalyticsResult {
+  final String       summary;
+  final List<String> keyInsights;
+  final List<String> warnings;
+  final List<String> opportunities;
+  final List<String> recommendations;
+
+  const ClinicAnalyticsResult({
+    required this.summary,
+    required this.keyInsights,
+    required this.warnings,
+    required this.opportunities,
+    required this.recommendations,
+  });
+
+  factory ClinicAnalyticsResult.fromJson(Map<String, dynamic> j) =>
+      ClinicAnalyticsResult(
+        summary:         j['summary']         as String? ?? '',
+        keyInsights:     _strList(j['keyInsights']),
+        warnings:        _strList(j['warnings']),
+        opportunities:   _strList(j['opportunities']),
+        recommendations: _strList(j['recommendations']),
+      );
+
+  bool get isEmpty =>
+      summary.isEmpty &&
+      keyInsights.isEmpty &&
+      warnings.isEmpty &&
+      opportunities.isEmpty &&
+      recommendations.isEmpty;
+}
+
 // ── Shared helper ──────────────────────────────────────────────────────────────
 
 List<String> _strList(dynamic v) =>

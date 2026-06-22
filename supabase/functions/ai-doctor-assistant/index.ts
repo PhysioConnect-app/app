@@ -5,6 +5,8 @@
 //   PATIENT_HISTORY_SUMMARY  → summarises a patient's clinical history
 //   REVENUE_SUMMARY          → analyses clinic revenue for a date range
 //   EXPENSE_SUMMARY          → analyses clinic expenses for a date range
+//   FINANCIAL_CHAT           → conversational financial AI assistant (Feature 5)
+//   CLINIC_ANALYTICS         → deep business & statistics analysis (Feature 6)
 //
 // Required secrets (set with `supabase secrets set KEY=value`):
 //   GROQ_API_KEY             → your Groq API key
@@ -29,6 +31,8 @@ type TaskType =
   | 'PATIENT_HISTORY_SUMMARY'
   | 'REVENUE_SUMMARY'
   | 'EXPENSE_SUMMARY'
+  | 'FINANCIAL_CHAT'
+  | 'CLINIC_ANALYTICS'
 
 interface Prompt {
   system:    string
@@ -48,6 +52,8 @@ const VALID_TASKS: TaskType[] = [
   'PATIENT_HISTORY_SUMMARY',
   'REVENUE_SUMMARY',
   'EXPENSE_SUMMARY',
+  'FINANCIAL_CHAT',
+  'CLINIC_ANALYTICS',
 ]
 
 // Maximum Groq output tokens per task type
@@ -56,6 +62,8 @@ const MAX_TOKENS: Record<TaskType, number> = {
   PATIENT_HISTORY_SUMMARY: 1200,
   REVENUE_SUMMARY:         600,
   EXPENSE_SUMMARY:         600,
+  FINANCIAL_CHAT:          700,
+  CLINIC_ANALYTICS:        1000,
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -88,7 +96,6 @@ function buildPrompt(taskType: TaskType, ctx: Record<string, unknown>): Prompt {
       const age     = ctx.patientAge ? `, ${ctx.patientAge} y.o.` : ''
       const dx      = str(ctx.diagnosis)
       const date    = ctx.sessionDate ? `\nSession date: ${ctx.sessionDate}` : ''
-      // Hard cap on session notes to control input tokens
       const notes   = cap(str(ctx.sessionNotes), 2500)
 
       return {
@@ -122,7 +129,6 @@ Return exactly this JSON:
       const patient   = str(ctx.patientName)
       const count     = ctx.noteCount ?? 0
       const rawNotes  = ctx.recentNotes as Array<Record<string, unknown>> | undefined
-      // Strip heavy fields; send only the most recent 8 notes, capped at 7 000 chars
       const slim = (rawNotes ?? []).slice(0, 8).map((n) => ({
         date:          n.created_at ?? n.date,
         chiefComplaint: str(n.chiefComplaint ?? n.subjective).slice(0, 200),
@@ -164,7 +170,6 @@ Return exactly this JSON:
       const currency = str(ctx.currency) || 'USD'
       const total    = ctx.totalInvoiced ?? 0
       const rawInv   = ctx.invoices as Array<Record<string, unknown>> | undefined
-      // Minimal invoice representation — drop patient PII
       const slim = (rawInv ?? []).slice(0, 50).map((inv) => ({
         date:   str(inv.invoice_date ?? inv.date ?? inv.created_at).slice(0, 10),
         amount: inv.amount,
@@ -228,6 +233,167 @@ Return exactly this JSON:
 }`,
 
         maxTokens: MAX_TOKENS.EXPENSE_SUMMARY,
+      }
+    }
+
+    // ── Financial chat (Feature 5) ─────────────────────────────────────────
+    case 'FINANCIAL_CHAT': {
+      const userMessage = str(ctx.userMessage)
+      const currentDate = str(ctx.currentDate) || new Date().toISOString().slice(0, 10)
+
+      // Financial context — only pre-aggregated totals, never full record lists
+      const revCtx  = ctx.revenueContext  as Record<string, unknown> | undefined
+      const expCtx  = ctx.expenseContext  as Record<string, unknown> | undefined
+      const history = ctx.conversationHistory as Array<{role: string; content: string}> | undefined
+
+      // Tool result from a previously executed action (optional)
+      const toolResult = ctx.toolResult as Record<string, unknown> | undefined
+      const toolName   = str(ctx.executedTool)
+
+      const revenueBlock = revCtx ? `Revenue (${str(revCtx.period)}):
+- Collected: ${str(revCtx.collected)}
+- Pending: ${str(revCtx.pending)}
+- Invoices: ${str(revCtx.invoiceCount)}
+- Overdue: ${str(revCtx.overdue)}` : 'Revenue data: not provided'
+
+      const expenseBlock = expCtx ? `Expenses (${str(expCtx.period)}):
+- Total: ${str(expCtx.total)}
+- Top category: ${str(expCtx.topCategory)} (${str(expCtx.topCategoryAmount)})
+- Pending: ${str(expCtx.pendingAmount)}` : 'Expense data: not provided'
+
+      const toolResultBlock = toolResult
+        ? `\nPrevious action "${toolName}" result:\n${cap(JSON.stringify(toolResult), 500)}\n`
+        : ''
+
+      // Build conversation history block (last 6 messages max)
+      const historyBlock = (history ?? []).slice(-6).map(
+        (m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${cap(m.content, 300)}`
+      ).join('\n')
+
+      return {
+        system: `You are a Financial AI Assistant for a physiotherapy clinic management system.
+You help the clinic doctor manage revenue records (invoices) and expense records conversationally.
+You have access to the following tools you can request:
+- getRevenueRecords: fetch filtered revenue/invoice records
+- addRevenue: add a new revenue/invoice record
+- updateRevenue: update an existing revenue record by ID
+- deleteRevenue: delete a revenue record by ID
+- getExpenseRecords: fetch filtered expense records
+- addExpense: add a new expense record
+- updateExpense: update an existing expense record by ID
+- deleteExpense: delete an expense record by ID
+- getClinicSummary: get a combined financial summary
+
+IMPORTANT RULES:
+1. You NEVER modify data directly. You always request a tool call and wait for confirmation.
+2. For any modification (add/update/delete), return responseType "action" with full details.
+3. For read-only queries, return responseType "text" with your answer.
+4. If a tool result was provided, incorporate it into your response.
+5. Always be concise and specific. Use actual numbers from the context.
+6. Currency is USD unless stated otherwise.
+7. Today's date is ${currentDate}.
+8. If information is insufficient to fulfill a request, ask a clarifying question instead of guessing.
+
+For modifications, the action.data must include ALL required fields for the database record.
+For expense: category, amount, expense_date (ISO string), status (pending/paid)
+For revenue: patient_name, service, amount, invoice_date (ISO string), status (pending/paid)
+
+Respond with valid JSON only — no markdown, no extra text.`,
+
+        user: `Financial context:
+${revenueBlock}
+${expenseBlock}
+${toolResultBlock}
+${historyBlock ? `\nConversation so far:\n${historyBlock}` : ''}
+
+User: ${cap(userMessage, 800)}
+
+Return exactly this JSON structure:
+{
+  "responseType": "text" | "action" | "clarification",
+  "message": "your response to the user",
+  "action": {
+    "type": "getRevenueRecords|addRevenue|updateRevenue|deleteRevenue|getExpenseRecords|addExpense|updateExpense|deleteExpense|getClinicSummary",
+    "description": "plain English summary of what will happen",
+    "recordId": "existing record UUID (for update/delete only, else omit)",
+    "filters": { "status": "...", "dateFrom": "...", "dateTo": "...", "category": "...", "search": "..." },
+    "data": { ... }
+  }
+}
+Note: include "action" only when responseType is "action". Omit it for "text" and "clarification".`,
+
+        maxTokens: MAX_TOKENS.FINANCIAL_CHAT,
+      }
+    }
+
+    // ── Clinic analytics (Feature 6) ───────────────────────────────────────
+    case 'CLINIC_ANALYTICS': {
+      const period      = str(ctx.period) || 'monthly'
+      const dateRange   = str(ctx.dateRange)
+      const userPrompt  = str(ctx.userPrompt)
+
+      const revData  = ctx.revenue  as Record<string, unknown> | undefined
+      const expData  = ctx.expenses as Record<string, unknown> | undefined
+      const sessData = ctx.sessions as Record<string, unknown> | undefined
+
+      const revBlock = revData ? `Revenue:
+- Collected: ${str(revData.collected)}
+- Pending: ${str(revData.pending)}
+- Total invoices: ${str(revData.invoiceCount)}
+- Previous period collected: ${str(revData.previousPeriodCollected)}
+- Growth: ${str(revData.growth)}
+- By month: ${cap(JSON.stringify(revData.byMonth ?? []), 400)}` : 'Revenue: not provided'
+
+      const expBlock = expData ? `Expenses:
+- Total: ${str(expData.total)}
+- By category: ${cap(JSON.stringify(expData.byCategory ?? []), 400)}
+- Previous period total: ${str(expData.previousPeriodTotal)}` : 'Expenses: not provided'
+
+      const sessBlock = sessData ? `Sessions:
+- Total completed: ${str(sessData.total)}
+- By therapist: ${cap(JSON.stringify(sessData.byTherapist ?? []), 300)}
+- Patient visits: ${str(sessData.patientVisits)}
+- New patients: ${str(sessData.newPatients)}` : 'Sessions: not provided'
+
+      return {
+        system: `You are a business intelligence assistant for a physiotherapy clinic.
+Analyse the provided financial and operational data to generate actionable business insights.
+Be specific, data-driven, and focus on practical recommendations.
+Respond with valid JSON only.`,
+
+        user: `Analyse clinic performance for: ${dateRange} (${period})
+
+${revBlock}
+
+${expBlock}
+
+${sessBlock}
+
+${userPrompt ? `Specific question: ${cap(userPrompt, 400)}` : ''}
+
+Return exactly this JSON:
+{
+  "summary": "2–3 sentence executive overview of clinic performance",
+  "keyInsights": [
+    "specific data-backed insight 1",
+    "specific data-backed insight 2",
+    "specific data-backed insight 3"
+  ],
+  "warnings": [
+    "risk or concern 1 (only include if genuinely concerning)"
+  ],
+  "opportunities": [
+    "growth or improvement opportunity 1",
+    "growth or improvement opportunity 2"
+  ],
+  "recommendations": [
+    "actionable recommendation 1",
+    "actionable recommendation 2",
+    "actionable recommendation 3"
+  ]
+}`,
+
+        maxTokens: MAX_TOKENS.CLINIC_ANALYTICS,
       }
     }
   }
@@ -294,7 +460,6 @@ async function getUsage(
   const enabled      = (cfg?.enabled      as boolean | undefined) ?? true
   const monthlyLimit = (cfg?.monthly_limit as number  | undefined) ?? DEFAULT_LIMIT
 
-  // Sum usage across all features for this user/month → single monthly cap
   const { data: rows } = await admin
     .from('ai_usage')
     .select('requests_used')
@@ -397,7 +562,7 @@ Deno.serve(async (req) => {
     // ── 5. Call Groq ─────────────────────────────────────────────────────
     const { content, tokensUsed } = await callGroq(prompt)
 
-    // ── 6. Update usage (non-blocking — don't fail the response) ─────────
+    // ── 6. Update usage (non-blocking) ───────────────────────────────────
     incrementUsage(adminClient, user.id, taskType, usage.month, tokensUsed).catch(
       (e) => console.error('Usage tracking error (non-fatal):', e),
     )

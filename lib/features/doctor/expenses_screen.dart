@@ -10,6 +10,8 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/breakpoints.dart';
 import '../../core/config/form_factor_features.dart';
 import '../ai/ai_service.dart';
+import '../ai/financial_ai_chat_screen.dart';
+import '../ai/clinic_analytics_sheet.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
 import '../../core/utils/file_saver.dart';
@@ -1320,6 +1322,48 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                           : () => _showAiExpenseSheet(docs, s),
                     ),
                   ),
+                  const SizedBox(height: 6),
+                  // AI Financial Chat + Business Analytics
+                  Row(children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _kAccent,
+                          side: BorderSide(color: _kAccent),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: const Icon(Icons.chat_rounded, size: 14),
+                        label: const Text('AI Chat',
+                            style: TextStyle(fontSize: 12)),
+                        onPressed: () => Navigator.push(context,
+                            MaterialPageRoute(
+                                builder: (_) =>
+                                    const FinancialAiChatScreen())),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _kAccent,
+                          side: BorderSide(color: _kAccent),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: const Icon(Icons.insights_rounded, size: 14),
+                        label: const Text('Analytics',
+                            style: TextStyle(fontSize: 12)),
+                        onPressed: () => showClinicAnalyticsSheet(context),
+                      ),
+                    ),
+                  ]),
                 ],
               ],
             ),
@@ -1564,6 +1608,30 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
+        Row(mainAxisSize: MainAxisSize.min, children: [
+          FloatingActionButton.small(
+            heroTag: 'fab_analytics_expenses',
+            backgroundColor: Colors.white,
+            foregroundColor: _kAccent,
+            elevation: 2,
+            onPressed: () => showClinicAnalyticsSheet(context),
+            tooltip: 'Business Analytics',
+            child: const Icon(Icons.insights_rounded, size: 18),
+          ),
+          const SizedBox(width: 8),
+          FloatingActionButton.small(
+            heroTag: 'fab_chat_expenses',
+            backgroundColor: Colors.white,
+            foregroundColor: _kAccent,
+            elevation: 2,
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(
+                    builder: (_) => const FinancialAiChatScreen())),
+            tooltip: 'AI Financial Assistant',
+            child: const Icon(Icons.chat_rounded, size: 18),
+          ),
+        ]),
+        const SizedBox(height: 10),
         if (showImport) ...[
           Row(mainAxisSize: MainAxisSize.min, children: [
             FloatingActionButton.small(
