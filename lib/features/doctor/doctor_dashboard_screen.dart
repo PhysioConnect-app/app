@@ -17,6 +17,7 @@ import 'package:excel/excel.dart' as xl;
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/utils/file_saver.dart';
+import '../../core/utils/excel_compat.dart';
 import 'location_picker_screen.dart';
 import '../../core/config/form_factor_features.dart';
 import '../../core/widgets/patient_search_field.dart';
@@ -38,22 +39,29 @@ import '../auth/auth_service.dart';
 import 'assessment_library/assessment_library_screen.dart';
 import 'doctor_notifications_tab.dart';
 
-// ── Patient import entry ──────────────────────────────────────────────────
+// ── Unified import row (patients + schedule + revenues) ───────────────────
 
-class _ScheduleImportEntry {
-  final String name;
-  final List<DateTime?> dates;
-  String? patientId;   // null = not matched to an existing patient
-  bool selected = true;
-  _ScheduleImportEntry({required this.name, required this.dates});
-}
+class _UnifiedRow {
+  final String    name;
+  final DateTime? date;
+  final double?   amount;    // null = schedule-only row
+  final String    service;
+  final String    statusKey; // 'pending' | 'paid' | 'partially_paid' | 'cancelled'
+  final String    note;
+  bool    selected  = true;
+  String? patientId;         // null = unmatched → will create new patient
 
-class _PatientImportEntry {
-  final String name;
-  final List<DateTime?> dates; // one entry per Excel row with this name
-  bool selected = true;        // checked in the preview list
-  bool createAccount = false;
-  _PatientImportEntry({required this.name, required this.dates});
+  _UnifiedRow({
+    required this.name,
+    this.date,
+    this.amount,
+    this.service   = 'Physical Therapy',
+    this.statusKey = 'pending',
+    this.note      = '',
+  });
+
+  bool get hasDate   => date != null;
+  bool get hasAmount => amount != null && amount! > 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -87,6 +95,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
   String _pendingName       = '';
   double? _lat;
   double? _lng;
+  ValueNotifier<({double pct, String label})>? _importProgress;
 
   // Navigation – order: Schedule | Documentation | My Patients | Statistics |
   //                     Billing | Expenses | My Profile | Notifications | Store | Assessment
@@ -217,6 +226,7 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
     _clinicAddrCtrl.dispose();
     _workingHoursCtrl.dispose();
     _phoneCtrl.dispose();
+    _importProgress?.dispose();
     super.dispose();
   }
 
@@ -335,6 +345,71 @@ class _DoctorDashboardScreenState extends State<DoctorDashboardScreen> {
 
   void _hideLoading() {
     if (mounted && Navigator.canPop(context)) Navigator.pop(context);
+  }
+
+  // ── Import progress dialog ─────────────────────────────────────────────────
+
+  void _showImportProgress() {
+    _importProgress?.dispose();
+    _importProgress = ValueNotifier((pct: 0.0, label: 'Starting…'));
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => PopScope(
+        canPop: false,
+        child: Dialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+            child: ValueListenableBuilder<({double pct, String label})>(
+              valueListenable: _importProgress!,
+              builder: (_, prog, __) => Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Importing…',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 16),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: LinearProgressIndicator(
+                      value: prog.pct,
+                      minHeight: 8,
+                      backgroundColor: Colors.grey.shade100,
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                          AppColors.primary),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Flexible(
+                        child: Text(prog.label,
+                            style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 12)),
+                      ),
+                      Text('${(prog.pct * 100).round()}%',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: AppColors.primary)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _setProgress(double pct, String label) {
+    _importProgress?.value = (pct: pct.clamp(0.0, 1.0), label: label);
   }
 
   void _navigateTo(int index) {
@@ -1019,7 +1094,7 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                   }),
                 ),
                 const SizedBox(height: 8),
-                _buildSubStatusBar(),
+                _buildSubStatusBar(s),
               ],
             ),
           ),
@@ -1028,7 +1103,7 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
     );
   }
 
-  Widget _buildSubStatusBar() {
+  Widget _buildSubStatusBar(AppStrings s) {
     final expired = _sub.isExpired;
     final now = DateTime.now();
     final expiresAt = _sub.expiresAt;
@@ -1082,6 +1157,17 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
               style: TextStyle(
                   color: color, fontSize: 12, fontWeight: FontWeight.w500)),
         ),
+        TextButton.icon(
+          onPressed: () => _importUnifiedFromExcel(s),
+          style: TextButton.styleFrom(
+            foregroundColor: AppColors.primary,
+            padding: EdgeInsets.zero,
+            minimumSize: const Size(0, 0),
+          ),
+          icon: const Icon(Icons.upload_file_rounded, size: 14),
+          label: const Text('Import', style: TextStyle(fontSize: 12)),
+        ),
+        const SizedBox(width: 4),
         TextButton(
           onPressed: () => _showLogout(),
           style: TextButton.styleFrom(
@@ -2189,73 +2275,6 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
             ),
           ),
         ),
-        if (FormFactorFeatures.of(context).showScheduleImportExport) ...[
-          const SizedBox(width: 6),
-          // Import from Excel — compact
-          SizedBox(
-            height: 38,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 0),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                elevation: 0,
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              icon: const Icon(Icons.upload_file_rounded, size: 14),
-              label: const Text('Import',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 11)),
-              onPressed: () => _importScheduleFromExcel(s),
-            ),
-          ),
-          const SizedBox(width: 6),
-          // Help
-          GestureDetector(
-            onTap: () => showImportHelpSheet(
-              context,
-              title: 'Import Schedule',
-              subtitle: 'Each row = one appointment for the patient in col B',
-              columns: ['Date (Col A)', 'Patient Name (Col B)'],
-              examples: [
-                ['01/15/2024', 'John Smith'],
-                ['03/20/2024', 'John Smith'],
-                ['02/10/2024', 'Sarah Lee'],
-              ],
-              notes: [
-                'Column A: Appointment date — added to the schedule',
-                'Column B: Patient name — must match a patient in My Patients',
-                'Same patient on multiple rows = multiple appointments',
-                'Past dates → Previous (completed), Future → Upcoming',
-                'Accepted formats: dd/MM/yyyy · yyyy-MM-dd · d/M/yyyy',
-                'First row can be a header (auto-detected)',
-              ],
-            ),
-            child: Container(
-              height: 46,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade50,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.amber.shade200),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: const [
-                Icon(Icons.help_outline_rounded,
-                    color: Colors.amber, size: 16),
-                SizedBox(width: 4),
-                Text('Format',
-                    style: TextStyle(
-                        color: Colors.amber,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold)),
-              ]),
-            ),
-          ),
-        ],
       ]),
     );
 
@@ -3665,44 +3684,6 @@ void _showPickPatientForDoc(AppStrings s) {
                   _showSearchExistingPatients(s);
                 },
               ),
-              if (FormFactorFeatures.of(context)
-                  .showPatientsImportExport) ...[
-                const SizedBox(height: 10),
-                _addPatientTile(
-                  ctx: ctx,
-                  icon: Icons.upload_file_rounded,
-                  color: const Color(0xFF2E7D32),
-                  bgColor: const Color(0xFFE8F5E9),
-                  title: 'Import from Excel',
-                  subtitle: 'Col A: Date → Schedule  ·  Col B: Patient Name',
-                  onTap: () {
-                    Navigator.pop(ctx);
-                    _importPatientsFromExcel();
-                  },
-                  onHelp: () => showImportHelpSheet(
-                    ctx,
-                    title: 'Import Patients & Schedule',
-                    subtitle: 'Each row = one appointment assigned to the patient',
-                    columns: ['Date (Col A)', 'Patient Name (Col B)'],
-                    examples: [
-                      ['01/15/2024', 'John Smith'],
-                      ['03/20/2024', 'John Smith'],
-                      ['02/10/2024', 'Sarah Johnson'],
-                    ],
-                    notes: [
-                      'Column A — Appointment date: fills the doctor\'s schedule',
-                      'Column B — Patient name: the appointment is assigned to this patient',
-                      'Each row creates ONE appointment linked to the patient in col B',
-                      'Same patient can appear on multiple rows (different dates)',
-                      'Past dates → shown in Schedule "Previous" section (status: completed)',
-                      'Future dates → shown in Schedule "Upcoming" section (status: scheduled)',
-                      'Accepted date formats: dd/MM/yyyy · yyyy-MM-dd · d/M/yyyy',
-                      'First row can be a header (auto-detected by keyword)',
-                      'Toggle "Account" in the preview to create a patient login',
-                    ],
-                  ),
-                ),
-              ],
               const SizedBox(height: 6),
             ],
           ),
@@ -5112,8 +5093,10 @@ void _showPickPatientForDoc(AppStrings s) {
             );
           }
 
-          String searchQuery = '';
-          String sortBy     = 'name'; // 'name' | 'condition' | 'account' | 'date'
+          String searchQuery  = '';
+          String sortBy       = 'name';
+          var    selectionMode = false;
+          final  selectedIds   = <String>{};
           return StatefulBuilder(
             builder: (context, setState) {
               // ── Filter ────────────────────────────────────────────────
@@ -5166,75 +5149,124 @@ void _showPickPatientForDoc(AppStrings s) {
                   });
               }
 
+              void toggleOne(String id) => setState(() {
+                if (selectedIds.contains(id)) {
+                  selectedIds.remove(id);
+                } else {
+                  selectedIds.add(id);
+                }
+              });
+              void enterSelection(String id) => setState(() {
+                selectionMode = true;
+                selectedIds.add(id);
+              });
+              void exitSelection() => setState(() {
+                selectionMode = false;
+                selectedIds.clear();
+              });
+
               return Column(
                 children: [
-                  // Header with search and add button
-                  Container(
-                    color: Colors.white,
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 4),
-                        Row(
+                  // ── Header: selection bar OR search+add bar ────────────
+                  selectionMode
+                    ? Container(
+                        color: Colors.white,
+                        padding: const EdgeInsets.fromLTRB(4, 6, 12, 6),
+                        child: Row(children: [
+                          IconButton(
+                            icon: const Icon(Icons.close_rounded),
+                            tooltip: 'Cancel selection',
+                            onPressed: exitSelection,
+                          ),
+                          Text(
+                            '${selectedIds.length} selected',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 15),
+                          ),
+                          const Spacer(),
+                          TextButton(
+                            onPressed: () => setState(() {
+                              selectedIds.addAll(filteredPatients
+                                  .map((p) => p['id'] as String));
+                            }),
+                            child: const Text('Select all'),
+                          ),
+                        ]),
+                      )
+                    : Container(
+                        color: Colors.white,
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Expanded(
-                              child: TextField(
-                                onChanged: (v) =>
-                                    setState(() => searchQuery = v),
-                                decoration: InputDecoration(
-                                  hintText: 'Search by name, condition, contact…',
-                                  prefixIcon: const Icon(Icons.search_rounded,
-                                      color: AppColors.primary),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
+                            const SizedBox(height: 4),
+                            Row(children: [
+                              Expanded(
+                                child: TextField(
+                                  onChanged: (v) =>
+                                      setState(() => searchQuery = v),
+                                  decoration: InputDecoration(
+                                    hintText:
+                                        'Search by name, condition, contact…',
+                                    prefixIcon: const Icon(
+                                        Icons.search_rounded,
+                                        color: AppColors.primary),
+                                    border: OutlineInputBorder(
+                                      borderRadius:
+                                          BorderRadius.circular(8),
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    contentPadding:
+                                        const EdgeInsets.symmetric(
+                                            vertical: 10),
                                   ),
-                                  filled: true,
-                                  fillColor: Colors.white,
-                                  contentPadding:
-                                      const EdgeInsets.symmetric(vertical: 10),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 10),
-                              ),
-                              icon: const Icon(Icons.add_rounded, size: 20),
-                              label: const Text('Add Patient',
-                                  style: TextStyle(fontSize: 13)),
-                              onPressed: () => _showAddPatientMenu(s),
-                            ),
-                            if (FormFactorFeatures.of(context)
-                                .showPatientsImportExport) ...[
                               const SizedBox(width: 8),
-                              Tooltip(
-                                message: 'Export to Excel',
-                                child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF2E7D32),
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 10),
-                                    minimumSize: Size.zero,
-                                  ),
-                                  child: const Icon(Icons.download_rounded,
-                                      size: 20),
-                                  onPressed: () =>
-                                      _exportPatientsExcel(filteredPatients),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 10),
                                 ),
+                                icon: const Icon(Icons.add_rounded,
+                                    size: 20),
+                                label: const Text('Add Patient',
+                                    style: TextStyle(fontSize: 13)),
+                                onPressed: () => _showAddPatientMenu(s),
                               ),
-                            ],
+                              if (FormFactorFeatures.of(context)
+                                  .showPatientsImportExport) ...[
+                                const SizedBox(width: 8),
+                                Tooltip(
+                                  message: 'Export to Excel',
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor:
+                                          const Color(0xFF2E7D32),
+                                      foregroundColor: Colors.white,
+                                      padding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 10),
+                                      minimumSize: Size.zero,
+                                    ),
+                                    child: const Icon(
+                                        Icons.download_rounded,
+                                        size: 20),
+                                    onPressed: () => _exportPatientsExcel(
+                                        filteredPatients),
+                                  ),
+                                ),
+                              ],
+                            ]),
                           ],
                         ),
-                      ],
-                    ),
-                  ),
-                  // Patient table
+                      ),
+
+                  // ── Patient list / table ──────────────────────────────
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -5248,13 +5280,67 @@ void _showPickPatientForDoc(AppStrings s) {
                               ),
                             )
                           : FormFactorFeatures.of(context).isMobile
-                              ? _buildPatientsCardList(s, filteredPatients)
-                              : _buildPatientsTable(s, filteredPatients,
+                              ? _buildPatientsCardList(
+                                  s, filteredPatients,
+                                  selectionMode: selectionMode,
+                                  selectedIds: selectedIds,
+                                  onToggle: toggleOne,
+                                  onLongPress: enterSelection,
+                                )
+                              : _buildPatientsTable(
+                                  s, filteredPatients,
                                   sortBy: sortBy,
                                   onSortChanged: (v) =>
-                                      setState(() => sortBy = v)),
+                                      setState(() => sortBy = v),
+                                  selectionMode: selectionMode,
+                                  selectedIds: selectedIds,
+                                  onToggle: toggleOne,
+                                  onToggleAll: () => setState(() {
+                                    final all = filteredPatients
+                                        .map((p) => p['id'] as String)
+                                        .toSet();
+                                    if (selectedIds.containsAll(all)) {
+                                      selectedIds.removeAll(all);
+                                    } else {
+                                      selectedIds.addAll(all);
+                                    }
+                                  }),
+                                  onLongPress: enterSelection,
+                                ),
                     ),
                   ),
+
+                  // ── Bulk action bar (visible only in selection mode) ───
+                  if (selectionMode && selectedIds.isNotEmpty)
+                    Container(
+                      color: Colors.white,
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.error,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                          icon: const Icon(
+                              Icons.person_remove_rounded, size: 18),
+                          label: Text(
+                            'Remove ${selectedIds.length} '
+                            'patient${selectedIds.length == 1 ? '' : 's'}'
+                            ' from My Patients',
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold),
+                          ),
+                          onPressed: () => _bulkRemovePatients(
+                            selectedIds.toList(),
+                            () => exitSelection(),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               );
             },
@@ -5269,7 +5355,12 @@ void _showPickPatientForDoc(AppStrings s) {
   /// action sheet as the desktop table row (schedule / view appointments /
   /// add documentation / etc.). Desktop's table is unchanged.
   Widget _buildPatientsCardList(
-      AppStrings s, List<Map<String, dynamic>> patients) {
+      AppStrings s, List<Map<String, dynamic>> patients, {
+      bool selectionMode = false,
+      Set<String> selectedIds = const {},
+      void Function(String)? onToggle,
+      void Function(String)? onLongPress,
+  }) {
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -5285,23 +5376,49 @@ void _showPickPatientForDoc(AppStrings s) {
         final dateOfBirth = data['date_of_birth'] as String?;
         final hasAccount  = (data['email'] as String? ?? '').isNotEmpty &&
             (data['hasAccount'] as bool? ?? true);
+        final isSelected  = selectedIds.contains(patientId);
 
         return Card(
           elevation: 0,
           margin: EdgeInsets.zero,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: AppColors.cardBorder),
+            side: BorderSide(
+              color: isSelected && selectionMode
+                  ? AppColors.primary
+                  : AppColors.cardBorder,
+              width: isSelected && selectionMode ? 2 : 1,
+            ),
           ),
+          color: isSelected && selectionMode
+              ? AppColors.primary.withValues(alpha: 0.06)
+              : null,
           child: InkWell(
             borderRadius: BorderRadius.circular(12),
-            onTap: () => _showPatientSummary(
-                s, patientId, name, photoUrl,
-                hasAccount: hasAccount, phone: phone,
-                diagnosis: diagnosis, dateOfBirth: dateOfBirth),
+            onTap: selectionMode
+                ? () => onToggle?.call(patientId)
+                : () => _showPatientSummary(
+                    s, patientId, name, photoUrl,
+                    hasAccount: hasAccount, phone: phone,
+                    diagnosis: diagnosis, dateOfBirth: dateOfBirth),
+            onLongPress: selectionMode
+                ? null
+                : () => onLongPress?.call(patientId),
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Row(children: [
+                if (selectionMode)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Checkbox(
+                      value: isSelected,
+                      onChanged: (_) => onToggle?.call(patientId),
+                      activeColor: AppColors.primary,
+                      materialTapTargetSize:
+                          MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
                 Stack(children: [
                   CircleAvatar(
                     radius: 22,
@@ -5315,7 +5432,6 @@ void _showPickPatientForDoc(AppStrings s) {
                             color: AppColors.primary)
                         : null,
                   ),
-                  // Account status dot
                   Positioned(
                     right: 0, bottom: 0,
                     child: Container(
@@ -5349,7 +5465,8 @@ void _showPickPatientForDoc(AppStrings s) {
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                if (!selectionMode)
+                  const Icon(Icons.chevron_right_rounded, color: Colors.grey),
               ]),
             ),
           ),
@@ -5361,7 +5478,13 @@ void _showPickPatientForDoc(AppStrings s) {
   Widget _buildPatientsTable(
       AppStrings s, List<Map<String, dynamic>> patients, {
       required String sortBy,
-      required ValueChanged<String> onSortChanged}) {
+      required ValueChanged<String> onSortChanged,
+      bool selectionMode = false,
+      Set<String> selectedIds = const {},
+      void Function(String)? onToggle,
+      void Function()? onToggleAll,
+      void Function(String)? onLongPress,
+  }) {
     // Inline helper: sortable column header
     Widget sortHeader(String label, String field, {int flex = 1, bool center = false}) {
       final active = sortBy == field;
@@ -5415,6 +5538,28 @@ void _showPickPatientForDoc(AppStrings s) {
             ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(children: [
+              if (selectionMode)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: SizedBox(
+                    width: 24, height: 24,
+                    child: Checkbox(
+                      tristate: true,
+                      value: patients.every(
+                              (p) => selectedIds.contains(p['id'] as String))
+                          ? true
+                          : patients.any(
+                                  (p) => selectedIds.contains(p['id'] as String))
+                              ? null
+                              : false,
+                      onChanged: (_) => onToggleAll?.call(),
+                      activeColor: Colors.white,
+                      checkColor: const Color(0xFF1565C0),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ),
               sortHeader('Patient Name', 'name', flex: 2),
               sortHeader('Condition',    'condition'),
               _th2('Last Visit'),
@@ -5447,17 +5592,42 @@ void _showPickPatientForDoc(AppStrings s) {
                   final lastVisit = snapshot.data?['last'];
                   final nextVisit = snapshot.data?['next'];
 
+                  final isSelected = selectedIds.contains(patientId);
                   return Container(
-                    color: i.isEven ? Colors.white : const Color(0xFFF8FAFF),
+                    color: isSelected && selectionMode
+                        ? AppColors.primary.withValues(alpha: 0.06)
+                        : i.isEven
+                            ? Colors.white
+                            : const Color(0xFFF8FAFF),
                     child: GestureDetector(
-                      onTap: () => _showPatientSummary(
-                          s, patientId, name, photoUrl,
-                          hasAccount: hasAccount, phone: phone,
-                          diagnosis: diagnosis, dateOfBirth: dateOfBirth),
+                      onTap: selectionMode
+                          ? () => onToggle?.call(patientId)
+                          : () => _showPatientSummary(
+                              s, patientId, name, photoUrl,
+                              hasAccount: hasAccount, phone: phone,
+                              diagnosis: diagnosis, dateOfBirth: dateOfBirth),
+                      onLongPress: selectionMode
+                          ? null
+                          : () => onLongPress?.call(patientId),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 10),
                         child: Row(children: [
+                          if (selectionMode)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: SizedBox(
+                                width: 24, height: 24,
+                                child: Checkbox(
+                                  value: isSelected,
+                                  onChanged: (_) => onToggle?.call(patientId),
+                                  activeColor: AppColors.primary,
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                              ),
+                            ),
                           // Name + avatar
                           Expanded(
                             flex: 2,
@@ -5639,6 +5809,45 @@ void _showPickPatientForDoc(AppStrings s) {
     final patData = await Supabase.instance.client.from('users').select('doctor_ids').eq('id', patientId).single();
     final patIds = List<String>.from((patData['doctor_ids'] as List?) ?? [])..remove(myUid);
     await Supabase.instance.client.from('users').update({'doctor_ids': patIds}).eq('id', patientId);
+  }
+
+  // ── Bulk-remove patients ───────────────────────────────────────────────────
+
+  Future<void> _bulkRemovePatients(
+      List<String> ids, VoidCallback onDone) async {
+    final n = ids.length;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove patients'),
+        content: Text(
+          'Remove $n patient${n == 1 ? '' : 's'} from your list?\n'
+          'Their accounts are not deleted.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+    _showLoading('Removing patients…');
+    try {
+      for (final id in ids) {
+        await _removePatient(id);
+      }
+      onDone();
+    } finally {
+      _hideLoading();
+      if (mounted) setState(() {});
+    }
   }
 
   // ── Export patients to Excel ───────────────────────────────────────────────
@@ -7306,398 +7515,341 @@ void _showPickPatientForDoc(AppStrings s) {
     return null;
   }
 
-  // ── Import Schedule from Excel ────────────────────────────────────────────
+  // ── Unified Excel import (patients + schedule + revenues) ────────────────
 
-  Future<void> _importScheduleFromExcel(AppStrings s) async {
+  Future<void> _importUnifiedFromExcel(AppStrings s) async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['xlsx', 'xls'],
       withData: true,
     );
     if (result == null || result.files.isEmpty) return;
-
     final bytes = result.files.first.bytes;
     if (bytes == null) return;
 
-    if (mounted) _showLoading('Reading Excel file…');
-    await Future.delayed(Duration.zero); // yield so dialog renders before heavy sync work
-
-    final excel = xl.Excel.decodeBytes(bytes);
-    final sheet = excel.tables[excel.tables.keys.first];
-    if (sheet == null || sheet.rows.isEmpty) {
-      _hideLoading();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No data found in the file.')));
-      return;
-    }
-
-    // Auto-detect columns (default: col A = date, col B = name)
-    int dateCol = 0, nameCol = 1;
-    bool hasHeader = false;
-    final headerRow = sheet.rows.first;
-    for (int i = 0; i < headerRow.length; i++) {
-      final h = headerRow[i]?.value?.toString().toLowerCase().trim() ?? '';
-      if (h.contains('date') || h.contains('appt') ||
-          h.contains('appointment')) {
-        dateCol = i;
-        hasHeader = true;
-      }
-      if (h.contains('name') || h.contains('patient')) {
-        nameCol = i;
-        hasHeader = true;
-      }
-    }
-
-    // Group dates by patient name
-    final grouped = <String, List<DateTime?>>{};
-    final dataRows = hasHeader ? sheet.rows.skip(1) : sheet.rows;
-    for (final row in dataRows) {
-      if (row.isEmpty) continue;
-      final name = nameCol < row.length
-          ? (row[nameCol]?.value?.toString().trim() ?? '')
-          : '';
-      if (name.isEmpty) continue;
-      final date = dateCol < row.length
-          ? _tryParseDate(row[dateCol]?.value?.toString().trim() ?? '')
-          : null;
-      grouped.putIfAbsent(name, () => []).add(date);
-    }
-
-    if (grouped.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No entries found in the file.')));
-      return;
-    }
-
-    // One-shot fetch of assigned patients (avoids stream empty-first-emission)
-    final patientDocs = await _service.getAssignedPatientsOnce();
-
-    // Normalise a name for comparison: lowercase, collapse internal spaces
-    String norm(String s) =>
-        s.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
-
-    final entries = grouped.entries.map((e) {
-      final entry = _ScheduleImportEntry(name: e.key, dates: e.value);
-      final q = norm(e.key);
-
-      // 1) Exact match on 'name' field
-      Map<String, dynamic>? match = patientDocs.cast<Map<String, dynamic>?>()
-          .firstWhere(
-        (p) => p != null && norm((p['name'] as String?) ?? '') == q,
-        orElse: () => null,
-      );
-
-      // 2) Fallback: contains-match
-      match ??= patientDocs.cast<Map<String, dynamic>?>().firstWhere(
-        (p) {
-          if (p == null) return false;
-          final name = norm((p['name'] as String?) ?? '');
-          return name.isNotEmpty && (name.contains(q) || q.contains(name));
-        },
-        orElse: () => null,
-      );
-
-      // 3) Try matching against email field
-      match ??= patientDocs.cast<Map<String, dynamic>?>().firstWhere(
-        (p) {
-          if (p == null) return false;
-          final em = norm((p['email'] as String?) ?? '');
-          return em.isNotEmpty && em.contains(q);
-        },
-        orElse: () => null,
-      );
-
-      entry.patientId = match?['id'] as String?;
-      return entry;
-    }).toList();
-
-    _hideLoading();
     if (!mounted) return;
-    _showScheduleImportPreview(entries, s);
+    _showImportProgress();
+    await Future.delayed(Duration.zero);
+
+    List<_UnifiedRow>? rows;
+    try {
+      _setProgress(0.10, 'Decoding Excel…');
+      final excel = decodeExcelBytes(bytes);
+      if (excel.tables.isEmpty) {
+        if (mounted) { ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No sheets found in the file.'))); }
+        return;
+      }
+
+      final sheet = excel.tables[excel.tables.keys.first];
+      if (sheet == null || sheet.rows.isEmpty) {
+        if (mounted) { ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No data found in the file.'))); }
+        return;
+      }
+
+      _setProgress(0.25, 'Parsing columns…');
+
+      // Default: A=Date  B=Name  C=Amount  D=Service  E=Status  F=Note
+      int dateCol = 0, nameCol = 1, amtCol = 2, svcCol = 3, statusCol = 4, noteCol = 5;
+      bool hasHeader = false;
+      final headerRow = sheet.rows.first;
+      for (int i = 0; i < headerRow.length; i++) {
+        final h = headerRow[i]?.value?.toString().toLowerCase().trim() ?? '';
+        if (h.contains('date') || h.contains('appt'))          { dateCol   = i; hasHeader = true; }
+        if (h.contains('name') || h.contains('patient'))       { nameCol   = i; hasHeader = true; }
+        if (h == 'amount' || h == 'amt' || h.contains('amou')) { amtCol    = i; hasHeader = true; }
+        if (h.contains('service') || h.contains('svc'))        { svcCol    = i; hasHeader = true; }
+        if (h.contains('status'))                               { statusCol = i; hasHeader = true; }
+        if (h.contains('note'))                                 { noteCol   = i; hasHeader = true; }
+      }
+
+      String cellStr(List<xl.Data?> row, int col) =>
+          col < row.length ? (row[col]?.value?.toString().trim() ?? '') : '';
+
+      String parseStatus(String raw) => switch (raw.toLowerCase().trim()) {
+        'paid'                                => 'paid',
+        'partially_paid' || 'partially paid' => 'partially_paid',
+        'cancelled'      || 'canceled'       => 'cancelled',
+        _                                     => 'pending',
+      };
+
+      rows = <_UnifiedRow>[];
+      final dataRows = hasHeader ? sheet.rows.skip(1) : sheet.rows;
+
+      for (final row in dataRows) {
+        if (row.isEmpty) continue;
+        final name = cellStr(row, nameCol);
+        if (name.isEmpty) continue;
+        final dateStr   = cellStr(row, dateCol);
+        final amtStr    = cellStr(row, amtCol).replaceAll(',', '').replaceAll(' ', '');
+        final svc       = cellStr(row, svcCol);
+        final statusRaw = cellStr(row, statusCol);
+        final note      = cellStr(row, noteCol);
+
+        final date   = dateStr.isNotEmpty ? _tryParseDate(dateStr) : null;
+        final amount = double.tryParse(amtStr);
+
+        rows.add(_UnifiedRow(
+          name:      name,
+          date:      date,
+          amount:    (amount != null && amount > 0) ? amount : null,
+          service:   svc.isEmpty ? 'Physical Therapy' : svc,
+          statusKey: parseStatus(statusRaw),
+          note:      note,
+        ));
+      }
+
+      if (rows.isEmpty) {
+        if (mounted) { ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No valid rows found in the file.'))); }
+        return;
+      }
+
+      _setProgress(0.45, 'Parsed ${rows.length} rows — matching patients…');
+
+      // Pre-match existing patients
+      final patientDocs = await _service.getAssignedPatientsOnce();
+      String norm(String n) => n.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
+      for (int i = 0; i < rows.length; i++) {
+        _setProgress(0.45 + 0.50 * ((i + 1) / rows.length),
+            'Matching patient ${i + 1} of ${rows.length}…');
+        final row = rows[i];
+        final q = norm(row.name);
+        Map<String, dynamic>? match =
+            patientDocs.cast<Map<String, dynamic>?>().firstWhere(
+          (p) => p != null && norm((p['name'] as String?) ?? '') == q,
+          orElse: () => null,
+        );
+        match ??= patientDocs.cast<Map<String, dynamic>?>().firstWhere(
+          (p) {
+            if (p == null) return false;
+            final n = norm((p['name'] as String?) ?? '');
+            return n.isNotEmpty && (n.contains(q) || q.contains(n));
+          },
+          orElse: () => null,
+        );
+        row.patientId = match?['id'] as String?;
+      }
+      _setProgress(0.98, 'Ready — review and confirm…');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to read file: $e'),
+          backgroundColor: AppColors.error,
+        ));
+      }
+      return;
+    } finally {
+      _hideLoading();
+    }
+
+    if (!mounted) return;
+    _showUnifiedImportPreview(rows, s);
   }
 
-  // ── Schedule import preview ────────────────────────────────────────────────
+  void _showUnifiedImportPreview(List<_UnifiedRow> rows, AppStrings s) {
+    // Pre-compute first-occurrence flags for unmatched names.
+    // Rows with the same name share one patient; only the first shows the
+    // "new patient" badge — subsequent duplicates show a "linked" badge instead.
+    String normName(String n) =>
+        n.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
+    final seenNew = <String>{};
+    final isFirstNew = rows.map((r) {
+      if (r.patientId != null) return false; // already matched → not "new"
+      return seenNew.add(normName(r.name));  // true on first insertion
+    }).toList();
 
-  void _showScheduleImportPreview(
-      List<_ScheduleImportEntry> entries, AppStrings s) {
-    final now = DateTime.now();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.75,
+        initialChildSize: 0.78,
         minChildSize: 0.45,
         maxChildSize: 0.95,
         expand: false,
         builder: (_, scrollCtrl) => StatefulBuilder(
           builder: (ctx, set) {
-            final matched   = entries.where((e) => e.patientId != null).length;
-            final unmatched = entries.length - matched;
-            final selected  = entries.where((e) => e.selected).length;
-            final allSelected = selected == entries.length;
+            final selected    = rows.where((r) => r.selected).length;
+            final allSelected = selected == rows.length;
+            final apptCount   = rows.where((r) => r.selected && r.hasDate).length;
+            final invCount    = rows.where((r) => r.selected && r.hasAmount).length;
+            // Count unique new-patient names among selected rows only.
+            final newPatCount = rows
+                .where((r) => r.selected && r.patientId == null)
+                .map((r) => normName(r.name))
+                .toSet()
+                .length;
 
             return Column(children: [
-              // ── Header ──────────────────────────────────────────────────
+              // Header
               Container(
                 color: Colors.white,
-                padding: const EdgeInsets.fromLTRB(12, 14, 20, 10),
+                padding: const EdgeInsets.fromLTRB(12, 14, 12, 10),
                 child: Row(children: [
                   Checkbox(
                     tristate: true,
-                    value: allSelected
-                        ? true
-                        : (selected == 0 ? false : null),
+                    value: allSelected ? true : (selected == 0 ? false : null),
                     activeColor: AppColors.primary,
                     onChanged: (_) => set(() {
                       final target = !allSelected;
-                      for (final e in entries) { e.selected = target; }
+                      for (final r in rows) { r.selected = target; }
                     }),
                   ),
                   Expanded(
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                      Text(
-                        'Schedule Import  ·  $selected / ${entries.length} selected',
-                        style: const TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.bold)),
+                      Text('Unified Import · $selected / ${rows.length} selected',
+                          style: const TextStyle(
+                              fontSize: 15, fontWeight: FontWeight.bold)),
                       Row(children: [
-                        const Icon(Icons.check_circle_rounded,
-                            size: 11, color: Color(0xFF2E7D32)),
-                        const SizedBox(width: 4),
-                        Text('$matched matched',
-                            style: const TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF2E7D32))),
-                        if (unmatched > 0) ...[
-                          const SizedBox(width: 10),
-                          const Icon(Icons.warning_amber_rounded,
-                              size: 11, color: Color(0xFFF57F17)),
-                          const SizedBox(width: 4),
-                          Text('$unmatched not in My Patients',
+                        if (apptCount > 0) ...[
+                          const Icon(Icons.calendar_month_rounded,
+                              size: 11, color: AppColors.primary),
+                          const SizedBox(width: 3),
+                          Text('$apptCount appt${apptCount == 1 ? '' : 's'}',
                               style: const TextStyle(
-                                  fontSize: 11,
-                                  color: Color(0xFFF57F17))),
+                                  fontSize: 11, color: AppColors.primary)),
+                          const SizedBox(width: 8),
+                        ],
+                        if (invCount > 0) ...[
+                          const Icon(Icons.receipt_rounded,
+                              size: 11, color: Color(0xFF0E8378)),
+                          const SizedBox(width: 3),
+                          Text('$invCount invoice${invCount == 1 ? '' : 's'}',
+                              style: const TextStyle(
+                                  fontSize: 11, color: Color(0xFF0E8378))),
+                          const SizedBox(width: 8),
+                        ],
+                        if (newPatCount > 0) ...[
+                          const Icon(Icons.person_add_rounded,
+                              size: 11, color: Color(0xFFE65100)),
+                          const SizedBox(width: 3),
+                          Text('$newPatCount new',
+                              style: const TextStyle(
+                                  fontSize: 11, color: Color(0xFFE65100))),
                         ],
                       ]),
                     ]),
                   ),
+                  IconButton(
+                    icon: const Icon(Icons.help_outline_rounded, size: 18),
+                    color: Colors.grey.shade500,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () => showImportHelpSheet(
+                      ctx,
+                      title: 'Unified Import',
+                      subtitle: 'Column layout for the unified Excel sheet',
+                      columns: ['Date', 'Name', 'Amount', 'Service', 'Status', 'Note'],
+                      examples: [
+                        ['01/15/2024', 'John Smith', '',    'PT Session',   '',        ''],
+                        ['02/10/2024', 'Sara Lee',   '150', 'Follow-up',    'paid',    ''],
+                        ['',           'Mike Brown', '200', 'Initial Eval', 'pending', 'First visit'],
+                      ],
+                      notes: [
+                        'Date — appointment date (dd/MM/yyyy or yyyy-MM-dd); blank = invoice only',
+                        'Name — patient name; matched against My Patients or creates new record',
+                        'Amount — USD value; blank = schedule-only row, no invoice created',
+                        'Service — session description; defaults to "Physical Therapy"',
+                        'Status — pending · paid · partially_paid · cancelled (invoices only)',
+                        'Note — optional note for the invoice entry',
+                        'Row with Date only → appointment added to Schedule',
+                        'Row with Amount only → invoice added to Revenue',
+                        'Row with both → appointment + invoice both created',
+                      ],
+                    ),
+                  ),
                 ]),
               ),
               const Divider(height: 1),
-              // ── Entry list ───────────────────────────────────────────────
+              // Row list
               Expanded(
                 child: ListView.separated(
                   controller: scrollCtrl,
                   padding: const EdgeInsets.symmetric(vertical: 4),
-                  itemCount: entries.length,
+                  itemCount: rows.length,
                   separatorBuilder: (_, __) =>
                       const Divider(height: 1, indent: 16, endIndent: 16),
                   itemBuilder: (_, i) {
-                    final e       = entries[i];
-                    final matched = e.patientId != null;
-                    final validDates =
-                        e.dates.whereType<DateTime>().toList();
-
-                    return InkWell(
-                      onTap: () => set(() => e.selected = !e.selected),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 10),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Checkbox(
-                              value: e.selected,
-                              activeColor: AppColors.primary,
-                              onChanged: (v) =>
-                                  set(() => e.selected = v ?? false),
-                            ),
-                            // Status icon
-                            Container(
-                              width: 36, height: 36,
-                              decoration: BoxDecoration(
-                                color: matched
-                                    ? const Color(0xFFE8F5E9)
-                                    : const Color(0xFFFFF3E0),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(
-                                matched
-                                    ? Icons.person_rounded
-                                    : Icons.person_off_rounded,
-                                size: 18,
-                                color: matched
-                                    ? const Color(0xFF2E7D32)
-                                    : const Color(0xFFF57F17),
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.start,
-                                children: [
-                                  Row(children: [
-                                    Expanded(
-                                      child: Text(e.name,
-                                          style: TextStyle(
-                                              fontWeight: FontWeight.w700,
-                                              fontSize: 14,
-                                              color: e.selected
-                                                  ? AppColors.textPrimary
-                                                  : Colors.grey)),
-                                    ),
-                                    Container(
-                                      padding:
-                                          const EdgeInsets.symmetric(
-                                              horizontal: 7, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: matched
-                                            ? const Color(0xFFE8F5E9)
-                                            : const Color(0xFFFFF3E0),
-                                        borderRadius:
-                                            BorderRadius.circular(20),
-                                      ),
-                                      child: Text(
-                                        matched
-                                            ? 'In My Patients'
-                                            : 'Not found',
-                                        style: TextStyle(
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            color: matched
-                                                ? const Color(0xFF2E7D32)
-                                                : const Color(
-                                                    0xFFF57F17)),
-                                      ),
-                                    ),
-                                  ]),
-                                  const SizedBox(height: 4),
-                                  if (validDates.isEmpty)
-                                    const Text('No date',
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            color: AppColors
-                                                .textSecondary))
-                                  else
-                                    Wrap(
-                                      spacing: 4,
-                                      runSpacing: 4,
-                                      children: validDates.map((d) {
-                                        final isPast = d.isBefore(now);
-                                        return Container(
-                                          padding:
-                                              const EdgeInsets.symmetric(
-                                                  horizontal: 7,
-                                                  vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: isPast
-                                                ? Colors.grey.shade100
-                                                : const Color(
-                                                    0xFFE3F2FD),
-                                            borderRadius:
-                                                BorderRadius.circular(
-                                                    6),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize:
-                                                MainAxisSize.min,
-                                            children: [
-                                              Icon(
-                                                isPast
-                                                    ? Icons
-                                                        .history_rounded
-                                                    : Icons
-                                                        .event_rounded,
-                                                size: 10,
-                                                color: isPast
-                                                    ? Colors.grey
-                                                    : const Color(
-                                                        0xFF1565C0),
-                                              ),
-                                              const SizedBox(width: 3),
-                                              Text(
-                                                DateFormat('MMM d, yyyy')
-                                                    .format(d),
-                                                style: TextStyle(
-                                                    fontSize: 10,
-                                                    color: isPast
-                                                        ? Colors.grey
-                                                            .shade700
-                                                        : const Color(
-                                                            0xFF1565C0),
-                                                    fontWeight:
-                                                        FontWeight.w500),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      }).toList(),
-                                    ),
-                                ],
-                              ),
-                            ),
-                          ],
+                    final r        = rows[i];
+                    final isNew    = r.patientId == null;
+                    final isFirst  = isFirstNew[i]; // first occurrence of this name
+                    final fmtDate  = r.date != null
+                        ? DateFormat('MMM d, yyyy').format(r.date!)
+                        : null;
+                    final subtitle = [
+                      if (fmtDate != null) fmtDate,
+                      if (r.hasAmount)
+                        'USD ${r.amount!.toStringAsFixed(2)}',
+                      r.service,
+                      if (r.hasAmount && r.statusKey != 'pending')
+                        r.statusKey.replaceAll('_', ' '),
+                    ].join(' · ');
+                    return CheckboxListTile(
+                      value: r.selected,
+                      activeColor: AppColors.primary,
+                      onChanged: (v) => set(() => r.selected = v ?? false),
+                      title: Row(children: [
+                        Expanded(
+                          child: Text(r.name,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 13)),
                         ),
-                      ),
+                        if (r.hasDate)
+                          _unifiedBadge(Icons.calendar_month_rounded,
+                              AppColors.primary),
+                        if (r.hasAmount)
+                          _unifiedBadge(Icons.receipt_rounded,
+                              const Color(0xFF0E8378)),
+                        // First unmatched occurrence → will create the patient.
+                        // Subsequent same-name rows → merged into that patient.
+                        if (isNew && isFirst)
+                          _unifiedBadge(Icons.person_add_rounded,
+                              const Color(0xFFE65100))
+                        else if (isNew)
+                          _unifiedBadge(Icons.link_rounded,
+                              Colors.grey.shade500),
+                      ]),
+                      subtitle: Text(subtitle,
+                          style: TextStyle(
+                              fontSize: 11, color: Colors.grey.shade600)),
                     );
                   },
                 ),
               ),
-              // ── Bottom action ─────────────────────────────────────────────
+              const Divider(height: 1),
+              // Footer
               Container(
                 color: Colors.white,
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  if (unmatched > 0 &&
-                      entries
-                          .where(
-                              (e) => e.selected && e.patientId == null)
-                          .isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(children: [
-                        const Icon(Icons.info_outline_rounded,
-                            size: 14, color: Color(0xFFF57F17)),
-                        const SizedBox(width: 6),
-                        const Expanded(
-                          child: Text(
-                            'Unmatched patients will be imported as stubs and added to My Patients.',
-                            style: TextStyle(
-                                fontSize: 12,
-                                color: Color(0xFFF57F17)),
-                          ),
-                        ),
-                      ]),
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            selected == 0 ? Colors.grey : AppColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                      icon: const Icon(Icons.event_available_rounded),
-                      label: Text(
-                        'Import $selected Appointment(s)',
-                        style: const TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.bold),
-                      ),
-                      onPressed: selected == 0
-                          ? null
-                          : () => _doScheduleImport(entries, s, ctx),
+                    icon: const Icon(Icons.upload_rounded, size: 18),
+                    label: Text(
+                      'Import $selected Row${selected == 1 ? '' : 's'}',
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 14),
                     ),
+                    onPressed: selected == 0
+                        ? null
+                        : () {
+                            Navigator.pop(ctx); // close preview sheet first
+                            _doUnifiedImport(rows, s);
+                          },
                   ),
-                ]),
+                ),
               ),
             ]);
           },
@@ -7706,628 +7858,165 @@ void _showPickPatientForDoc(AppStrings s) {
     );
   }
 
-  // ── Execute schedule import ────────────────────────────────────────────────
+  Widget _unifiedBadge(IconData icon, Color color) => Container(
+        margin: const EdgeInsets.only(left: 4),
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(5),
+        ),
+        child: Icon(icon, size: 12, color: color),
+      );
 
-  Future<void> _doScheduleImport(
-      List<_ScheduleImportEntry> entries,
-      AppStrings s,
-      BuildContext sheetCtx) async {
-    final messenger = ScaffoldMessenger.of(context);
+  Future<void> _doUnifiedImport(List<_UnifiedRow> rows, AppStrings s) async {
+    if (!mounted) return;
+    _showImportProgress();
+    final messenger = ScaffoldMessenger.of(context); // capture before first await
+    await Future.delayed(Duration.zero);
     final myUid     = Supabase.instance.client.auth.currentUser!.id;
     final now       = DateTime.now();
     int apptCount   = 0;
+    int invCount    = 0;
+    int patCount    = 0;
+    bool success    = false;
+    String? errMsg;
 
-    for (final entry in entries) {
-      if (!entry.selected) continue;
-
-      String patientId = entry.patientId ?? '';
-
-      // If unmatched against this doctor's own patients, check globally by
-      // exact name before creating a duplicate stub patient (mirrors
-      // _doPatientImport's matching so the same person isn't re-created).
-      if (patientId.isEmpty) {
-        final existingList = await Supabase.instance.client
-            .from('users').select('id, doctor_ids')
-            .eq('role', 'patient').eq('name', entry.name).limit(1);
-
-        if (existingList.isNotEmpty) {
-          patientId = existingList.first['id'] as String;
-          final patIds = List<String>.from(
-              (existingList.first['doctor_ids'] as List?) ?? []);
-          if (!patIds.contains(myUid)) {
-            patIds.add(myUid);
-            await Supabase.instance.client
-                .from('users').update({'doctor_ids': patIds}).eq('id', patientId);
-          }
-        } else {
-          final newRow = await Supabase.instance.client.from('users').insert({
-            'name':       entry.name,
-            'role':       'patient',
-            'doctor_ids': [myUid],
-            'created_at': DateTime.now().toIso8601String(),
-          }).select().single();
-          patientId = newRow['id'] as String;
-        }
-
-        final myData = await Supabase.instance.client.from('users').select('assigned_patient_ids').eq('id', myUid).single();
-        final myIds = List<String>.from((myData['assigned_patient_ids'] as List?) ?? []);
-        if (!myIds.contains(patientId)) {
-          myIds.add(patientId);
-          await Supabase.instance.client.from('users').update({'assigned_patient_ids': myIds}).eq('id', myUid);
-        }
-        await _service.notifyPatientAdded(
-            patientId, await _service.getMyName());
-      }
-
-      // Create one appointment per calendar day (deduplicate same-day entries)
-      final seenDays = <String>{};
-      for (final date in entry.dates) {
-        if (date == null) continue;
-        final dayKey = DateFormat('yyyy-MM-dd').format(date);
-        if (!seenDays.add(dayKey)) continue;
-        final isPast = date.isBefore(now);
-        await Supabase.instance.client.from('appointments').insert({
-          'patient_id':       patientId,
-          'patient_name':     entry.name,
-          'doctor_id':        myUid,
-          'appointment_time': date.toIso8601String(),
-          'status':           isPast ? 'completed' : 'scheduled',
-          'notes':            '',
-          'created_at':       DateTime.now().toIso8601String(),
-        });
-        apptCount++;
-      }
-    }
-
-    if (!sheetCtx.mounted) return;
-    Navigator.pop(sheetCtx);
-
-    messenger.showSnackBar(SnackBar(
-      content: Text(
-          '$apptCount appointment(s) added to your schedule.'),
-      backgroundColor: AppColors.success,
-    ));
-    if (mounted) setState(() {});
-  }
-
-  // ── Import patients from Excel ─────────────────────────────────────────
-
-  Future<void> _importPatientsFromExcel() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['xlsx', 'xls'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-
-    final bytes = result.files.first.bytes;
-    if (bytes == null) return;
-
-    if (mounted) _showLoading('Reading Excel file…');
-    await Future.delayed(Duration.zero); // yield so dialog renders before heavy sync work
-
-    final excel = xl.Excel.decodeBytes(bytes);
-    final sheet = excel.tables[excel.tables.keys.first];
-    if (sheet == null || sheet.rows.isEmpty) {
-      _hideLoading();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No data found in the file.')));
-      return;
-    }
-
-    // ── Auto-detect columns from header row ──────────────────────────────
-    int dateCol = 0, nameCol = 1; // col A = date, col B = name
-    bool hasHeader = false;
-    final headerRow = sheet.rows.first;
-    for (int i = 0; i < headerRow.length; i++) {
-      final h = headerRow[i]?.value?.toString().toLowerCase().trim() ?? '';
-      if (h.contains('name') || h.contains('patient')) {
-        nameCol = i; hasHeader = true;
-      }
-      if (h.contains('date') || h.contains('appt') ||
-          h.contains('appointment')) {
-        dateCol = i; hasHeader = true;
-      }
-    }
-
-    // ── Parse & group rows by patient name ───────────────────────────────
-    final grouped = <String, List<DateTime?>>{};
-    final dataRows = hasHeader ? sheet.rows.skip(1) : sheet.rows;
-
-    for (final row in dataRows) {
-      if (row.isEmpty) continue;
-      final name = nameCol < row.length
-          ? (row[nameCol]?.value?.toString().trim() ?? '')
-          : '';
-      if (name.isEmpty) continue;
-      DateTime? date;
-      if (dateCol < row.length) {
-        date = _tryParseDate(row[dateCol]?.value?.toString().trim() ?? '');
-      }
-      grouped.putIfAbsent(name, () => []).add(date);
-    }
-
-    if (grouped.isEmpty) {
-      _hideLoading();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No patients found in the file.')));
-      return;
-    }
-
-    final entries = grouped.entries
-        .map((e) => _PatientImportEntry(name: e.key, dates: e.value))
-        .toList();
-
-    _hideLoading();
-    if (!mounted) return;
-    _showImportPreviewSheet(entries);
-  }
-
-  // ── Import preview sheet ───────────────────────────────────────────────
-
-  void _showImportPreviewSheet(List<_PatientImportEntry> entries) {
-    final now = DateTime.now();
-    bool importing = false;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.75,
-        minChildSize: 0.45,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (_, scrollCtrl) => StatefulBuilder(
-          builder: (ctx, set) {
-            final selectedCount = entries.where((e) => e.selected).length;
-            final allSelected   = selectedCount == entries.length;
-            final noneSelected  = selectedCount == 0;
-            final needAccount   = entries.where((e) => e.createAccount && e.selected).length;
-
-            return Column(
-              children: [
-                // ── Header + Select All ───────────────────────────────────
-                Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.fromLTRB(12, 14, 20, 10),
-                  child: Row(children: [
-                    // Select-all tristate checkbox
-                    Checkbox(
-                      tristate: true,
-                      value: allSelected ? true : (noneSelected ? false : null),
-                      activeColor: AppColors.primary,
-                      onChanged: (_) => set(() {
-                        final target = !allSelected;
-                        for (final e in entries) { e.selected = target; }
-                      }),
-                    ),
-                    Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                        Text(
-                          'Import Preview  ·  $selectedCount / ${entries.length} selected',
-                          style: const TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.bold)),
-                        const Text(
-                          'Toggle "Account" to create a login for the patient',
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: AppColors.textSecondary)),
-                      ]),
-                    ),
-                  ]),
-                ),
-                const Divider(height: 1),
-                // ── Patient list ─────────────────────────────────────────
-                Expanded(
-                  child: ListView.separated(
-                    controller: scrollCtrl,
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    itemCount: entries.length,
-                    separatorBuilder: (_, __) =>
-                        const Divider(height: 1, indent: 16, endIndent: 16),
-                    itemBuilder: (_, i) {
-                      final e       = entries[i];
-                      final validDates = e.dates.whereType<DateTime>().toList();
-
-                      return InkWell(
-                        onTap: () => set(() => e.selected = !e.selected),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 10),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Checkbox
-                              Checkbox(
-                                value: e.selected,
-                                activeColor: AppColors.primary,
-                                onChanged: (v) =>
-                                    set(() => e.selected = v ?? false),
-                              ),
-                              // Avatar
-                              CircleAvatar(
-                                radius: 20,
-                                backgroundColor: e.selected
-                                    ? AppColors.primary.withValues(alpha: 0.12)
-                                    : Colors.grey.shade200,
-                                child: Text(
-                                  e.name.isNotEmpty
-                                      ? e.name[0].toUpperCase()
-                                      : '?',
-                                  style: TextStyle(
-                                      color: e.selected
-                                          ? AppColors.primary
-                                          : Colors.grey,
-                                      fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              // Name + dates
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text(e.name,
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                            fontSize: 14,
-                                            color: e.selected
-                                                ? AppColors.textPrimary
-                                                : Colors.grey)),
-                                    const SizedBox(height: 4),
-                                    if (validDates.isEmpty)
-                                      const Text('No appointment date',
-                                          style: TextStyle(
-                                              fontSize: 11,
-                                              color: AppColors.textSecondary))
-                                    else
-                                      Wrap(
-                                        spacing: 4,
-                                        runSpacing: 4,
-                                        children: validDates.map((d) {
-                                          final isPast = d.isBefore(now);
-                                          return Container(
-                                            padding:
-                                                const EdgeInsets.symmetric(
-                                                    horizontal: 7,
-                                                    vertical: 3),
-                                            decoration: BoxDecoration(
-                                              color: isPast
-                                                  ? Colors.grey.shade100
-                                                  : const Color(0xFFE3F2FD),
-                                              borderRadius:
-                                                  BorderRadius.circular(6),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  isPast
-                                                      ? Icons.history_rounded
-                                                      : Icons.event_rounded,
-                                                  size: 10,
-                                                  color: isPast
-                                                      ? Colors.grey
-                                                      : const Color(0xFF1565C0),
-                                                ),
-                                                const SizedBox(width: 3),
-                                                Text(
-                                                  DateFormat('MMM d, yyyy')
-                                                      .format(d),
-                                                  style: TextStyle(
-                                                      fontSize: 10,
-                                                      color: isPast
-                                                          ? Colors.grey.shade700
-                                                          : const Color(
-                                                              0xFF1565C0),
-                                                      fontWeight:
-                                                          FontWeight.w500),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        }).toList(),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              // Account toggle
-                              SizedBox(
-                                width: 72,
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text('Account',
-                                        style: TextStyle(
-                                            fontSize: 10,
-                                            color: e.createAccount
-                                                ? AppColors.primary
-                                                : AppColors.textSecondary,
-                                            fontWeight: FontWeight.w600)),
-                                    Transform.scale(
-                                      scale: 0.75,
-                                      child: Switch(
-                                        value: e.createAccount,
-                                        onChanged: (v) =>
-                                            set(() => e.createAccount = v),
-                                        activeThumbColor: AppColors.primary,
-                                        activeTrackColor: AppColors.primary
-                                            .withValues(alpha: 0.4),
-                                        materialTapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                // ── Bottom action ─────────────────────────────────────────
-                Container(
-                  color: Colors.white,
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (needAccount > 0)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(children: [
-                            const Icon(Icons.info_outline_rounded,
-                                size: 14, color: AppColors.primary),
-                            const SizedBox(width: 6),
-                            Text(
-                                '$needAccount patient(s) will need '
-                                'account credentials after import.',
-                                style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.primary)),
-                          ]),
-                        ),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: (selectedCount == 0 || importing)
-                                ? Colors.grey
-                                : AppColors.primary,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
-                          ),
-                          onPressed: (selectedCount == 0 || importing)
-                              ? null
-                              : () async {
-                                  set(() => importing = true);
-                                  await _doPatientImport(entries, ctx);
-                                },
-                          child: importing
-                              ? const Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    SizedBox(
-                                      width: 18, height: 18,
-                                      child: CircularProgressIndicator(
-                                          color: Colors.white,
-                                          strokeWidth: 2.5),
-                                    ),
-                                    SizedBox(width: 12),
-                                    Text('Importing…',
-                                        style: TextStyle(
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.bold)),
-                                  ],
-                                )
-                              : Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(Icons.upload_rounded),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Import $selectedCount Patient(s)',
-                                      style: const TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.bold),
-                                    ),
-                                  ],
-                                ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  // ── Execute import ─────────────────────────────────────────────────────
-
-  Future<void> _doPatientImport(
-      List<_PatientImportEntry> entries, BuildContext sheetCtx) async {
-    final messenger   = ScaffoldMessenger.of(context);
-    final myUid       = Supabase.instance.client.auth.currentUser!.id;
-    final now         = DateTime.now();
-    final needAccount = <String, String>{};  // name → patientId
-    int patientsCount = 0, apptCount = 0;
+    final selected = rows.where((r) => r.selected).toList();
+    final total    = selected.length;
 
     try {
-      final doctorName = await _service.getMyName();
+      final resolvedIds = <String, String>{}; // normalised name → patient id
+      final seenAppts   = <String>{};          // "patientId|yyyy-MM-dd" dedup
+      final seenRevs    = <String>{};          // same key — one invoice per patient per day
 
-      for (final entry in entries) {
-        if (!entry.selected) continue;
+      for (int i = 0; i < selected.length; i++) {
+        final row = selected[i];
+        _setProgress(i / total, 'Importing ${i + 1} of $total…');
 
-        String patientId;
-        final existingList = await Supabase.instance.client
-            .from('users').select('id, doctor_ids')
-            .eq('role', 'patient').eq('name', entry.name).limit(1);
+        final nameKey    = row.name.toLowerCase().trim().replaceAll(RegExp(r'\s+'), ' ');
+        String patientId = resolvedIds[nameKey] ?? row.patientId ?? '';
 
-        if (existingList.isNotEmpty) {
-          patientId = existingList.first['id'] as String;
-          final patIds = List<String>.from(
-              (existingList.first['doctor_ids'] as List?) ?? []);
-          if (!patIds.contains(myUid)) {
-            patIds.add(myUid);
-            await Supabase.instance.client
-                .from('users').update({'doctor_ids': patIds}).eq('id', patientId);
+        if (!resolvedIds.containsKey(nameKey)) {
+          if (patientId.isEmpty) {
+            final existingList = await Supabase.instance.client
+                .from('users').select('id, doctor_ids')
+                .eq('role', 'patient').eq('name', row.name).limit(1);
+
+            if (existingList.isNotEmpty) {
+              patientId = existingList.first['id'] as String;
+              final patIds = List<String>.from(
+                  (existingList.first['doctor_ids'] as List?) ?? []);
+              if (!patIds.contains(myUid)) {
+                patIds.add(myUid);
+                await Supabase.instance.client
+                    .from('users').update({'doctor_ids': patIds}).eq('id', patientId);
+              }
+            } else {
+              final newRow = await Supabase.instance.client.from('users').insert({
+                'name':       row.name,
+                'role':       'patient',
+                'doctor_ids': [myUid],
+                'created_at': DateTime.now().toIso8601String(),
+              }).select().single();
+              patientId = newRow['id'] as String;
+              patCount++;
+            }
+
+            final myData = await Supabase.instance.client
+                .from('users').select('assigned_patient_ids').eq('id', myUid).single();
+            final myIds = List<String>.from(
+                (myData['assigned_patient_ids'] as List?) ?? []);
+            if (!myIds.contains(patientId)) {
+              myIds.add(patientId);
+              await Supabase.instance.client
+                  .from('users').update({'assigned_patient_ids': myIds}).eq('id', myUid);
+            }
           }
+          resolvedIds[nameKey] = patientId;
         } else {
-          final newRow = await Supabase.instance.client.from('users').insert({
-            'name':       entry.name,
-            'role':       'patient',
-            'doctor_ids': [myUid],
-            'created_at': DateTime.now().toIso8601String(),
-          }).select('id').single();
-          patientId = newRow['id'] as String;
+          patientId = resolvedIds[nameKey]!;
         }
 
-        // Keep doctor's assigned_patient_ids in sync
-        final myData = await Supabase.instance.client
-            .from('users').select('assigned_patient_ids').eq('id', myUid).maybeSingle();
-        final myIds = List<String>.from(
-            (myData?['assigned_patient_ids'] as List?) ?? []);
-        if (!myIds.contains(patientId)) {
-          myIds.add(patientId);
-          await Supabase.instance.client
-              .from('users').update({'assigned_patient_ids': myIds}).eq('id', myUid);
+        // Schedule appointment — one per patient per calendar day.
+        // Capture the inserted row's ID so the invoice can be linked to it,
+        // preventing _syncPastAppointments from creating a second invoice.
+        String? linkedApptId;
+        if (row.hasDate) {
+          final dayKey  = DateFormat('yyyy-MM-dd').format(row.date!);
+          final apptKey = '$patientId|$dayKey';
+          if (seenAppts.add(apptKey)) {
+            final isPast  = row.date!.isBefore(now);
+            final apptRow = await Supabase.instance.client
+                .from('appointments')
+                .insert({
+                  'patient_id':       patientId,
+                  'patient_name':     row.name,
+                  'doctor_id':        myUid,
+                  'appointment_time': row.date!.toIso8601String(),
+                  'status':           isPast ? 'completed' : 'scheduled',
+                  'notes':            row.service == 'Physical Therapy'
+                                          ? ''
+                                          : row.service,
+                  'created_at':       DateTime.now().toIso8601String(),
+                })
+                .select('id')
+                .single();
+            linkedApptId = apptRow['id'] as String?;
+            apptCount++;
+          }
         }
 
-        await _service.notifyPatientAdded(patientId, doctorName);
-
-        for (final date in entry.dates) {
-          if (date == null) continue;
-          await Supabase.instance.client.from('appointments').insert({
-            'patient_id':       patientId,
-            'patient_name':     entry.name,
-            'doctor_id':        myUid,
-            'appointment_time': date.toIso8601String(),
-            'status':           date.isBefore(now) ? 'completed' : 'scheduled',
-            'notes':            '',
-            'created_at':       DateTime.now().toIso8601String(),
-          });
-          apptCount++;
+        // Revenue invoice — one per patient per calendar day.
+        // Stamping appointment_id prevents billing sync from creating a duplicate.
+        if (row.hasAmount) {
+          final invoiceDate = row.date ?? now;
+          final revKey = '$patientId|${DateFormat('yyyy-MM-dd').format(invoiceDate)}';
+          if (seenRevs.add(revKey)) {
+            await Supabase.instance.client.from('invoices').insert({
+              'doctor_id':      myUid,
+              'patient_id':     patientId,
+              'patient_name':   row.name,
+              'service':        row.service,
+              'amount':         row.amount,
+              'currency':       'USD',
+              'status':         row.statusKey,
+              'note':           row.note,
+              'invoice_date':   invoiceDate.toIso8601String(),
+              'created_at':     DateTime.now().toIso8601String(),
+              if (linkedApptId != null) 'appointment_id': linkedApptId,
+            });
+            invCount++;
+          }
         }
-
-        if (entry.createAccount) needAccount[entry.name] = patientId;
-        patientsCount++;
       }
 
-      if (!sheetCtx.mounted) return;
-      Navigator.pop(sheetCtx);
+      _setProgress(1.0, 'Done');
+      await Future.delayed(const Duration(milliseconds: 350));
+      success = true;
+    } catch (e) {
+      errMsg = e.toString();
+    } finally {
+      _hideLoading();
+    }
 
+    if (!mounted) return;
+    if (success) {
+      final parts = <String>[
+        if (patCount  > 0) '$patCount patient${patCount  == 1 ? '' : 's'}',
+        if (apptCount > 0) '$apptCount appt${apptCount   == 1 ? '' : 's'}',
+        if (invCount  > 0) '$invCount invoice${invCount   == 1 ? '' : 's'}',
+      ];
       messenger.showSnackBar(SnackBar(
-        content: Text('$patientsCount patient(s) · $apptCount appointment(s) imported.'),
+        content: Text('Imported: ${parts.join(' · ')}'),
         backgroundColor: AppColors.success,
       ));
-
-      if (mounted) setState(() {});
-
-      if (needAccount.isNotEmpty && mounted) {
-        _showPendingAccountsSheet(needAccount);
-      }
-    } catch (e) {
-      if (!sheetCtx.mounted) return;
-      Navigator.pop(sheetCtx);
+      setState(() {});
+    } else {
       messenger.showSnackBar(SnackBar(
-        content: Text('Import failed: $e'),
+        content: Text('Import failed: $errMsg'),
         backgroundColor: AppColors.error,
       ));
-      if (mounted) setState(() {});
     }
-  }
-
-  // ── Pending accounts sheet ─────────────────────────────────────────────
-
-  // nameToId: patient display name → existing stub patient UUID
-  void _showPendingAccountsSheet(Map<String, String> nameToId) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                const Icon(Icons.manage_accounts_rounded,
-                    color: AppColors.primary),
-                const SizedBox(width: 10),
-                Text('Set Up ${nameToId.length} Account(s)',
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold)),
-              ]),
-              const SizedBox(height: 4),
-              const Text(
-                  'Create login credentials for the following patients.',
-                  style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary)),
-              const Divider(height: 20),
-              ...nameToId.entries.map((e) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: CircleAvatar(
-                      backgroundColor:
-                          AppColors.primary.withValues(alpha: 0.1),
-                      child: Text(
-                        e.key.isNotEmpty ? e.key[0].toUpperCase() : '?',
-                        style: const TextStyle(
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                    title: Text(e.key,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold)),
-                    trailing: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                      ),
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => CreatePatientScreen(
-                              prefillName: e.key,
-                              existingPatientId: e.value,
-                            ),
-                          ),
-                        );
-                      },
-                      child: const Text('Create Account'),
-                    ),
-                  )),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 
   // ════════════════════════════════════════════════════════════════════════════

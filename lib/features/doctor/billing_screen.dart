@@ -6,7 +6,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:provider/provider.dart';
 import 'package:excel/excel.dart' as xl;
-import 'package:file_picker/file_picker.dart';
 import '../../core/config/form_factor_features.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/breakpoints.dart';
@@ -17,7 +16,6 @@ import '../../core/widgets/patient_search_field.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
 import '../../core/utils/file_saver.dart';
-import 'import_help_sheet.dart';
 
 // ── Status helpers ─────────────────────────────────────────────────────────
 
@@ -845,143 +843,6 @@ class _BillingScreenState extends State<BillingScreen> {
     );
   }
 
-  // ── Import from Excel ─────────────────────────────────────────────────────
-
-  void _showLoading(String msg) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => PopScope(
-        canPop: false,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          content: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const CircularProgressIndicator(),
-              const SizedBox(width: 20),
-              Flexible(child: Text(msg, style: const TextStyle(fontSize: 14))),
-            ]),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _hideLoading() {
-    if (mounted && Navigator.canPop(context)) Navigator.pop(context);
-  }
-
-  Future<void> _importBillingFromExcel() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['xlsx', 'xls'],
-      withData: true,
-    );
-    if (result == null || result.files.isEmpty) return;
-
-    final bytes = result.files.first.bytes;
-    if (bytes == null) return;
-
-    if (mounted) _showLoading('Importing income records…');
-
-    try {
-      final excel = xl.Excel.decodeBytes(bytes);
-      final sheet = excel.tables[excel.tables.keys.first];
-      if (sheet == null) {
-        _hideLoading();
-        return;
-      }
-
-      // Fetch all patients once — avoids one Supabase call per row
-      final patSnap = await _supabase.from('users').select().eq('role', 'patient');
-      final patList = (patSnap as List).cast<Map<String, dynamic>>();
-
-      int imported = 0;
-      for (final row in sheet.rows.skip(1)) {
-        if (row.length < 5) continue;
-        final name    = row[0]?.value?.toString().trim() ?? '';
-        final service = row[1]?.value?.toString().trim() ?? '';
-        final dateStr = row[2]?.value?.toString().trim() ?? '';
-        final amtStr  = row[3]?.value?.toString().trim() ?? '';
-
-        // Detect whether exported format (includes Currency column at index 4)
-        final col4 = row[4]?.value?.toString().trim().toLowerCase() ?? '';
-        final hasCurrencyCol = row.length >= 6 &&
-            ['usd', 'eur', 'gbp', 'jod', 'ils', 'sar', 'aed'].contains(col4);
-        final statusRaw = hasCurrencyCol
-            ? (row[5]?.value?.toString().trim().toLowerCase() ?? 'pending')
-            : col4;
-        final note = hasCurrencyCol
-            ? (row.length > 6 ? (row[6]?.value?.toString().trim() ?? '') : '')
-            : (row.length > 5 ? (row[5]?.value?.toString().trim() ?? '') : '');
-
-        if (name.isEmpty || amtStr.isEmpty) continue;
-        final amt = double.tryParse(amtStr);
-        if (amt == null) continue;
-
-        DateTime invoiceDate;
-        try {
-          invoiceDate = DateFormat('dd/MM/yyyy').parse(dateStr);
-        } catch (_) {
-          try {
-            invoiceDate = DateFormat('yyyy-MM-dd').parse(dateStr);
-          } catch (_) {
-            invoiceDate = DateTime.now();
-          }
-        }
-
-        final String statusKey;
-        if (statusRaw == 'paid') {
-          statusKey = 'paid';
-        } else if (statusRaw.startsWith('partially_paid') ||
-            statusRaw == 'partially paid') {
-          statusKey = 'partially_paid';
-        } else if (statusRaw.startsWith('cancelled')) {
-          statusKey = 'cancelled';
-        } else {
-          statusKey = 'pending';
-        }
-
-        final patDoc = patList.cast<Map<String, dynamic>?>().firstWhere(
-          (p) => (p?['name'] as String? ?? '')
-                  .toLowerCase()
-                  .contains(name.toLowerCase()),
-          orElse: () => null,
-        );
-
-        await _supabase.from('invoices').insert({
-          'doctor_id':    _uid,
-          'patient_id':   patDoc?['id'] ?? '',
-          'patient_name': name,
-          'service':     service.isEmpty ? 'Physical Therapy' : service,
-          'amount':      amt,
-          'currency':    'USD',
-          'status':      statusKey,
-          'note':        note,
-          'invoice_date': invoiceDate.toIso8601String(),
-          'created_at':   DateTime.now().toIso8601String(),
-        });
-        imported++;
-      }
-
-      _hideLoading();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Imported $imported invoice(s) successfully.'),
-        backgroundColor: AppColors.success,
-      ));
-      setState(() {});
-    } catch (e) {
-      _hideLoading();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Import failed: $e'),
-        backgroundColor: AppColors.error,
-      ));
-    }
-  }
-
   // ── Export to Excel ──────────────────────────────────────────────────────
 
   Future<void> _showExport(
@@ -1166,7 +1027,7 @@ class _BillingScreenState extends State<BillingScreen> {
                     awaitingCount: awaitingCount,
                     isDesktop: isDesktop,
                   ),
-                  _filterBar(s),
+                  _filterBar(s, isDesktop: isDesktop),
                   Expanded(
                     child: isDesktop
                       ? _desktopTable(filtered, s)
@@ -1184,137 +1045,156 @@ class _BillingScreenState extends State<BillingScreen> {
 
   // ── Filter bar ───────────────────────────────────────────────────────────────
 
-  Widget _filterBar(AppStrings s) {
+  Widget _filterBar(AppStrings s, {bool isDesktop = false}) {
+    // ── reusable sub-widgets ──────────────────────────────────────────────────
+    Widget periodPicker() => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _period,
+          dropdownColor: _kAccent,
+          isDense: true,
+          icon: const Icon(Icons.arrow_drop_down_rounded, color: Colors.white),
+          items: ['daily', 'weekly', 'monthly', 'yearly'].map((p) =>
+            DropdownMenuItem(
+              value: p,
+              child: Row(children: [
+                const Icon(Icons.calendar_month_rounded,
+                    color: Colors.white, size: 14),
+                const SizedBox(width: 5),
+                Text(p[0].toUpperCase() + p.substring(1),
+                    style: const TextStyle(color: Colors.white, fontSize: 13)),
+              ]),
+            )).toList(),
+          onChanged: (v) => setState(() => _period = v!),
+        ),
+      ),
+    );
+
+    Widget datePicker() => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        GestureDetector(
+          onTap: _prev,
+          child: const Icon(Icons.chevron_left_rounded,
+              color: _kAccent, size: 18)),
+        const SizedBox(width: 6),
+        GestureDetector(
+          onTap: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: _refDate,
+              firstDate: DateTime(2020),
+              lastDate: DateTime.now().add(const Duration(days: 365)),
+            );
+            if (picked != null) setState(() => _refDate = picked);
+          },
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.calendar_month_rounded, color: _kAccent, size: 13),
+            const SizedBox(width: 3),
+            Text(_rangeLabel,
+                style: const TextStyle(
+                    color: _kAccent, fontWeight: FontWeight.w600,
+                    fontSize: 12)),
+          ]),
+        ),
+        const SizedBox(width: 4),
+        GestureDetector(
+          onTap: _next,
+          child: const Icon(Icons.chevron_right_rounded,
+              color: _kAccent, size: 18)),
+      ]),
+    );
+
+    Widget searchField() => TextField(
+      controller: _searchCtrl,
+      onChanged: (v) => setState(() => _patientFilter = v),
+      decoration: InputDecoration(
+        hintText: 'Search patient...',
+        hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+        prefixIcon: const Icon(Icons.search_rounded,
+            color: Colors.white, size: 16),
+        filled: true,
+        fillColor: Colors.white.withValues(alpha: 0.1),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        isDense: true,
+      ),
+      style: const TextStyle(color: Colors.white, fontSize: 13),
+    );
+
+    Widget statusFilter() => Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String?>(
+          value: _statusFilter,
+          dropdownColor: _kAccent,
+          isDense: true,
+          icon: const Icon(Icons.arrow_drop_down_rounded, color: Colors.white),
+          items: [null, 'awaiting_review', 'pending', 'paid',
+                  'partially_paid', 'cancelled']
+              .map((st) => DropdownMenuItem(
+                value: st,
+                child: Row(children: [
+                  const Icon(Icons.filter_list_rounded,
+                      color: Colors.white, size: 14),
+                  const SizedBox(width: 5),
+                  Text(
+                    st == null ? 'All' : st.replaceAll('_', ' '),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                  ),
+                ]),
+              )).toList(),
+          onChanged: (v) => setState(() => _statusFilter = v),
+        ),
+      ),
+    );
+
+    // ── layout ───────────────────────────────────────────────────────────────
+    if (isDesktop) {
+      // Single compact row — saves ~52 px vs the two-row mobile layout
+      return Container(
+        color: _kAccent,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+        child: Row(children: [
+          periodPicker(),
+          const SizedBox(width: 10),
+          datePicker(),
+          const SizedBox(width: 10),
+          Expanded(child: searchField()),
+          const SizedBox(width: 8),
+          statusFilter(),
+        ]),
+      );
+    }
+
+    // Mobile: two rows
     return Container(
       color: _kAccent,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
         children: [
+          Row(children: [periodPicker(), const Spacer(), datePicker()]),
+          const SizedBox(height: 8),
           Row(children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _period,
-                  dropdownColor: _kAccent,
-                  icon: const Icon(Icons.arrow_drop_down_rounded,
-                      color: Colors.white),
-                  items: ['daily', 'weekly', 'monthly', 'yearly'].map((p) =>
-                    DropdownMenuItem(
-                      value: p,
-                      child: Row(children: [
-                        const Icon(Icons.calendar_month_rounded,
-                            color: Colors.white, size: 16),
-                        const SizedBox(width: 6),
-                        Text(p[0].toUpperCase() + p.substring(1),
-                            style: const TextStyle(color: Colors.white)),
-                      ]),
-                    )).toList(),
-                  onChanged: (v) => setState(() => _period = v!),
-                ),
-              ),
-            ),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(children: [
-                GestureDetector(
-                  onTap: _prev,
-                  child: const Icon(Icons.chevron_left_rounded,
-                      color: _kAccent, size: 20)),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: _refDate,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now()
-                          .add(const Duration(days: 365)),
-                    );
-                    if (picked != null) {
-                      setState(() => _refDate = picked);
-                    }
-                  },
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.calendar_month_rounded,
-                        color: _kAccent, size: 15),
-                    const SizedBox(width: 4),
-                    Text(_rangeLabel,
-                        style: const TextStyle(
-                            color: _kAccent,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13)),
-                  ]),
-                ),
-                const SizedBox(width: 4),
-                GestureDetector(
-                  onTap: _next,
-                  child: const Icon(Icons.chevron_right_rounded,
-                      color: _kAccent, size: 20)),
-              ]),
-            ),
-          ]),
-          const SizedBox(height: 10),
-          Row(children: [
-            Expanded(
-              child: TextField(
-                controller: _searchCtrl,
-                onChanged: (v) => setState(() => _patientFilter = v),
-                decoration: InputDecoration(
-                  hintText: 'Search patient...',
-                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
-                  prefixIcon: const Icon(Icons.search_rounded,
-                      color: Colors.white, size: 18),
-                  filled: true,
-                  fillColor: Colors.white.withValues(alpha: 0.1),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 10),
-                ),
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-              ),
-            ),
+            Expanded(child: searchField()),
             const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String?>(
-                  value: _statusFilter,
-                  dropdownColor: _kAccent,
-                  icon: const Icon(Icons.arrow_drop_down_rounded,
-                      color: Colors.white),
-                  items: [null, 'awaiting_review', 'pending', 'paid',
-                          'partially_paid', 'cancelled']
-                      .map((st) => DropdownMenuItem(
-                        value: st,
-                        child: Row(children: [
-                          const Icon(Icons.filter_list_rounded,
-                              color: Colors.white, size: 16),
-                          const SizedBox(width: 6),
-                          Text(st == null ? 'All Status' : st.replaceAll('_', ' '),
-                              style: const TextStyle(color: Colors.white, fontSize: 13)),
-                        ]),
-                      )).toList(),
-                  onChanged: (v) => setState(() => _statusFilter = v),
-                ),
-              ),
-            ),
+            statusFilter(),
           ]),
         ],
       ),
@@ -1332,7 +1212,7 @@ class _BillingScreenState extends State<BillingScreen> {
 
   Widget _desktopTable(List<Map<String, dynamic>> filtered, AppStrings s) =>
       Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
         child: Material(
           elevation: 2,
           borderRadius: BorderRadius.circular(14),
@@ -1481,7 +1361,7 @@ class _BillingScreenState extends State<BillingScreen> {
 
     return Container(
       color: bg,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
       child: Row(children: [
         Expanded(flex: 3,
           child: Text(name,
@@ -2137,14 +2017,15 @@ class _BillingScreenState extends State<BillingScreen> {
       {bool isDesktop = true}) {
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
             if (isDesktop) ...[
+              // Primary action
               SizedBox(
                 width: double.infinity,
-                height: 44,
+                height: 42,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _kAccent,
@@ -2162,132 +2043,49 @@ class _BillingScreenState extends State<BillingScreen> {
                 ),
               ),
               const SizedBox(height: 6),
-              // AI Revenue Analysis — desktop only, user-triggered
-              SizedBox(
-                width: double.infinity,
-                height: 38,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _kAccent,
-                    side: BorderSide(color: _kAccent),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  icon: _aiLoading
-                      ? const SizedBox(
-                          width: 14, height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Icon(Icons.auto_awesome_rounded, size: 16),
-                  label: Text(
-                    _aiLoading ? 'Analyzing…' : 'Analyze Revenue with AI',
-                    style: const TextStyle(
-                        fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                  onPressed: (_aiLoading || filtered.isEmpty)
-                      ? null
-                      : () => _showAiRevenueSheet(filtered, s),
-                ),
-              ),
-              const SizedBox(height: 6),
-              // AI Financial Chat — opens full chat screen
+              // All secondary actions in one compact row
               Row(children: [
                 Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: _kAccent,
-                      side: BorderSide(color: _kAccent),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    icon: const Icon(Icons.chat_rounded, size: 16),
-                    label: const Text('AI Chat',
-                        style: TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w600)),
-                    onPressed: () => Navigator.push(context,
+                  child: _smallActionBtn(
+                    icon: _aiLoading
+                        ? Icons.hourglass_top_rounded
+                        : Icons.auto_awesome_rounded,
+                    label: _aiLoading ? 'Analyzing…' : 'AI Analysis',
+                    onTap: (_aiLoading || filtered.isEmpty)
+                        ? () {}
+                        : () => _showAiRevenueSheet(filtered, s),
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: _smallActionBtn(
+                    icon: Icons.chat_rounded,
+                    label: 'AI Chat',
+                    onTap: () => Navigator.push(context,
                         MaterialPageRoute(
                             builder: (_) => const FinancialAiChatScreen())),
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 5),
                 Expanded(
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: _kAccent,
-                      side: BorderSide(color: _kAccent),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    icon: const Icon(Icons.insights_rounded, size: 16),
-                    label: const Text('Analytics',
-                        style: TextStyle(
-                            fontSize: 12, fontWeight: FontWeight.w600)),
-                    onPressed: () => showClinicAnalyticsSheet(context),
+                  child: _smallActionBtn(
+                    icon: Icons.insights_rounded,
+                    label: 'Analytics',
+                    onTap: () => showClinicAnalyticsSheet(context),
                   ),
                 ),
+                if (FormFactorFeatures.of(context).showBillingImportExport) ...[
+                  const SizedBox(width: 5),
+                  Expanded(
+                    child: _smallActionBtn(
+                      icon: Icons.download_rounded,
+                      label: 'Export',
+                      onTap: () => _showExport(filtered, s),
+                    ),
+                  ),
+                ],
               ]),
-              const SizedBox(height: 8),
             ],
-            if (FormFactorFeatures.of(context).showBillingImportExport)
-              Row(children: [
-                Expanded(
-                  child: _smallActionBtn(
-                    icon: Icons.download_rounded,
-                    label: 'Export Report',
-                    onTap: () => _showExport(filtered, s),
-                  ),
-                ),
-                const SizedBox(width: 7),
-                Expanded(
-                  child: _smallActionBtn(
-                    icon: Icons.upload_file_rounded,
-                    label: 'Import Excel',
-                    onTap: _importBillingFromExcel,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                GestureDetector(
-                  onTap: () => showImportHelpSheet(
-                    context,
-                    title: 'Import Bills',
-                    subtitle: 'Expected Excel column order',
-                    columns: [
-                      'Name', 'Service', 'Date', 'Amount', 'Status', 'Note'
-                    ],
-                    examples: [
-                      ['John Smith', 'Physical Therapy', '01/15/2024',
-                       '150', 'paid', ''],
-                      ['Sara Lee', 'Follow-up Session', '02/10/2024',
-                       '80', 'pending', ''],
-                    ],
-                    notes: [
-                      'Name: patient full name (matched to existing patients)',
-                      'Service: description of the billed service',
-                      'Date format: dd/MM/yyyy or yyyy-MM-dd',
-                      'Amount: number only, e.g. 150 or 150.00',
-                      'Status values: pending · paid · partially paid · cancelled',
-                      'Note: optional — any extra information about the invoice',
-                    ],
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(Icons.help_outline_rounded,
-                        color: Colors.grey.shade600, size: 20),
-                  ),
-                ),
-              ]),
           ],
         ),
     );
@@ -2346,7 +2144,7 @@ class _BillingScreenState extends State<BillingScreen> {
 
     return Container(
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2416,7 +2214,7 @@ class _BillingScreenState extends State<BillingScreen> {
               ]),
             ]),
           if (isDesktop) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
             _collectionBar(collectedPct, pendingPct, overduePct),
           ],
         ],
@@ -2432,10 +2230,10 @@ class _BillingScreenState extends State<BillingScreen> {
     String? sublabel,
   }) =>
       Container(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
           color: tint,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2443,104 +2241,86 @@ class _BillingScreenState extends State<BillingScreen> {
           children: [
             Text(title,
                 style: TextStyle(
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: FontWeight.w600,
                     color: accent.withValues(alpha: 0.8))),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
               child: Text(
                 _fmtAmt(amount),
                 style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: accent),
               ),
             ),
-            if (sublabel != null) ...[
-              const SizedBox(height: 2),
+            if (sublabel != null)
               Text(sublabel,
                   style: TextStyle(
-                      fontSize: 11,
+                      fontSize: 10,
                       color: accent.withValues(alpha: 0.65))),
-            ],
           ],
         ),
       );
 
   Widget _collectionBar(
       double collectedPct, double pendingPct, double overduePct) {
-    const barH         = 8.0;
+    const barH         = 6.0;
     const successColor = Color(0xFF4CAF50);
     const warningColor = Color(0xFFFFC107);
     const dangerColor  = Color(0xFFF44336);
     final hasData = collectedPct + pendingPct + overduePct > 0;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
+    // Compact single row: [bar] [X% collected] [● Pending] [● Overdue]
+    return Row(
       children: [
-        Row(children: [
-          const Text('Collection rate',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-          const Spacer(),
-          Text(
-            '${(collectedPct * 100).toStringAsFixed(1)}% collected',
-            style: const TextStyle(
-                fontSize: 12,
-                color: _kSuccess,
-                fontWeight: FontWeight.w600),
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: hasData
+                ? Row(children: [
+                    if (collectedPct > 0)
+                      Expanded(
+                        flex: (collectedPct * 1000).round(),
+                        child: Container(height: barH, color: successColor),
+                      ),
+                    if (pendingPct > 0)
+                      Expanded(
+                        flex: (pendingPct * 1000).round(),
+                        child: Container(height: barH, color: warningColor),
+                      ),
+                    if (overduePct > 0)
+                      Expanded(
+                        flex: (overduePct * 1000).round(),
+                        child: Container(height: barH, color: dangerColor),
+                      ),
+                  ])
+                : Container(height: barH, color: Colors.grey.shade200),
           ),
-        ]),
-        const SizedBox(height: 6),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: hasData
-              ? Row(children: [
-                  if (collectedPct > 0)
-                    Expanded(
-                      flex: (collectedPct * 1000).round(),
-                      child: Container(height: barH, color: successColor),
-                    ),
-                  if (pendingPct > 0)
-                    Expanded(
-                      flex: (pendingPct * 1000).round(),
-                      child: Container(height: barH, color: warningColor),
-                    ),
-                  if (overduePct > 0)
-                    Expanded(
-                      flex: (overduePct * 1000).round(),
-                      child: Container(height: barH, color: dangerColor),
-                    ),
-                ])
-              : Container(height: barH, color: Colors.grey.shade200),
         ),
-        const SizedBox(height: 6),
-        Row(children: [
-          _barLegend('Collected', successColor),
-          const SizedBox(width: 14),
-          _barLegend('Pending', warningColor),
-          const SizedBox(width: 14),
-          _barLegend('Overdue', dangerColor),
-        ]),
+        const SizedBox(width: 10),
+        Text(
+          '${(collectedPct * 100).toStringAsFixed(1)}% collected',
+          style: const TextStyle(
+              fontSize: 11, color: _kSuccess, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(width: 10),
+        _barDot(warningColor), const SizedBox(width: 3),
+        Text('Pending',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+        const SizedBox(width: 8),
+        _barDot(dangerColor), const SizedBox(width: 3),
+        Text('Overdue',
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
       ],
     );
   }
 
-  Widget _barLegend(String label, Color color) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 4),
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 11, color: AppColors.textSecondary)),
-        ],
+  Widget _barDot(Color color) => Container(
+        width: 8, height: 8,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
       );
 
   String _fmtAmt(double amt) =>
