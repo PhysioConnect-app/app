@@ -3060,10 +3060,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     required bool isSelected,
     required VoidCallback onToggle,
   }) {
-    final name  = (doc['name']  ?? 'Unknown') as String;
-    final email = (doc['email'] ?? '')         as String;
-    final phone = (doc['phone'] ?? '')         as String;
-    final ac    = _avatarColor(name);
+    final id       = doc['id']    as String;
+    final name     = (doc['name']  ?? 'Unknown') as String;
+    final email    = (doc['email'] ?? '')         as String;
+    final phone    = (doc['phone'] ?? '')         as String;
+    final hasAcc   = email.isNotEmpty && (doc['has_account'] as bool? ?? true);
+    final ac       = _avatarColor(name);
 
     return GestureDetector(
       onTap: onToggle,
@@ -3118,10 +3120,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         fontSize: 15,
                         color: AppColors.textPrimary)),
                 const SizedBox(height: 2),
-                Text(email,
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 12),
-                    overflow: TextOverflow.ellipsis),
+                if (email.isNotEmpty)
+                  Text(email,
+                      style: const TextStyle(
+                          color: AppColors.textSecondary, fontSize: 12),
+                      overflow: TextOverflow.ellipsis)
+                else
+                  const Text('No account',
+                      style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic)),
                 if (phone.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Row(children: [
@@ -3134,8 +3143,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ],
               ]),
             ),
+            if (!hasAcc)
+              IconButton(
+                onPressed: () => _showCreateAccountForStub(id, name),
+                icon: const Icon(Icons.manage_accounts_rounded,
+                    color: AppColors.primary, size: 20),
+                tooltip: 'Create login account',
+              ),
             IconButton(
-              onPressed: () => _confirmDeletePatient(doc['id'] as String, name),
+              onPressed: () => _confirmDeletePatient(id, name),
               icon: const Icon(Icons.delete_outline_rounded,
                   color: AppColors.error, size: 20),
               tooltip: 'Remove patient',
@@ -3144,6 +3160,178 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _showCreateAccountForStub(String stubId, String patientName) async {
+    final emailCtrl    = TextEditingController();
+    final passwordCtrl = TextEditingController();
+    bool obscure       = true;
+    bool loading       = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('Create Account for $patientName'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+              controller: emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                labelText: 'Email',
+                prefixIcon: const Icon(Icons.email_outlined, color: AppColors.primary),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                filled: true, fillColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 12),
+            StatefulBuilder(
+              builder: (_, setInner) => TextField(
+                controller: passwordCtrl,
+                obscureText: obscure,
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary),
+                  suffixIcon: IconButton(
+                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility,
+                        color: Colors.grey),
+                    onPressed: () { obscure = !obscure; setInner(() {}); },
+                  ),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  filled: true, fillColor: Colors.white,
+                ),
+              ),
+            ),
+          ]),
+          actions: [
+            TextButton(
+              onPressed: loading ? null : () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+              onPressed: loading
+                  ? null
+                  : () => _submitCreateAccountForStub(
+                        ctx: ctx,
+                        set: set,
+                        stubId: stubId,
+                        patientName: patientName,
+                        email: emailCtrl.text.trim(),
+                        password: passwordCtrl.text,
+                        setLoading: (v) => set(() => loading = v),
+                      ),
+              child: loading
+                  ? const SizedBox(
+                      width: 18, height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Create Account'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submitCreateAccountForStub({
+    required BuildContext ctx,
+    required StateSetter set,
+    required String stubId,
+    required String patientName,
+    required String email,
+    required String password,
+    required void Function(bool) setLoading,
+  }) async {
+    if (email.isEmpty || password.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Enter a valid email and password (min 6 chars).'),
+      ));
+      return;
+    }
+
+    setLoading(true);
+
+    // Check if this email already belongs to an existing patient
+    final existing = await _supabase
+        .from('users')
+        .select('id, name')
+        .eq('email', email)
+        .eq('role', 'patient')
+        .maybeSingle();
+
+    if (existing != null) {
+      setLoading(false);
+      if (!ctx.mounted || !mounted) return;
+      Navigator.pop(ctx); // close create-account dialog
+
+      final existingId   = existing['id']   as String;
+      final existingName = (existing['name'] as String?) ?? email;
+
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (d) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Patient already exists'),
+          content: Text(
+            '"$existingName" already has an account with this email.\n\n'
+            'Merge "$patientName" into their account? All appointments, '
+            'revenues and documentation will be transferred.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(d, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+              onPressed: () => Navigator.pop(d, true),
+              child: const Text('Merge & Link'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirm != true || !mounted) return;
+
+      final err = await _adminService.mergePatients(
+        canonicalId: existingId,
+        duplicateIds: [stubId],
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(err == null
+            ? '$patientName merged into $existingName successfully!'
+            : 'Merge failed: $err'),
+        backgroundColor: err == null ? AppColors.success : AppColors.error,
+      ));
+      return;
+    }
+
+    // No conflict — upgrade stub in-place (reuses same UUID, data preserved)
+    final newId = await _adminService.createPatientAccount(
+      name:    patientName,
+      email:   email,
+      password: password,
+      doctorId: '', // stub already has its doctor_ids
+      stubId:  stubId,
+    );
+
+    setLoading(false);
+    if (!ctx.mounted) return;
+    Navigator.pop(ctx);
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(newId != null
+          ? 'Account created for $patientName!'
+          : 'Failed to create account. The email may already be in use.'),
+      backgroundColor: newId != null ? AppColors.success : AppColors.error,
+    ));
   }
 
   Future<void> _confirmDeleteSelectedPatients() async {
