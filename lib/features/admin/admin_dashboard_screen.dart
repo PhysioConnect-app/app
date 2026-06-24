@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_colors.dart';
@@ -150,6 +151,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   // Doctors list
   String _searchQuery = '';
+  // Doctor name lookup: id → name (kept in sync via stream subscription)
+  Map<String, String> _doctorNames = {};
+  StreamSubscription<List<Map<String, dynamic>>>? _doctorSub;
+
   // Patients list
   String _patientSearchQuery = '';
   final Set<String> _selectedPatientIds = {};
@@ -161,7 +166,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   bool _noteSending = false;
 
   @override
+  void initState() {
+    super.initState();
+    _doctorSub = _supabase
+        .from('users')
+        .stream(primaryKey: ['id'])
+        .eq('role', 'doctor')
+        .listen((rows) {
+      if (!mounted) return;
+      setState(() {
+        _doctorNames = {
+          for (final r in rows)
+            r['id'] as String: (r['name'] as String? ?? 'Unknown'),
+        };
+      });
+    });
+  }
+
+  @override
   void dispose() {
+    _doctorSub?.cancel();
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _passCtrl.dispose();
@@ -2728,6 +2752,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       final id = filtered[i]['id'] as String;
                       return _patientCard(
                         filtered[i],
+                        doctorNames: _doctorNames,
                         isSelected: _selectedPatientIds.contains(id),
                         onToggle: () => setState(() {
                           if (_selectedPatientIds.contains(id)) {
@@ -3057,6 +3082,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Widget _patientCard(
     Map<String, dynamic> doc, {
+    required Map<String, String> doctorNames,
     required bool isSelected,
     required VoidCallback onToggle,
   }) {
@@ -3066,6 +3092,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final phone    = (doc['phone'] ?? '')         as String;
     final hasAcc   = email.isNotEmpty && (doc['has_account'] as bool? ?? true);
     final ac       = _avatarColor(name);
+    final assignedDoctors = ((doc['doctor_ids'] as List?) ?? [])
+        .cast<String>()
+        .map((id) => doctorNames[id] ?? 'Dr. Unknown')
+        .toList();
 
     return GestureDetector(
       onTap: onToggle,
@@ -3139,6 +3169,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     Text(phone,
                         style: const TextStyle(
                             color: AppColors.textSecondary, fontSize: 12)),
+                  ]),
+                ],
+                if (assignedDoctors.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(Icons.medical_services_rounded,
+                        size: 12, color: AppColors.primary),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        assignedDoctors.join(', '),
+                        style: const TextStyle(
+                            color: AppColors.primary, fontSize: 12),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 2,
+                      ),
+                    ),
                   ]),
                 ],
               ]),
