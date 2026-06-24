@@ -2026,12 +2026,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         int basic = 0, premium = 0;
         for (final d in all) {
           final tier = (d['subscription'] as String?) ?? 'basic';
-          if (tier == 'premium') { premium++; }
-          else                   { basic++;   }
+          if (tier == 'premium') { premium++; } else { basic++; }
         }
 
-        // recent 5
-        final recent = List<Map<String, dynamic>>.from(all)
+        final latest = (List<Map<String, dynamic>>.from(all)
           ..sort((a, b) {
             final ta = a['created_at'] as String?;
             final tb = b['created_at'] as String?;
@@ -2039,44 +2037,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             if (ta == null) return 1;
             if (tb == null) return -1;
             return tb.compareTo(ta);
-          });
-        final latest = recent.take(5).toList();
+          })).take(5).toList();
 
-        return ListView(
-          padding: const EdgeInsets.all(16),
+        // Feature-distribution panel
+        final featurePanel = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Stat cards — 3-up on wide, 2+1 on narrow ─────────────────
-            LayoutBuilder(builder: (ctx, c) {
-              final wide = c.maxWidth > 380;
-              if (wide) {
-                return Row(children: [
-                  Expanded(child: _kpiCard(all.length.toString(), 'Total Doctors',
-                      Icons.people_rounded, _kInk)),
-                  const SizedBox(width: 10),
-                  Expanded(child: _kpiCard(basic.toString(), 'Basic Plan',
-                      Icons.star_border_rounded, SubTier.basic.color)),
-                  const SizedBox(width: 10),
-                  Expanded(child: _kpiCard(premium.toString(), 'Premium',
-                      Icons.star_rounded, SubTier.premium.color)),
-                ]);
-              }
-              return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Row(children: [
-                  Expanded(child: _kpiCard(all.length.toString(), 'Total Doctors',
-                      Icons.people_rounded, _kInk)),
-                  const SizedBox(width: 10),
-                  Expanded(child: _kpiCard(basic.toString(), 'Basic',
-                      Icons.star_border_rounded, SubTier.basic.color)),
-                ]),
-                const SizedBox(height: 10),
-                _kpiCard(premium.toString(), 'Premium',
-                    Icons.star_rounded, SubTier.premium.color),
-              ]);
-            }),
-
-            const SizedBox(height: 24),
-
-            // ── Feature summary ────────────────────────────────────────────
             const AdminSectionLabel('Feature Distribution'),
             const SizedBox(height: 12),
             ..._kFeats.map((f) {
@@ -2084,21 +2050,104 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 final feats = (d['features'] as Map<String, dynamic>?) ?? {};
                 return feats[f.key] as bool? ?? false;
               }).length;
-              final pct = all.isEmpty ? 0.0 : count / all.length;
-              return _featureBar(f, count, all.length, pct);
+              return _featureBar(f, count, all.length,
+                  all.isEmpty ? 0.0 : count / all.length);
             }),
+          ],
+        );
 
-            const SizedBox(height: 24),
-
-            // ── Recent registrations ───────────────────────────────────────
-            _overviewSectionLabel('Recent Registrations'),
+        // Recent-registrations panel
+        final recentPanel = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const AdminSectionLabel('Recent Registrations'),
             const SizedBox(height: 12),
             if (latest.isEmpty)
               _emptyCard('No doctors registered yet.')
             else
-              ...latest.map((d) => _recentRow(d)),
+              ...latest.map(_recentRow),
           ],
         );
+
+        return LayoutBuilder(builder: (ctx, constraints) {
+          final wide = constraints.maxWidth >= kMobileBreakpoint;
+
+          // 5-KPI row: 3 on top + 2 below on narrow; all 5 on wide
+          Widget kpiRow;
+          if (wide) {
+            kpiRow = Row(children: [
+              Expanded(child: _kpiCard(all.length.toString(),
+                  'Doctors', Icons.people_rounded, AppColors.primary)),
+              const SizedBox(width: 10),
+              Expanded(child: _kpiCard(basic.toString(),
+                  'Basic', Icons.star_border_rounded, SubTier.basic.color)),
+              const SizedBox(width: 10),
+              Expanded(child: _kpiCard(premium.toString(),
+                  'Premium', Icons.star_rounded, SubTier.premium.color)),
+              const SizedBox(width: 10),
+              Expanded(child: _kpiCard(_patientCount.toString(),
+                  'Patients', Icons.personal_injury_rounded,
+                  AppColors.accent)),
+              const SizedBox(width: 10),
+              Expanded(child: _kpiCard(_pendingCount.toString(),
+                  'Pending', Icons.notifications_rounded,
+                  AppColors.warning)),
+            ]);
+          } else {
+            kpiRow = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(children: [
+                  Expanded(child: _kpiCard(all.length.toString(),
+                      'Doctors', Icons.people_rounded, AppColors.primary)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _kpiCard(_patientCount.toString(),
+                      'Patients', Icons.personal_injury_rounded,
+                      AppColors.accent)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _kpiCard(_pendingCount.toString(),
+                      'Pending', Icons.notifications_rounded,
+                      AppColors.warning)),
+                ]),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(child: _kpiCard(basic.toString(),
+                      'Basic', Icons.star_border_rounded,
+                      SubTier.basic.color)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _kpiCard(premium.toString(),
+                      'Premium', Icons.star_rounded,
+                      SubTier.premium.color)),
+                ]),
+              ],
+            );
+          }
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              kpiRow,
+              const SizedBox(height: 24),
+              if (wide)
+                // Side-by-side on desktop
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 3, child: featurePanel),
+                      const SizedBox(width: 16),
+                      Expanded(flex: 2, child: recentPanel),
+                    ],
+                  ),
+                )
+              else ...[
+                featurePanel,
+                const SizedBox(height: 24),
+                recentPanel,
+              ],
+            ],
+          );
+        });
       },
     );
   }
@@ -2236,22 +2285,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
       ),
     );
-  }
-
-  Widget _overviewSectionLabel(String label) {
-    return Row(children: [
-      Container(
-        width: 3, height: 16,
-        decoration: BoxDecoration(
-          color: _kSlate, borderRadius: BorderRadius.circular(2)),
-      ),
-      const SizedBox(width: 8),
-      Text(label,
-          style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary)),
-    ]);
   }
 
   Widget _emptyCard(String msg) {
