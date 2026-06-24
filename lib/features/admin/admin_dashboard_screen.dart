@@ -7,8 +7,6 @@ import '../../core/constants/design_tokens.dart';
 import '../../core/models/subscription_model.dart';
 import '../admin/admin_service.dart';
 
-const _kSlate = Color(0xFF37474F);
-const _kInk   = Color(0xFF1A237E);
 
 // ── Notification list helpers ─────────────────────────────────────────────────
 
@@ -131,8 +129,8 @@ List<List<Map<String, dynamic>>> _findDuplicatePatientGroups(
 // Shared primitives
 // ════════════════════════════════════════════════════════════════════════════════
 
-/// Accent bar + bold label. Replaces _overviewSectionLabel, _formSection,
-/// and _sheetSectionLabel once all call sites are migrated.
+/// Accent bar + bold label. Replaced _overviewSectionLabel, _formSection,
+/// and _sheetSectionLabel (all call sites migrated).
 /// [trailing] is optional — used e.g. for a "Select All" button on the right.
 class AdminSectionLabel extends StatelessWidget {
   const AdminSectionLabel(this.text, {super.key, this.trailing});
@@ -543,7 +541,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ]),
 
                 const SizedBox(height: 28),
-                _sheetSectionLabel('Subscription Tier'),
+                AdminSectionLabel('Subscription Tier'),
                 const SizedBox(height: 4),
                 const Text(
                   'Selecting a tier auto-applies default features. '
@@ -598,7 +596,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
 
                 const SizedBox(height: 26),
-                _sheetSectionLabel('Feature Access'),
+                AdminSectionLabel('Feature Access'),
                 const SizedBox(height: 4),
                 const Text(
                   'Toggle individual features on or off for this doctor.',
@@ -679,7 +677,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
                 const SizedBox(height: 26),
                 // ── Doctor info ───────────────────────────────────────────────
-                _sheetSectionLabel('Doctor Info'),
+                AdminSectionLabel('Doctor Info'),
                 const SizedBox(height: 10),
                 _adminField(nameCtrl, 'Full Name', Icons.person_rounded),
                 const SizedBox(height: 10),
@@ -687,7 +685,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
                 const SizedBox(height: 26),
                 // ── Account settings ──────────────────────────────────────────
-                _sheetSectionLabel('Account Settings'),
+                AdminSectionLabel('Account Settings'),
                 const SizedBox(height: 10),
                 _adminToggleTile(
                   icon: Icons.power_settings_new_rounded,
@@ -701,7 +699,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 const SizedBox(height: 8),
                 _adminToggleTile(
                   icon: Icons.search_rounded,
-                  color: _kInk,
+                  color: AppColors.textPrimary,
                   title: 'Show in Find a Doctor',
                   subtitle: 'Visible to patients searching for therapists',
                   value: config.showInSearch,
@@ -744,7 +742,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ),
                     child: Row(children: [
                       const Icon(Icons.event_rounded,
-                          color: _kInk, size: 20),
+                          color: AppColors.textPrimary, size: 20),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -779,7 +777,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
                 const SizedBox(height: 20),
                 // ── AI Doctor Assistant ───────────────────────────────────────
-                _sheetSectionLabel('AI Doctor Assistant'),
+                AdminSectionLabel('AI Doctor Assistant'),
                 const SizedBox(height: 4),
                 const Text(
                   'Control access to AI features and set the monthly request limit.',
@@ -890,7 +888,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
                 const SizedBox(height: 20),
                 // ── Dr. prefix ────────────────────────────────────────────────
-                _sheetSectionLabel('Dr. Prefix'),
+                AdminSectionLabel('Dr. Prefix'),
                 const SizedBox(height: 6),
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -1007,7 +1005,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ? const Center(child: CircularProgressIndicator())
                       : ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _kSlate,
+                            backgroundColor: DesignTokens.adminAccent,
                             foregroundColor: Colors.white,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
@@ -1359,7 +1357,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   final reqEmail = (d['email']          as String? ?? '');
                   final reqPhone = (d['phone_number']   as String? ?? '');
                   final hasDpt   = (d['has_doctorate']  as bool?) ?? false;
-                  final ac       = _avatarColor(reqName);
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
@@ -1368,7 +1365,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE8EAED)),
+                        border: Border.all(color: AppColors.cardBorder),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.04),
@@ -1380,52 +1377,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(children: [
-                            Container(
-                              width: 44, height: 44,
-                              decoration: BoxDecoration(
-                                color: ac.withValues(alpha: 0.13),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Center(
-                                child: Text(_initials(reqName),
-                                    style: TextStyle(
-                                        color: ac,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16)),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(reqName,
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 15,
-                                          color: AppColors.textPrimary)),
-                                  Text(reqEmail,
-                                      style: const TextStyle(
-                                          color: AppColors.textSecondary,
-                                          fontSize: 12)),
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFF3E0),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: const Text('Pending',
-                                  style: TextStyle(
-                                      color: Color(0xFFF57F17),
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700)),
-                            ),
-                          ]),
+                          AdminEntityRow(
+                            name: reqName,
+                            subtitle: reqEmail,
+                            trailing: _pendingPill(),
+                          ),
                           const SizedBox(height: 8),
                           // Details row: phone + doctorate badge
                           Wrap(
@@ -1507,7 +1463,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 final id   = d['id'] as String;
                 final name = (d['name'] as String? ?? 'Unknown');
                 final spec = (d['specialization'] ?? '') as String;
-                final ac   = _avatarColor(name);
                 final isNameChange = item.type == _NotifType.nameChange;
                 final pendingName =
                     isNameChange ? (d['pending_name'] as String? ?? '') : '';
@@ -1519,7 +1474,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE8EAED)),
+                      border: Border.all(color: AppColors.cardBorder),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.04),
@@ -1531,53 +1486,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(children: [
-                          Container(
-                            width: 44, height: 44,
-                            decoration: BoxDecoration(
-                              color: ac.withValues(alpha: 0.13),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Center(
-                              child: Text(_initials(name),
-                                  style: TextStyle(
-                                      color: ac,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16)),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(name,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 15,
-                                        color: AppColors.textPrimary)),
-                                if (spec.isNotEmpty)
-                                  Text(spec,
-                                      style: const TextStyle(
-                                          color: AppColors.textSecondary,
-                                          fontSize: 12)),
-                              ],
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFFF3E0),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Text('Pending',
-                                style: TextStyle(
-                                    color: Color(0xFFF57F17),
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700)),
-                          ),
-                        ]),
+                        AdminEntityRow(
+                          name: name,
+                          subtitle: spec.isNotEmpty ? spec : null,
+                          trailing: _pendingPill(),
+                        ),
                         const SizedBox(height: 6),
                         Text(
                           isNameChange
@@ -1641,7 +1554,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         controller: ctrl,
         decoration: InputDecoration(
           labelText: label,
-          prefixIcon: Icon(icon, size: 18, color: _kSlate),
+          prefixIcon: Icon(icon, size: 18, color: DesignTokens.adminAccent),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
           filled: true,
           fillColor: const Color(0xFFF8F9FA),
@@ -2160,9 +2073,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         borderRadius: BorderRadius.circular(16),
         border: Border(
           left:   BorderSide(color: color, width: 4),
-          top:    const BorderSide(color: Color(0xFFE8EAED)),
-          right:  const BorderSide(color: Color(0xFFE8EAED)),
-          bottom: const BorderSide(color: Color(0xFFE8EAED)),
+          top:    const BorderSide(color: AppColors.cardBorder),
+          right:  const BorderSide(color: AppColors.cardBorder),
+          bottom: const BorderSide(color: AppColors.cardBorder),
         ),
         boxShadow: [
           BoxShadow(
@@ -2208,7 +2121,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE8EAED)),
+        border: Border.all(color: AppColors.cardBorder),
       ),
       child: Column(children: [
         Row(children: [
@@ -2238,7 +2151,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           child: LinearProgressIndicator(
             value: pct,
             minHeight: 6,
-            backgroundColor: const Color(0xFFE8EAED),
+            backgroundColor: AppColors.cardBorder,
             valueColor: AlwaysStoppedAnimation(f.color),
           ),
         ),
@@ -2294,7 +2207,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE8EAED)),
+        border: Border.all(color: AppColors.cardBorder),
       ),
       child: Text(msg,
           style: const TextStyle(color: AppColors.textSecondary)),
@@ -2390,7 +2303,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [_kSlate, _kInk],
+          colors: [DesignTokens.adminAccent, AppColors.textPrimary],
         ),
         borderRadius: BorderRadius.circular(18),
       ),
@@ -2423,7 +2336,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
         ),
         GestureDetector(
-          onTap: () => setState(() => _currentIndex = 3),
+          onTap: () => setState(() => _currentIndex = 2),
           child: Container(
             padding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
@@ -2652,6 +2565,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  /// Amber "Pending" pill used on all notification request cards.
+  Widget _pendingPill() => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(
+      color: DesignTokens.warningLight,
+      borderRadius: BorderRadius.circular(20),
+    ),
+    child: Text('Pending',
+        style: TextStyle(
+            color: AppColors.warning,
+            fontSize: 11,
+            fontWeight: FontWeight.w700)),
+  );
+
   /// Small rounded pill used in the doctor-card status row.
   Widget _statusPill(String label, {
     required IconData icon,
@@ -2689,19 +2616,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: _kSlate.withValues(alpha: 0.06),
+              color: DesignTokens.adminAccent.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _kSlate.withValues(alpha: 0.12)),
+              border: Border.all(color: DesignTokens.adminAccent.withValues(alpha: 0.12)),
             ),
             child: Row(children: [
               Container(
                 width: 42, height: 42,
                 decoration: BoxDecoration(
-                  color: _kSlate.withValues(alpha: 0.1),
+                  color: DesignTokens.adminAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(11),
                 ),
                 child: const Icon(Icons.person_add_rounded,
-                    color: _kSlate, size: 20),
+                    color: DesignTokens.adminAccent, size: 20),
               ),
               const SizedBox(width: 14),
               const Expanded(
@@ -2742,14 +2669,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _formSection('Personal Info'),
+                AdminSectionLabel('Personal Info'),
                 const SizedBox(height: 14),
                 _field(_nameCtrl, 'Doctor Full Name', Icons.badge_rounded),
                 const SizedBox(height: 12),
                 _field(_specCtrl, 'Specialization',
                     Icons.medical_services_rounded),
                 const SizedBox(height: 22),
-                _formSection('Login Credentials'),
+                AdminSectionLabel('Login Credentials'),
                 const SizedBox(height: 14),
                 _field(_emailCtrl, 'Professional Email', Icons.email_rounded,
                     type: TextInputType.emailAddress),
@@ -2760,7 +2687,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   decoration: InputDecoration(
                     labelText: 'Initial Password (min 6 chars)',
                     prefixIcon: const Icon(Icons.lock_rounded,
-                        color: _kSlate, size: 20),
+                        color: DesignTokens.adminAccent, size: 20),
                     suffixIcon: IconButton(
                       icon: Icon(
                           _obscure
@@ -2774,7 +2701,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         borderRadius: BorderRadius.circular(12)),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: _kSlate, width: 2),
+                      borderSide: const BorderSide(color: DesignTokens.adminAccent, width: 2),
                     ),
                   ),
                 ),
@@ -2786,7 +2713,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ? const Center(child: CircularProgressIndicator())
                       : ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: _kSlate,
+                            backgroundColor: DesignTokens.adminAccent,
                             foregroundColor: Colors.white,
                             elevation: 0,
                             shape: RoundedRectangleBorder(
@@ -3111,7 +3038,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           border: Border.all(
                               color: selected
                                   ? const Color(0xFF1565C0)
-                                  : const Color(0xFFE8EAED),
+                                  : AppColors.cardBorder,
                               width: selected ? 1.5 : 1),
                         ),
                         child: Row(children: [
@@ -3321,7 +3248,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           border: Border.all(
             color: isSelected
                 ? AppColors.primary.withValues(alpha: 0.4)
-                : const Color(0xFFE8EAED),
+                : AppColors.cardBorder,
           ),
           boxShadow: [
             BoxShadow(
@@ -3722,19 +3649,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _formSection('Send a Note to Doctors'),
+              AdminSectionLabel('Send a Note to Doctors'),
               const SizedBox(height: 14),
               TextField(
                 controller: _noteTitleCtrl,
                 decoration: InputDecoration(
                   labelText: 'Title',
                   prefixIcon: const Icon(Icons.title_rounded,
-                      color: _kSlate, size: 20),
+                      color: DesignTokens.adminAccent, size: 20),
                   border:
                       OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: _kSlate, width: 2),
+                    borderSide: const BorderSide(color: DesignTokens.adminAccent, width: 2),
                   ),
                 ),
               ),
@@ -3749,15 +3676,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: _kSlate, width: 2),
+                    borderSide: const BorderSide(color: DesignTokens.adminAccent, width: 2),
                   ),
                 ),
               ),
               const SizedBox(height: 20),
-              Row(children: [
-                _sheetSectionLabel('Send To'),
-                const Spacer(),
-                TextButton(
+              AdminSectionLabel(
+                'Send To',
+                trailing: TextButton(
                   onPressed: doctors.isEmpty
                       ? null
                       : () => setState(() {
@@ -3771,7 +3697,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           }),
                   child: Text(allSelected ? 'Deselect All' : 'Select All'),
                 ),
-              ]),
+              ),
               const SizedBox(height: 8),
               if (doctors.isEmpty)
                 const Padding(
@@ -3805,7 +3731,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         subtitle: email.isNotEmpty
                             ? Text(email, style: const TextStyle(fontSize: 12))
                             : null,
-                        activeColor: _kSlate,
+                        activeColor: DesignTokens.adminAccent,
                         dense: true,
                         controlAffinity: ListTileControlAffinity.leading,
                       );
@@ -3823,7 +3749,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             ? null
                             : _sendAdminNote,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _kSlate,
+                          backgroundColor: DesignTokens.adminAccent,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
@@ -3913,7 +3839,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-          borderSide: const BorderSide(color: _kSlate, width: 1.5),
+          borderSide: const BorderSide(color: DesignTokens.adminAccent, width: 1.5),
         ),
       ),
     );
@@ -3927,11 +3853,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           Container(
             width: 76, height: 76,
             decoration: BoxDecoration(
-              color: _kSlate.withValues(alpha: 0.07),
+              color: DesignTokens.adminAccent.withValues(alpha: 0.07),
               shape: BoxShape.circle,
             ),
             child: Icon(Icons.people_outline_rounded,
-                size: 36, color: _kSlate.withValues(alpha: 0.35)),
+                size: 36, color: DesignTokens.adminAccent.withValues(alpha: 0.35)),
           ),
           const SizedBox(height: 16),
           Text(
@@ -3956,39 +3882,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _formSection(String label) {
-    return Row(children: [
-      Container(
-        width: 3, height: 16,
-        decoration: BoxDecoration(
-          color: _kSlate, borderRadius: BorderRadius.circular(2)),
-      ),
-      const SizedBox(width: 8),
-      Text(label,
-          style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: _kSlate,
-              letterSpacing: 0.3)),
-    ]);
-  }
-
-  Widget _sheetSectionLabel(String label) {
-    return Row(children: [
-      Container(
-        width: 3, height: 16,
-        decoration: BoxDecoration(
-          color: _kSlate, borderRadius: BorderRadius.circular(2)),
-      ),
-      const SizedBox(width: 8),
-      Text(label,
-          style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary)),
-    ]);
-  }
-
   Widget _field(
     TextEditingController ctrl,
     String label,
@@ -4000,11 +3893,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       keyboardType: type,
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon, color: _kSlate, size: 20),
+        prefixIcon: Icon(icon, color: DesignTokens.adminAccent, size: 20),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _kSlate, width: 2),
+          borderSide: const BorderSide(color: DesignTokens.adminAccent, width: 2),
         ),
       ),
     );
