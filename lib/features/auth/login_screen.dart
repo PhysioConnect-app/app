@@ -9,6 +9,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
 import '../patient/find_doctors_screen.dart';
+import '../store/doctor_storefront_screen.dart';
 import 'auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -212,9 +213,8 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _openPhysioGate() {
-    launchUrl(
-      Uri.parse('https://www.physiogate.com'),
-      mode: LaunchMode.externalApplication,
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const DoctorStorefrontScreen()),
     );
   }
 

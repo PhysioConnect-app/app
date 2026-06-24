@@ -78,53 +78,120 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
     final supabase  = Supabase.instance.client;
     final doctorUid = supabase.auth.currentUser!.id;
     final name      = _nameController.text.trim();
+    final email     = _emailController.text.trim();
 
     try {
+      // ── Check whether this email already belongs to a patient ────────────
+      final existing = await supabase
+          .from('users')
+          .select('id, name')
+          .eq('email', email)
+          .eq('role', 'patient')
+          .maybeSingle();
+
+      if (existing != null) {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+
+        final existingName = (existing['name'] as String?) ?? email;
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Patient already exists'),
+            content: Text(
+              '"$existingName" already has an account with this email.\n\n'
+              'Link them to your practice and merge all their data?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Merge & Link'),
+              ),
+            ],
+          ),
+        );
+
+        if (confirm != true || !mounted) return;
+        setState(() => _isLoading = true);
+
+        final existingId = existing['id'] as String;
+
+        await _linkExistingPatient(
+          supabase: supabase,
+          existingId: existingId,
+          doctorId: doctorUid,
+          phone: _phoneController.text.trim(),
+          primaryDiagnosis: _diagnosisController.text.trim(),
+          dateOfBirth: _dob,
+        );
+
+        // Also absorb any stubs for this doctor with the same name
+        await _absorbStubs(supabase,
+            canonicalId: existingId, doctorUid: doctorUid, name: name);
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('$existingName linked to your practice!'),
+          backgroundColor: AppColors.success,
+        ));
+        Navigator.pop(context);
+        return;
+      }
+
+      // ── Create account ───────────────────────────────────────────────────────
+      // stub_id tells the edge function to reuse the stub's UUID so the same
+      // row is upgraded in-place — no new row, no deletion needed.
       final newId = await AdminService().createPatientAccount(
         name: name,
-        email: _emailController.text.trim(),
+        email: email,
         password: _passwordController.text.trim(),
         doctorId: doctorUid,
         phone: _phoneController.text.trim(),
         dateOfBirth: _dob,
         primaryDiagnosis: _diagnosisController.text.trim(),
+        stubId: widget.existingPatientId,
       );
 
       if (!mounted) return;
-
       if (newId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to create patient account.'), backgroundColor: AppColors.error),
+          const SnackBar(content: Text('Failed to create patient account.'),
+              backgroundColor: AppColors.error),
         );
         return;
       }
 
-      // ── Replace stub patient with the new auth account ───────────────────
-      final stubId = widget.existingPatientId;
-      if (stubId != null && stubId != newId) {
-        final mergeError = await _mergeStubIntoNewAccount(
+      // ── Flutter-side fallback (older edge function or stub_id unsupported) ──
+      // New edge function returns stub_id unchanged (same row, no duplicate).
+      // If a different ID came back a new row was created — migrate and remove
+      // the stub so the list stays clean.
+      final explicitStub = widget.existingPatientId;
+      if (explicitStub != null && explicitStub != newId) {
+        await _mergeStubIntoNewAccount(
           supabase: supabase,
-          stubId: stubId,
+          stubId: explicitStub,
           newId: newId,
           doctorUid: doctorUid,
         );
-        if (!mounted) return;
-        if (mergeError != null) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Account created but merge failed: $mergeError'),
-            backgroundColor: AppColors.warning,
-          ));
-          return;
-        }
       }
 
+      // ── Absorb any other same-name stubs (manual-creation path fallback) ────
+      await _absorbStubs(supabase,
+          canonicalId: newId, doctorUid: doctorUid, name: name);
+
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Patient account created for $name!'),
-          backgroundColor: AppColors.success,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Patient account created for $name!'),
+        backgroundColor: AppColors.success,
+      ));
       Navigator.pop(context);
     } catch (e) {
       if (!mounted) return;
@@ -133,6 +200,103 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  /// Links an existing patient account to the current doctor.
+  /// Adds the doctor to the patient's [doctor_ids] and the patient to the
+  /// doctor's [assigned_patient_ids]. Fills profile fields that are empty.
+  Future<void> _linkExistingPatient({
+    required SupabaseClient supabase,
+    required String existingId,
+    required String doctorId,
+    String? phone,
+    String? primaryDiagnosis,
+    DateTime? dateOfBirth,
+  }) async {
+    final existing = await supabase
+        .from('users')
+        .select('doctor_ids, phone, primary_diagnosis, date_of_birth')
+        .eq('id', existingId)
+        .maybeSingle();
+
+    // Merge doctor into patient's doctor_ids
+    final doctorIds = List<String>.from(
+        (existing?['doctor_ids'] as List?) ?? []);
+    if (!doctorIds.contains(doctorId)) doctorIds.add(doctorId);
+
+    final updates = <String, dynamic>{'doctor_ids': doctorIds};
+
+    // Fill sparse profile fields only if currently empty on the existing record
+    if (phone != null && phone.isNotEmpty &&
+        ((existing?['phone'] as String?) ?? '').isEmpty) {
+      updates['phone'] = phone;
+    }
+    if (primaryDiagnosis != null && primaryDiagnosis.isNotEmpty &&
+        ((existing?['primary_diagnosis'] as String?) ?? '').isEmpty) {
+      updates['primary_diagnosis'] = primaryDiagnosis;
+    }
+    if (dateOfBirth != null && existing?['date_of_birth'] == null) {
+      updates['date_of_birth'] = dateOfBirth.toIso8601String();
+    }
+
+    await supabase.from('users').update(updates).eq('id', existingId);
+
+    // Add patient to doctor's assigned_patient_ids
+    final docRow = await supabase
+        .from('users')
+        .select('assigned_patient_ids')
+        .eq('id', doctorId)
+        .maybeSingle();
+    final assignedIds = List<String>.from(
+        (docRow?['assigned_patient_ids'] as List?) ?? []);
+    if (!assignedIds.contains(existingId)) assignedIds.add(existingId);
+    await supabase
+        .from('users')
+        .update({'assigned_patient_ids': assignedIds})
+        .eq('id', doctorId);
+  }
+
+  /// Finds every stub patient for [doctorUid] whose name matches [name] and
+  /// absorbs them into [canonicalId]. A patient is treated as a stub when they
+  /// have no email OR have [has_account] = false (covers old DB rows that still
+  /// carry the default true, as long as email is empty). The explicit
+  /// [widget.existingPatientId] is always absorbed regardless of those flags.
+  Future<void> _absorbStubs(
+    SupabaseClient supabase, {
+    required String canonicalId,
+    required String doctorUid,
+    required String name,
+  }) async {
+    // Note: widget.existingPatientId is already handled by the edge function.
+    // This sweep only picks up additional name-matching stubs.
+    final toAbsorb = <String>{};
+
+    // Find all patients for this doctor with the same name that look like stubs
+    try {
+      final rows = await supabase
+          .from('users')
+          .select('id, email, has_account')
+          .eq('role', 'patient')
+          .contains('doctor_ids', [doctorUid])
+          .ilike('name', name)
+          .neq('id', canonicalId);
+
+      for (final r in rows as List) {
+        final em = (r['email'] as String?) ?? '';
+        final ha = r['has_account'] as bool? ?? true;
+        // Stub: no email (can't log in) OR explicitly flagged as no-account
+        if (em.isEmpty || !ha) toAbsorb.add(r['id'] as String);
+      }
+    } catch (_) {}
+
+    for (final stubId in toAbsorb) {
+      await _mergeStubIntoNewAccount(
+        supabase: supabase,
+        stubId: stubId,
+        newId: canonicalId,
+        doctorUid: doctorUid,
+      );
     }
   }
 
@@ -174,9 +338,17 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
       await supabase.from('invoices')
           .update({'patient_id': newId}).eq('patient_id', stubId);
 
-      // 4. Update new user record: inherit all doctor links from stub
+      // 3d. Migrate appointment requests
+      await supabase.from('appointment_requests')
+          .update({'patient_id': newId}).eq('patient_id', stubId);
+
+      // 3e. Migrate home exercise programs
+      await supabase.from('hep_programs')
+          .update({'patient_id': newId}).eq('patient_id', stubId);
+
+      // 4. Update new user record: inherit all doctor links from stub + mark as auth account
       await supabase.from('users')
-          .update({'doctor_ids': stubDoctorIds}).eq('id', newId);
+          .update({'doctor_ids': stubDoctorIds, 'has_account': true}).eq('id', newId);
 
       // 5. For every doctor that had the stub: replace stub ID with new ID
       for (final dId in stubDoctorIds) {

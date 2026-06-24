@@ -53,6 +53,7 @@ class AdminService {
     String? phone,
     String? primaryDiagnosis,
     DateTime? dateOfBirth,
+    String? stubId,
   }) async {
     try {
       final res = await _supabase.functions.invoke('admin-create-user', body: {
@@ -64,6 +65,7 @@ class AdminService {
         'phone': phone ?? '',
         'primary_diagnosis': primaryDiagnosis ?? '',
         if (dateOfBirth != null) 'date_of_birth': dateOfBirth.toIso8601String(),
+        if (stubId != null) 'stub_id': stubId,
       });
       if (res.data is Map && (res.data as Map).containsKey('error')) {
         if (kDebugMode) debugPrint('createPatientAccount error: ${res.data}');

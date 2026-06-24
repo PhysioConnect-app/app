@@ -3837,10 +3837,11 @@ void _showPickPatientForDoc(AppStrings s) {
 
                               final newRow = await Supabase.instance.client
                                   .from('users').insert({
-                                'name':       patientName,
-                                'role':       'patient',
-                                'doctor_ids': [myUid],
-                                'created_at': DateTime.now().toIso8601String(),
+                                'name':        patientName,
+                                'role':        'patient',
+                                'doctor_ids':  [myUid],
+                                'has_account': false,
+                                'created_at':  DateTime.now().toIso8601String(),
                               }).select('id').single();
                               final patientId = newRow['id'] as String;
 
@@ -5128,7 +5129,7 @@ void _showPickPatientForDoc(AppStrings s) {
                     bool ha(Map<String, dynamic> p) {
                       final d = p;
                       return (d['email'] as String? ?? '').isNotEmpty &&
-                          (d['hasAccount'] as bool? ?? true);
+                          (d['has_account'] as bool? ?? true);
                     }
                     return ha(b) ? 1 : (ha(a) ? -1 : 0);
                   });
@@ -5375,7 +5376,7 @@ void _showPickPatientForDoc(AppStrings s) {
         final phone       = (data['phone'] ?? '') as String;
         final dateOfBirth = data['date_of_birth'] as String?;
         final hasAccount  = (data['email'] as String? ?? '').isNotEmpty &&
-            (data['hasAccount'] as bool? ?? true);
+            (data['has_account'] as bool? ?? true);
         final isSelected  = selectedIds.contains(patientId);
 
         return Card(
@@ -5582,9 +5583,9 @@ void _showPickPatientForDoc(AppStrings s) {
               final photoUrl    = (data['profile_photo_url'] ?? '') as String;
               final phone       = (data['phone'] ?? '') as String;
               final dateOfBirth = data['date_of_birth'] as String?;
-              // A patient has an account if they have an email and hasAccount != false
+              // A patient has an account if they have an email and has_account != false
               final hasAccount = (data['email'] as String? ?? '').isNotEmpty &&
-                  (data['hasAccount'] as bool? ?? true);
+                  (data['has_account'] as bool? ?? true);
 
               return FutureBuilder<Map<String, DateTime?>>(
                 future: _getPatientAppointmentDates(patientId),
@@ -5870,7 +5871,7 @@ void _showPickPatientForDoc(AppStrings s) {
       final d          = p;
       final email      = (d['email'] as String?) ?? '';
       final hasAccount = email.isNotEmpty &&
-          (d['hasAccount'] as bool? ?? true);
+          (d['has_account'] as bool? ?? true);
       sheet.appendRow([
         xl.TextCellValue((d['name'] ?? d['email'] ?? '') as String),
         xl.TextCellValue((d['primary_diagnosis'] ?? '') as String),
@@ -7913,10 +7914,11 @@ void _showPickPatientForDoc(AppStrings s) {
               }
             } else {
               final newRow = await Supabase.instance.client.from('users').insert({
-                'name':       row.name,
-                'role':       'patient',
-                'doctor_ids': [myUid],
-                'created_at': DateTime.now().toIso8601String(),
+                'name':        row.name,
+                'role':        'patient',
+                'doctor_ids':  [myUid],
+                'has_account': false,
+                'created_at':  DateTime.now().toIso8601String(),
               }).select().single();
               patientId = newRow['id'] as String;
               patCount++;

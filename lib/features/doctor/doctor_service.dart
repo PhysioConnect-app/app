@@ -16,11 +16,38 @@ class DoctorService {
         .from('users')
         .stream(primaryKey: ['id'])
         .eq('role', 'patient')
-        .map((list) => list.where((u) {
-              final ids = (u['doctor_ids'] as List?)?.cast<String>() ?? [];
-              return ids.contains(_uid);
-            }).toList());
+        .map((list) {
+          // 1. Only this doctor's patients
+          final mine = list.where((u) {
+            final ids = (u['doctor_ids'] as List?)?.cast<String>() ?? [];
+            return ids.contains(_uid);
+          }).toList();
+
+          // 2. Display-level dedup: if the same name exists as both a stub
+          //    (no email / has_account=false) and an active account, show only
+          //    the active account. This hides the stub even during the brief
+          //    window between account creation and server-side cleanup.
+          final activeNames = <String>{};
+          for (final p in mine) {
+            if (_patientHasAccount(p)) {
+              activeNames.add(_normName(p));
+            }
+          }
+          return mine.where((p) {
+            if (_patientHasAccount(p)) return true;
+            return !activeNames.contains(_normName(p));
+          }).toList();
+        });
   }
+
+  static bool _patientHasAccount(Map<String, dynamic> p) {
+    final email  = (p['email'] as String?) ?? '';
+    final hasAcc = p['has_account'] as bool? ?? true;
+    return email.isNotEmpty && hasAcc;
+  }
+
+  static String _normName(Map<String, dynamic> p) =>
+      (p['name'] as String? ?? '').toLowerCase().trim();
 
   Future<List<Map<String, dynamic>>> getAssignedPatientsOnce() async {
     final data = await _supabase
