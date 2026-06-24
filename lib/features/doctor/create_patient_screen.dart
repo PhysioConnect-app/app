@@ -133,6 +133,18 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
           dateOfBirth: _dob,
         );
 
+        // Absorb the explicit stub we were opened from (if any) — do this
+        // before the name sweep so the sweep doesn't double-process it.
+        final explicitStub = widget.existingPatientId;
+        if (explicitStub != null && explicitStub != existingId) {
+          await _mergeStubIntoNewAccount(
+            supabase: supabase,
+            stubId: explicitStub,
+            newId: existingId,
+            doctorUid: doctorUid,
+          );
+        }
+
         // Also absorb any stubs for this doctor with the same name
         await _absorbStubs(supabase,
             canonicalId: existingId, doctorUid: doctorUid, name: name);
@@ -346,9 +358,15 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
       await supabase.from('hep_programs')
           .update({'patient_id': newId}).eq('patient_id', stubId);
 
-      // 4. Update new user record: inherit all doctor links from stub + mark as auth account
+      // 4. Merge stub's doctor links into the real account (preserve existing links)
+      final newRow = await supabase.from('users')
+          .select('doctor_ids').eq('id', newId).maybeSingle();
+      final existingDoctorIds = List<String>.from(
+          (newRow?['doctor_ids'] as List?) ?? []);
+      final mergedDoctorIds =
+          {...existingDoctorIds, ...stubDoctorIds}.toList();
       await supabase.from('users')
-          .update({'doctor_ids': stubDoctorIds, 'has_account': true}).eq('id', newId);
+          .update({'doctor_ids': mergedDoctorIds, 'has_account': true}).eq('id', newId);
 
       // 5. For every doctor that had the stub: replace stub ID with new ID
       for (final dId in stubDoctorIds) {
