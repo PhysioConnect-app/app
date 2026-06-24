@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/constants/breakpoints.dart';
+import '../../core/constants/design_tokens.dart';
 import '../../core/models/subscription_model.dart';
 import '../admin/admin_service.dart';
 
@@ -271,6 +273,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Map<String, String> _doctorNames = {};
   StreamSubscription<List<Map<String, dynamic>>>? _doctorSub;
 
+  // Live counts for the nav rail — populated in initState, never block render
+  int _doctorCount      = 0;
+  int _patientCount     = 0;
+  int _drPendingCount   = 0; // doctors with pending Dr-prefix or name-change request
+  int _acctRequestCount = 0; // pending new-account requests
+  int get _pendingCount => _drPendingCount + _acctRequestCount;
+  StreamSubscription<List<Map<String, dynamic>>>? _patientCountSub;
+  StreamSubscription<List<Map<String, dynamic>>>? _requestCountSub;
+
   // Patients list
   String _patientSearchQuery = '';
   final Set<String> _selectedPatientIds = {};
@@ -284,6 +295,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Doctors stream: feeds name lookup + rail count + pending-doctor-request badge.
     _doctorSub = _supabase
         .from('users')
         .stream(primaryKey: ['id'])
@@ -295,13 +308,42 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           for (final r in rows)
             r['id'] as String: (r['name'] as String? ?? 'Unknown'),
         };
+        _doctorCount = rows.length;
+        _drPendingCount = rows.where((r) =>
+          (r['dr_prefix_request']   as String?) == 'pending' ||
+          (r['name_change_request'] as String?) == 'pending',
+        ).length;
       });
+    });
+
+    // Patient count for rail badge.
+    // Note: streams full rows — acceptable for now since _patientsTab does the same;
+    // a dedicated SELECT id COUNT query would be leaner on large datasets.
+    _patientCountSub = _supabase
+        .from('users')
+        .stream(primaryKey: ['id'])
+        .eq('role', 'patient')
+        .listen((rows) {
+      if (!mounted) return;
+      setState(() => _patientCount = rows.length);
+    });
+
+    // Pending account-request count for the amber rail badge.
+    _requestCountSub = _supabase
+        .from('account_requests')
+        .stream(primaryKey: ['id'])
+        .eq('status', 'pending')
+        .listen((rows) {
+      if (!mounted) return;
+      setState(() => _acctRequestCount = rows.length);
     });
   }
 
   @override
   void dispose() {
     _doctorSub?.cancel();
+    _patientCountSub?.cancel();
+    _requestCountSub?.cancel();
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _passCtrl.dispose();
@@ -1668,26 +1710,210 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.sizeOf(context).width >= kMobileBreakpoint;
+    final content = switch (_currentIndex) {
+      0 => _overviewTab(),
+      1 => _doctorsTab(),
+      2 => _registerTab(),
+      3 => _notificationsTab(),
+      4 => _patientsTab(),
+      _ => _notesTab(),
+    };
+
+    if (isDesktop) {
+      // Desktop: permanent left rail; no top header (branding lives in the rail).
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: Row(children: [
+          _adminRail(),
+          Expanded(child: content),
+        ]),
+      );
+    }
+
+    // Mobile: top header (with sign-out) + content + bottom nav.
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F2F5),
+      backgroundColor: AppColors.background,
       body: Column(children: [
         _header(),
-        _navBar(),
-        Expanded(
-          child: switch (_currentIndex) {
-            0 => _overviewTab(),
-            1 => _doctorsTab(),
-            2 => _registerTab(),
-            3 => _notificationsTab(),
-            4 => _patientsTab(),
-            _ => _notesTab(),
-          },
-        ),
+        Expanded(child: content),
       ]),
+      bottomNavigationBar: _mobileBottomNav(),
     );
   }
 
-  // ── Header ─────────────────────────────────────────────────────────────────
+  // ── Rail (desktop ≥ 600) ───────────────────────────────────────────────────
+
+  Widget _adminRail() {
+    return Container(
+      width: 232,
+      color: DesignTokens.adminAccent,
+      child: SafeArea(
+        right: false,
+        child: Column(children: [
+          // Branding block
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+            child: Row(children: [
+              Container(
+                width: 38, height: 38,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.22),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: const Icon(Icons.admin_panel_settings_rounded,
+                    color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Admin Portal',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2)),
+                  Text('PhysioConnect',
+                      style: TextStyle(color: Color(0xFF8FA8B6), fontSize: 11)),
+                ],
+              ),
+            ]),
+          ),
+
+          Divider(height: 1, color: Colors.white.withValues(alpha: 0.10)),
+          const SizedBox(height: 6),
+
+          // Nav items
+          for (var i = 0; i < _kAdminNavItems.length; i++)
+            _railItem(i),
+
+          const Spacer(),
+
+          Divider(height: 1, color: Colors.white.withValues(alpha: 0.10)),
+          // Sign-out (moved from header on desktop)
+          InkWell(
+            onTap: () => Supabase.instance.client.auth.signOut(),
+            borderRadius: BorderRadius.circular(10),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+              child: Row(children: [
+                Icon(Icons.logout_rounded, size: 17,
+                    color: Colors.white.withValues(alpha: 0.55)),
+                const SizedBox(width: 12),
+                Text('Sign Out',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white.withValues(alpha: 0.55))),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _railItem(int index) {
+    final item      = _kAdminNavItems[index];
+    final selected  = _currentIndex == index;
+    final count     = switch (index) {
+      1 => _doctorCount,
+      3 => _pendingCount,
+      4 => _patientCount,
+      _ => 0,
+    };
+    final isAmber = index == 3; // Requests tab gets amber badge
+
+    return GestureDetector(
+      onTap: () => setState(() => _currentIndex = index),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary.withValues(alpha: 0.18)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: Row(children: [
+          Icon(item.icon,
+              size: 18,
+              color: selected
+                  ? AppColors.primary
+                  : Colors.white.withValues(alpha: 0.60)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(item.label,
+                style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight:
+                        selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: 0.70))),
+          ),
+          if (count > 0)
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: isAmber
+                    ? AppColors.warning
+                    : Colors.white.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text('$count',
+                  style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: isAmber
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.90))),
+            ),
+        ]),
+      ),
+    );
+  }
+
+  // ── Bottom nav (mobile < 600) ──────────────────────────────────────────────
+
+  BottomNavigationBar _mobileBottomNav() {
+    return BottomNavigationBar(
+      currentIndex: _currentIndex,
+      onTap: (i) => setState(() => _currentIndex = i),
+      type: BottomNavigationBarType.fixed,
+      selectedItemColor: AppColors.primary,
+      unselectedItemColor: AppColors.textSecondary,
+      selectedFontSize: 10,
+      unselectedFontSize: 10,
+      items: [
+        for (var i = 0; i < _kAdminNavItems.length; i++)
+          BottomNavigationBarItem(
+            icon: _mobileNavIcon(i),
+            label: _kAdminNavItems[i].label,
+          ),
+      ],
+    );
+  }
+
+  Widget _mobileNavIcon(int index) {
+    final count = switch (index) {
+      1 => _doctorCount,
+      3 => _pendingCount,
+      4 => _patientCount,
+      _ => 0,
+    };
+    final icon = Icon(_kAdminNavItems[index].icon);
+    if (count == 0) return icon;
+    return Badge(
+      label: Text('$count'),
+      backgroundColor:
+          index == 3 ? AppColors.warning : AppColors.primary,
+      child: icon,
+    );
+  }
+
+  // ── Header (mobile only) ───────────────────────────────────────────────────
 
   Widget _header() {
     return Container(
@@ -1760,7 +1986,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ],
               ),
             ),
-            // Actions
+            // Sign-out (mobile only — on desktop it lives in the rail)
             IconButton(
               icon: const Icon(Icons.logout_rounded, size: 20),
               color: Colors.white.withValues(alpha: 0.75),
@@ -1777,57 +2003,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _navBar() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                for (var i = 0; i < _kAdminNavItems.length; i++)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 3),
-                    child: _navButton(i, _kAdminNavItems[i]),
-                  ),
-              ],
-            ),
-          ),
-          const Divider(height: 1, thickness: 1, color: Color(0xFFE8EAED)),
-        ],
-      ),
-    );
-  }
-
-  Widget _navButton(int index, _NavItem item) {
-    final selected = _currentIndex == index;
-    return GestureDetector(
-      onTap: () => setState(() => _currentIndex = index),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        margin: const EdgeInsets.only(bottom: 6),
-        decoration: BoxDecoration(
-          color: selected ? _kInk : Colors.transparent,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(item.icon,
-              size: 15,
-              color: selected ? Colors.white : AppColors.textSecondary),
-          const SizedBox(width: 6),
-          Text(item.label,
-              style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                  color: selected ? Colors.white : AppColors.textSecondary)),
-        ]),
-      ),
-    );
-  }
+  // ── _navBar / _navButton removed — replaced by _adminRail / _mobileBottomNav
 
   // ════════════════════════════════════════════════════════════════════════════
   // Overview Tab
