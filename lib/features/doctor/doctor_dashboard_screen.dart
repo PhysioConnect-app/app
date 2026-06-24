@@ -4962,7 +4962,8 @@ void _showPickPatientForDoc(AppStrings s) {
                       context,
                       MaterialPageRoute(
                         builder: (_) => CreatePatientScreen(
-                            prefillName: patientName),
+                            prefillName: patientName,
+                            existingPatientId: patientId),
                       ),
                     );
                   },
