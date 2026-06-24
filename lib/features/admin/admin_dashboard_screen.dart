@@ -126,6 +126,122 @@ List<List<Map<String, dynamic>>> _findDuplicatePatientGroups(
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
+// Shared primitives
+// ════════════════════════════════════════════════════════════════════════════════
+
+/// Accent bar + bold label. Replaces _overviewSectionLabel, _formSection,
+/// and _sheetSectionLabel once all call sites are migrated.
+/// [trailing] is optional — used e.g. for a "Select All" button on the right.
+class AdminSectionLabel extends StatelessWidget {
+  const AdminSectionLabel(this.text, {super.key, this.trailing});
+  final String text;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Container(
+        width: 3, height: 16,
+        decoration: BoxDecoration(
+          color: AppColors.primary,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Text(text,
+            style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary)),
+      ),
+      if (trailing != null) trailing!,
+    ]);
+  }
+}
+
+/// Tinted-initials avatar. Size and corner radius are parameterised so the
+/// same widget covers the 38 dp overview rows, 44 dp notification cards, and
+/// 48 dp doctor / patient cards.
+class AdminAvatar extends StatelessWidget {
+  const AdminAvatar(this.name, {super.key, this.size = 44, this.radius = 12});
+  final String name;
+  final double size;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _avatarColor(name);
+    return Container(
+      width: size, height: size,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      child: Center(
+        child: Text(_initials(name),
+            style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.bold,
+                fontSize: size * 0.36)),
+      ),
+    );
+  }
+}
+
+/// Avatar + name column + optional badge chip + optional trailing widget.
+/// Covers the repeated Row pattern in _recentRow, _doctorCard, _patientCard,
+/// and the notifications cards. Call sites that need a checkbox or extra
+/// leading widget should wrap this in their own Row.
+class AdminEntityRow extends StatelessWidget {
+  const AdminEntityRow({
+    super.key,
+    required this.name,
+    this.subtitle,
+    this.badge,       // chip rendered below subtitle (e.g. specialisation tag)
+    this.trailing,    // right-aligned widget (popup menu, tier pill, etc.)
+    this.avatarSize   = 44,
+    this.avatarRadius = 12,
+  });
+
+  final String name;
+  final String? subtitle;
+  final Widget? badge;
+  final Widget? trailing;
+  final double avatarSize;
+  final double avatarRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      AdminAvatar(name, size: avatarSize, radius: avatarRadius),
+      const SizedBox(width: 12),
+      Expanded(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(name,
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
+                  color: AppColors.textPrimary)),
+          if (subtitle != null) ...[
+            const SizedBox(height: 2),
+            Text(subtitle!,
+                style: const TextStyle(
+                    color: AppColors.textSecondary, fontSize: 12),
+                overflow: TextOverflow.ellipsis),
+          ],
+          if (badge != null) ...[
+            const SizedBox(height: 4),
+            badge!,
+          ],
+        ]),
+      ),
+      if (trailing != null) trailing!,
+    ]);
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
 // Screen
 // ════════════════════════════════════════════════════════════════════════════════
 
@@ -1785,7 +1901,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             const SizedBox(height: 24),
 
             // ── Feature summary ────────────────────────────────────────────
-            _overviewSectionLabel('Feature Distribution'),
+            const AdminSectionLabel('Feature Distribution'),
             const SizedBox(height: 12),
             ..._kFeats.map((f) {
               final count = all.where((d) {
@@ -1906,14 +2022,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _recentRow(Map<String, dynamic> doc) {
-    final data  = doc;
-    final name  = (data['name']  ?? 'Unknown') as String;
-    final email = (data['email'] ?? '')         as String;
+    final name  = (doc['name']  ?? 'Unknown') as String;
+    final email = (doc['email'] ?? '')         as String;
     final tier  = SubTier.values.firstWhere(
-      (t) => t.name == ((data['subscription'] as String?) ?? 'basic'),
+      (t) => t.name == ((doc['subscription'] as String?) ?? 'basic'),
       orElse: () => SubTier.basic,
     );
-    final ac = _avatarColor(name);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1921,43 +2035,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFE8EAED)),
+        border: Border.all(color: AppColors.cardBorder),
       ),
-      child: Row(children: [
-        Container(
-          width: 38, height: 38,
-          decoration: BoxDecoration(
-            color: ac.withValues(alpha: 0.13),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Center(
-            child: Text(_initials(name),
-                style: TextStyle(
-                    color: ac,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14)),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(name,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: AppColors.textPrimary)),
-              Text(email,
-                  style: const TextStyle(
-                      color: AppColors.textSecondary, fontSize: 11),
-                  overflow: TextOverflow.ellipsis),
-            ],
-          ),
-        ),
-        Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      child: AdminEntityRow(
+        name: name,
+        subtitle: email,
+        avatarSize: 38,
+        avatarRadius: 10,
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
           decoration: BoxDecoration(
             color: tier.bgColor,
             borderRadius: BorderRadius.circular(12),
@@ -1972,7 +2058,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     fontWeight: FontWeight.bold)),
           ]),
         ),
-      ]),
+      ),
     );
   }
 
