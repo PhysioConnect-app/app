@@ -2450,39 +2450,84 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _doctorCard(Map<String, dynamic> doc) {
-    final data      = doc;
-    final name      = (data['name']  ?? 'Unknown') as String;
-    final email     = (data['email'] ?? '')         as String;
-    final spec      = (data['specialization'] ?? data['specialty'] ?? '') as String;
-    final tier      = (data['subscription'] as String?) == 'premium'
+    final name       = (doc['name']  ?? 'Unknown') as String;
+    final email      = (doc['email'] ?? '')         as String;
+    final spec       = (doc['specialization'] ?? doc['specialty'] ?? '') as String;
+    final tier       = (doc['subscription'] as String?) == 'premium'
         ? SubTier.premium : SubTier.basic;
-    final featMap   = (data['features'] as Map<String, dynamic>?) ?? {};
-    final isEnabled = (data['is_enabled'] as bool?) ?? true;
-    final showSearch = (data['show_in_search'] as bool?) ?? true;
-    final ac        = _avatarColor(name);
+    final featMap    = (doc['features'] as Map<String, dynamic>?) ?? {};
+    final isEnabled  = (doc['is_enabled']    as bool?) ?? true;
+    final showSearch = (doc['show_in_search'] as bool?) ?? true;
+    final ac         = _avatarColor(name);
 
-    // Expiry date
-    final expiresTs  = data['expires_at'] as String?;
+    final expiresTs   = doc['expires_at'] as String?;
     final expiresDate = expiresTs != null ? DateTime.tryParse(expiresTs) : null;
     final now         = DateTime.now();
     final isExpired   = expiresDate != null && expiresDate.isBefore(now);
-    final expiresSoon = expiresDate != null &&
-        !isExpired &&
+    final expiresSoon = expiresDate != null && !isExpired &&
         expiresDate.isBefore(now.add(const Duration(days: 30)));
-    String expiryLabel = 'No expiry';
-    Color  expiryColor = AppColors.textSecondary;
-    if (expiresDate != null) {
-      expiryLabel = isExpired
-          ? 'Expired ${_fmtDate(expiresTs)}'
-          : 'Expires ${_fmtDate(expiresTs)}';
-      expiryColor = isExpired
-          ? AppColors.error
-          : expiresSoon
-              ? const Color(0xFFF57F17)
-              : const Color(0xFF2E7D32);
-    }
+    final isActive    = isEnabled && !isExpired;
 
-    final bool isActive = isEnabled && !isExpired;
+    // Expiry pill values
+    final Color expiryColor = expiresDate == null
+        ? AppColors.textSecondary
+        : isExpired  ? AppColors.error
+        : expiresSoon ? AppColors.warning
+        : DesignTokens.success;
+    final String expiryLabel = expiresDate == null
+        ? 'No expiry'
+        : '${isExpired ? 'Expired' : 'Expires'} ${_fmtDate(expiresTs)}';
+
+    // Spec chip passed as badge to AdminEntityRow
+    final specBadge = spec.isEmpty ? null : Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: ac.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(spec,
+          style: TextStyle(
+              fontSize: 10, color: ac, fontWeight: FontWeight.w600)),
+    );
+
+    // Popup menu trailing AdminEntityRow
+    final menu = PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert_rounded,
+          color: AppColors.textSecondary, size: 18),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      onSelected: (v) {
+        if (v == 'manage') { _openManageSheet(doc); }
+        else if (v == 'delete') { _confirmDelete(doc['id'] as String, name); }
+      },
+      itemBuilder: (_) => [
+        PopupMenuItem(
+          value: 'manage',
+          child: Row(children: [
+            Icon(Icons.manage_accounts_rounded,
+                color: DesignTokens.adminAccent, size: 18),
+            const SizedBox(width: 10),
+            const Text('Manage Account'),
+          ]),
+        ),
+        PopupMenuItem(
+          value: 'delete',
+          child: Row(children: [
+            Container(
+              width: 28, height: 28,
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.delete_rounded,
+                  color: AppColors.error, size: 16),
+            ),
+            const SizedBox(width: 10),
+            const Text('Remove Account',
+                style: TextStyle(color: AppColors.error)),
+          ]),
+        ),
+      ],
+    );
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -2492,7 +2537,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         border: Border.all(
           color: isExpired
               ? AppColors.error.withValues(alpha: 0.3)
-              : const Color(0xFFE8EAED),
+              : AppColors.cardBorder,
         ),
         boxShadow: [
           BoxShadow(
@@ -2508,244 +2553,94 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           borderRadius: BorderRadius.circular(16),
           onTap: () => _openManageSheet(doc),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 14, 10, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-              // ── Top row ────────────────────────────────────────────────
-              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                // Avatar
-                Container(
-                  width: 48, height: 48,
-                  decoration: BoxDecoration(
-                    color: ac.withValues(alpha: 0.13),
-                    borderRadius: BorderRadius.circular(13),
-                  ),
-                  child: Center(
-                    child: Text(_initials(name),
-                        style: TextStyle(
-                            color: ac,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 17)),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                // Name + email + spec
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(name,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                              color: AppColors.textPrimary)),
-                      const SizedBox(height: 2),
-                      Text(email,
-                          style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12),
-                          overflow: TextOverflow.ellipsis),
-                      if (spec.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: ac.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(spec,
-                              style: TextStyle(
-                                  fontSize: 10,
-                                  color: ac,
-                                  fontWeight: FontWeight.w600)),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                // Menu
-                PopupMenuButton<String>(
-                  icon: const Icon(Icons.more_vert_rounded,
-                      color: AppColors.textSecondary, size: 18),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  onSelected: (v) {
-                    if (v == 'manage') {
-                      _openManageSheet(doc);
-                    } else if (v == 'delete') {
-                      _confirmDelete(doc['id'] as String, name);
-                    }
-                  },
-                  itemBuilder: (_) => [
-                    const PopupMenuItem(
-                      value: 'manage',
-                      child: Row(children: [
-                        Icon(Icons.manage_accounts_rounded,
-                            color: _kSlate, size: 18),
-                        SizedBox(width: 10),
-                        Text('Manage Account'),
-                      ]),
-                    ),
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Row(children: [
-                        Container(
-                          width: 28, height: 28,
-                          decoration: BoxDecoration(
-                            color: AppColors.error.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(Icons.delete_rounded,
-                              color: AppColors.error, size: 16),
-                        ),
-                        const SizedBox(width: 10),
-                        const Text('Remove Account',
-                            style: TextStyle(color: AppColors.error)),
-                      ]),
-                    ),
-                  ],
-                ),
-              ]),
+            padding: const EdgeInsets.fromLTRB(14, 14, 6, 12),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
 
-              // ── Status bar ─────────────────────────────────────────────
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isExpired
-                      ? const Color(0xFFFFEBEE)
-                      : isActive
-                          ? const Color(0xFFF0FFF4)
-                          : const Color(0xFFF5F5F5),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isExpired
-                        ? AppColors.error.withValues(alpha: 0.2)
-                        : isActive
-                            ? const Color(0xFF2E7D32).withValues(alpha: 0.2)
-                            : Colors.grey.shade200,
-                  ),
-                ),
-                child: Row(children: [
-                  // Plan badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: tier.bgColor,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(tier.icon, size: 10, color: tier.color),
-                      const SizedBox(width: 3),
-                      Text(tier.label,
-                          style: TextStyle(
-                              fontSize: 10,
-                              color: tier.color,
-                              fontWeight: FontWeight.bold)),
-                    ]),
-                  ),
-                  const SizedBox(width: 8),
-                  // Expiry date
-                  Icon(
-                    isExpired
-                        ? Icons.timer_off_rounded
-                        : Icons.event_rounded,
-                    size: 12,
-                    color: expiryColor,
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      expiryLabel,
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: expiryColor),
-                    ),
-                  ),
-                  // Account status chips
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: isActive
-                          ? const Color(0xFF2E7D32).withValues(alpha: 0.1)
-                          : AppColors.error.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      isExpired
-                          ? 'Expired'
-                          : isEnabled
-                              ? 'Active'
-                              : 'Disabled',
-                      style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          color: isActive
-                              ? const Color(0xFF2E7D32)
-                              : AppColors.error),
-                    ),
-                  ),
-                  if (showSearch && tier == SubTier.premium) ...[
-                    const SizedBox(width: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _kInk.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Text('Searchable',
-                          style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              color: _kInk)),
-                    ),
-                  ],
-                ]),
+              // ── Top row via shared primitive ───────────────────────────
+              AdminEntityRow(
+                name: name,
+                subtitle: email,
+                badge: specBadge,
+                trailing: menu,
+                avatarSize: 48,
+                avatarRadius: 13,
               ),
 
-              // ── Feature mini-chips ─────────────────────────────────────
+              // ── Consolidated status pill row ───────────────────────────
+              const SizedBox(height: 10),
+              Wrap(spacing: 6, runSpacing: 4, children: [
+                // Tier
+                _statusPill(
+                  tier.label,
+                  icon: tier.icon,
+                  bg: tier.bgColor,
+                  fg: tier.color,
+                ),
+                // Active / Disabled / Expired
+                _statusPill(
+                  isExpired ? 'Expired' : isEnabled ? 'Active' : 'Disabled',
+                  icon: isExpired
+                      ? Icons.timer_off_rounded
+                      : isEnabled
+                          ? Icons.check_circle_rounded
+                          : Icons.block_rounded,
+                  bg: isActive
+                      ? DesignTokens.successLight
+                      : DesignTokens.errorLight,
+                  fg: isActive ? DesignTokens.success : DesignTokens.error,
+                ),
+                // Searchable (premium only)
+                if (showSearch && tier == SubTier.premium)
+                  _statusPill('Searchable',
+                      icon: Icons.search_rounded,
+                      bg: AppColors.primary.withValues(alpha: 0.08),
+                      fg: AppColors.primary),
+                // Expiry
+                if (expiresDate != null)
+                  _statusPill(expiryLabel,
+                      icon: isExpired
+                          ? Icons.timer_off_rounded
+                          : Icons.event_rounded,
+                      bg: expiryColor.withValues(alpha: 0.10),
+                      fg: expiryColor),
+              ]),
+
+              // ── Feature tiles: filled = enabled, dimmed = disabled ─────
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8F9FA),
+                  color: AppColors.background,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   children: _kFeats.map((f) {
                     final on = featMap[f.key] as bool? ?? false;
                     return Expanded(
-                      child: Column(children: [
-                        Container(
-                          width: 30, height: 30,
-                          decoration: BoxDecoration(
-                            color: on
-                                ? f.color.withValues(alpha: 0.12)
-                                : Colors.grey.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(f.icon,
-                              size: 14,
+                      child: Opacity(
+                        opacity: on ? 1.0 : 0.35,
+                        child: Column(children: [
+                          Container(
+                            width: 32, height: 32,
+                            decoration: BoxDecoration(
                               color: on
-                                  ? f.color
-                                  : Colors.grey.shade400),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(f.label,
-                            style: TextStyle(
-                                fontSize: 9,
-                                color: on
-                                    ? f.color
-                                    : Colors.grey.shade400,
-                                fontWeight: FontWeight.w500)),
-                      ]),
+                                  ? f.color.withValues(alpha: 0.13)
+                                  : Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(9),
+                            ),
+                            child: Icon(f.icon,
+                                size: 15,
+                                color: on ? f.color : Colors.grey.shade500),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(f.label,
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  color: on ? f.color : Colors.grey.shade500,
+                                  fontWeight: FontWeight.w600)),
+                        ]),
+                      ),
                     );
                   }).toList(),
                 ),
@@ -2754,6 +2649,28 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Small rounded pill used in the doctor-card status row.
+  Widget _statusPill(String label, {
+    required IconData icon,
+    required Color bg,
+    required Color fg,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 10, color: fg),
+        const SizedBox(width: 3),
+        Text(label,
+            style: TextStyle(
+                fontSize: 10, fontWeight: FontWeight.w700, color: fg)),
+      ]),
     );
   }
 
