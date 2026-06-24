@@ -734,6 +734,9 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
   final Map<String, String> _doctorPhotos      = {};
   final Map<String, bool>   _doctorShowDrPrefix = {};
 
+  // Summary tab: which doctor card is expanded
+  String? _expandedDoctorId;
+
   @override
   void initState() {
     super.initState();
@@ -1058,82 +1061,158 @@ class _PatientScheduleScreenState extends State<_PatientScheduleScreen>
                 color: AppColors.textPrimary)),
         const SizedBox(height: 10),
         ...sorted.map((entry) {
-          final doctorId = entry.key;
-          final sessions = entry.value;
+          final doctorId      = entry.key;
+          final sessions      = entry.value;
           final doctorName    = _doctorNames[doctorId] ?? '';
           final doctorPhoto   = _doctorPhotos[doctorId] ?? '';
           final showDrSummary = _doctorShowDrPrefix[doctorId] ?? false;
+          final isExpanded    = _expandedDoctorId == doctorId;
 
-          // Sort sessions by date (newest first) for the last-session label
-          final sorted2 = sessions.toList()
+          // Newest-first for the "last session" label
+          final sortedDesc = sessions.toList()
             ..sort((a, b) {
               final at = DateTime.parse(a['appointment_time'] as String);
               final bt = DateTime.parse(b['appointment_time'] as String);
               return bt.compareTo(at);
             });
           final lastSession =
-              DateTime.parse(sorted2.first['appointment_time'] as String);
+              DateTime.parse(sortedDesc.first['appointment_time'] as String);
 
-          return Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3)),
-              ],
-            ),
-            child: Row(children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: _kBlue.withValues(alpha: 0.1),
-                backgroundImage: doctorPhoto.isNotEmpty
-                    ? NetworkImage(doctorPhoto)
-                    : null,
-                child: doctorPhoto.isEmpty
-                    ? const Icon(Icons.person_rounded,
-                        color: _kBlue, size: 24)
-                    : null,
+          // Oldest-first for the date list; one row per calendar day
+          final sortedAsc = sessions.toList()
+            ..sort((a, b) {
+              final at = DateTime.parse(a['appointment_time'] as String);
+              final bt = DateTime.parse(b['appointment_time'] as String);
+              return at.compareTo(bt);
+            });
+          final seenDates = <String>{};
+          final uniqueDaySessions = sortedAsc.where((appt) {
+            final dt = DateTime.parse(appt['appointment_time'] as String);
+            return seenDates.add('${dt.year}-${dt.month}-${dt.day}');
+          }).toList();
+
+          return GestureDetector(
+            onTap: () => setState(
+                () => _expandedDoctorId = isExpanded ? null : doctorId),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3)),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(
-                    showDrSummary && doctorName.isNotEmpty
-                        ? 'Dr. $doctorName'
-                        : doctorName.isNotEmpty ? doctorName : 'Doctor',
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
-                  Text(
-                    s.lastSessionDate(DateFormat('MMM d, yyyy').format(lastSession)),
-                    style: const TextStyle(
-                        color: AppColors.textSecondary, fontSize: 11),
-                  ),
-                ]),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _kBlue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '${sessions.length} ${sessions.length == 1 ? 'session' : 'sessions'}',
-                  style: const TextStyle(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Doctor header row ──────────────────────────────────
+                  Row(children: [
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundColor: _kBlue.withValues(alpha: 0.1),
+                      backgroundImage: doctorPhoto.isNotEmpty
+                          ? NetworkImage(doctorPhoto)
+                          : null,
+                      child: doctorPhoto.isEmpty
+                          ? const Icon(Icons.person_rounded,
+                              color: _kBlue, size: 24)
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                        Text(
+                          showDrSummary && doctorName.isNotEmpty
+                              ? 'Dr. $doctorName'
+                              : doctorName.isNotEmpty
+                                  ? doctorName
+                                  : 'Doctor',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        Text(
+                          s.lastSessionDate(
+                              DateFormat('MMM d, yyyy').format(lastSession)),
+                          style: const TextStyle(
+                              color: AppColors.textSecondary, fontSize: 11),
+                        ),
+                      ]),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: _kBlue.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${sessions.length} ${sessions.length == 1 ? 'session' : 'sessions'}',
+                        style: const TextStyle(
+                            color: _kBlue,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      isExpanded
+                          ? Icons.expand_less_rounded
+                          : Icons.expand_more_rounded,
                       color: _kBlue,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12),
-                ),
+                      size: 20,
+                    ),
+                  ]),
+                  // ── Expanded: one row per session date ─────────────────
+                  if (isExpanded) ...[
+                    const SizedBox(height: 12),
+                    const Divider(height: 1),
+                    const SizedBox(height: 10),
+                    ...uniqueDaySessions.map((appt) {
+                      final dt = DateTime.parse(
+                          appt['appointment_time'] as String);
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 5),
+                        child: Row(children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: _kBlue.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                                Icons.calendar_today_rounded,
+                                size: 13,
+                                color: _kBlue),
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            DateFormat('EEE, MMM d, yyyy').format(dt),
+                            style: const TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w500),
+                          ),
+                          const Spacer(),
+                          Text(
+                            DateFormat('h:mm a').format(dt),
+                            style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary),
+                          ),
+                        ]),
+                      );
+                    }),
+                  ],
+                ],
               ),
-            ]),
+            ),
           );
         }),
       ],
