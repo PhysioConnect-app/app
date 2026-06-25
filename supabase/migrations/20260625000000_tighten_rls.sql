@@ -43,6 +43,8 @@ SECURITY DEFINER
 STABLE
 SET search_path = public
 AS $$
+  -- Runs as the function owner (postgres), which has BYPASSRLS in Supabase,
+  -- so this query does not trigger public.users RLS and cannot recurse.
   SELECT role FROM public.users WHERE id = auth.uid();
 $$;
 
@@ -247,14 +249,17 @@ CREATE POLICY "users_reads_public_doctors"
   USING (role = 'doctor' AND show_in_search = true);
 
 -- SELECT: patients can see their personally linked doctors
---   even if show_in_search = false
+--   even if show_in_search = false.
+--   Uses the DOCTOR row's assigned_patient_ids (reverse lookup) instead of
+--   subquerying public.users for the patient's doctor_ids array.
+--   Both directions of the link are kept in sync by the app, so the check
+--   is semantically identical but avoids the self-referential subquery that
+--   caused infinite recursion (42P17) in PostgreSQL RLS evaluation.
 CREATE POLICY "users_patient_reads_linked_doctors"
   ON public.users FOR SELECT
   USING (
     role = 'doctor'
-    AND id = ANY(
-      (SELECT COALESCE(doctor_ids, '{}') FROM public.users u2 WHERE u2.id = auth.uid())::uuid[]
-    )
+    AND assigned_patient_ids @> ARRAY[auth.uid()]
   );
 
 -- SELECT: polyclinic can see their linked doctors
