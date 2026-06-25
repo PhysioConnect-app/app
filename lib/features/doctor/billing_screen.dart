@@ -921,6 +921,7 @@ class _BillingScreenState extends State<BillingScreen> {
                 ),
                 const SizedBox(height: 8),
                 FloatingActionButton.small(
+                  key: const Key('billing_ai_btn'),
                   heroTag: 'billing_fab_chat',
                   backgroundColor: Colors.white,
                   foregroundColor: _kAccent,
@@ -933,6 +934,7 @@ class _BillingScreenState extends State<BillingScreen> {
                 ),
                 const SizedBox(height: 8),
                 FloatingActionButton.extended(
+                  key: const Key('billing_add_income_btn'),
                   heroTag: 'billing_fab_add',
                   onPressed: () => _showAddInvoice(s),
                   backgroundColor: _kAccent,
@@ -1055,6 +1057,7 @@ class _BillingScreenState extends State<BillingScreen> {
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
+          key: const Key('billing_period_dropdown'),
           value: _period,
           dropdownColor: _kAccent,
           isDense: true,
@@ -2027,6 +2030,7 @@ class _BillingScreenState extends State<BillingScreen> {
                 width: double.infinity,
                 height: 42,
                 child: ElevatedButton.icon(
+                  key: const Key('billing_add_income_btn'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _kAccent,
                     foregroundColor: Colors.white,
@@ -2059,6 +2063,7 @@ class _BillingScreenState extends State<BillingScreen> {
                 const SizedBox(width: 5),
                 Expanded(
                   child: _smallActionBtn(
+                    key: const Key('billing_ai_btn'),
                     icon: Icons.chat_rounded,
                     label: 'AI Chat',
                     onTap: () => Navigator.push(context,
@@ -2078,6 +2083,7 @@ class _BillingScreenState extends State<BillingScreen> {
                   const SizedBox(width: 5),
                   Expanded(
                     child: _smallActionBtn(
+                      key: const Key('billing_export_btn'),
                       icon: Icons.download_rounded,
                       label: 'Export',
                       onTap: () => _showExport(filtered, s),
@@ -2095,8 +2101,10 @@ class _BillingScreenState extends State<BillingScreen> {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    Key? key,
   }) =>
       OutlinedButton(
+        key: key,
         style: OutlinedButton.styleFrom(
           foregroundColor: _kAccent,
           side: const BorderSide(color: Color(0xFFBBD1EA)),

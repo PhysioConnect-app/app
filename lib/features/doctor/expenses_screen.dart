@@ -1497,6 +1497,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           width: double.infinity,
           height: 42,
           child: ElevatedButton.icon(
+            key: const Key('expenses_fab'),
             style: ElevatedButton.styleFrom(
               backgroundColor: _kAccent,
               foregroundColor: Colors.white,
@@ -1525,6 +1526,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           )),
           const SizedBox(width: 5),
           Expanded(child: _smallActionBtn(
+            key: const Key('expenses_ai_btn'),
             icon: Icons.chat_rounded,
             label: 'AI Chat',
             onTap: () => Navigator.push(context,
@@ -1539,6 +1541,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           )),
           const SizedBox(width: 5),
           Expanded(child: _smallActionBtn(
+            key: const Key('expenses_export_btn'),
             icon: Icons.download_rounded,
             label: 'Export',
             onTap: () => _showExport(filtered, s),
@@ -1560,8 +1563,10 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    Key? key,
   }) =>
       OutlinedButton(
+        key: key,
         style: OutlinedButton.styleFrom(
           foregroundColor: _kAccent,
           side: const BorderSide(color: Color(0xFFD4B5AD)),
@@ -1711,6 +1716,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           ),
           const SizedBox(width: 8),
           FloatingActionButton.small(
+            key: const Key('expenses_ai_btn'),
             heroTag: 'fab_chat_expenses',
             backgroundColor: Colors.white,
             foregroundColor: _kAccent,
@@ -1767,6 +1773,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
           const SizedBox(height: 10),
         ],
         FloatingActionButton.extended(
+          key: const Key('expenses_fab'),
           heroTag: 'fab_add_expenses',
           backgroundColor: _kAccent,
           foregroundColor: Colors.white,
