@@ -342,6 +342,7 @@ class _ClinicAnalyticsSheetState extends State<_ClinicAnalyticsSheet> {
               ]),
             ),
             const Divider(height: 1),
+            _buildAiDisclaimer(),
             Expanded(
               child: ListView(
                 controller: ctrl,
@@ -363,6 +364,28 @@ class _ClinicAnalyticsSheetState extends State<_ClinicAnalyticsSheet> {
   }
 
   // ── Controls ──────────────────────────────────────────────────────────────
+
+  Widget _buildAiDisclaimer() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      color: const Color(0xFFFFF8E1),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, size: 14, color: Color(0xFFF57F17)),
+          SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'AI outputs are not professional financial or medical advice. '
+              'Always verify insights against your own records.',
+              style: TextStyle(fontSize: 11, color: Color(0xFF6D4C41), height: 1.4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildControls() {
     return Column(

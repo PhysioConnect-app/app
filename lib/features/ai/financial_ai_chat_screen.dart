@@ -70,7 +70,9 @@ class _FinancialAiChatScreenState extends State<FinancialAiChatScreen> {
           'Try asking me:\n'
           '• "Show unpaid invoices"\n'
           '• "Add expense: Electricity \$120"\n'
-          '• "How much did I collect this month?"',
+          '• "How much did I collect this month?"\n\n'
+          '⚠ AI outputs are not professional financial or medical advice. '
+          'Always verify figures against your records.',
     ));
   }
 
@@ -659,6 +661,7 @@ class _FinancialAiChatScreenState extends State<FinancialAiChatScreen> {
               itemBuilder: (_, i) => _buildMessageBubble(_messages[i]),
             ),
           ),
+          _buildAiDisclaimer(),
           _buildSuggestions(),
           _buildInputBar(),
         ],
@@ -899,6 +902,30 @@ class _FinancialAiChatScreenState extends State<FinancialAiChatScreen> {
     'note'          => 'Note',
     _               => key,
   };
+
+  // ── AI disclaimer footer ──────────────────────────────────────────────────
+
+  Widget _buildAiDisclaimer() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      color: const Color(0xFFFFF8E1),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, size: 14, color: Color(0xFFF57F17)),
+          SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              'AI outputs are not professional financial or medical advice. '
+              'Always verify figures against your records.',
+              style: TextStyle(fontSize: 11, color: Color(0xFF6D4C41), height: 1.4),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   // ── Suggestion chips ──────────────────────────────────────────────────────
 
