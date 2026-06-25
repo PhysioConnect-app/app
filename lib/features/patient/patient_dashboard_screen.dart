@@ -340,6 +340,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
         ),
         const SizedBox(width: 8),
         ElevatedButton(
+          key: const Key('patient_book_btn'),
           onPressed: () => _go(_PatientMyDoctorsScreen(service: _service)),
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.primary,
@@ -467,6 +468,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
             width: double.infinity,
             height: 46,
             child: ElevatedButton(
+              key: const Key('patient_view_appt_btn'),
               onPressed: () => _go(const _PatientScheduleScreen()),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1565C0),
@@ -508,6 +510,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
       children: _kGrid.map((item) {
         final badge = item.index == 3 ? _unreadCount : 0;
         return _GridTile(
+          key: Key('patient_grid_tile_${item.index}'),
           item: item,
           label: gridLabels[item.index],
           badge: badge,
@@ -529,6 +532,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
   Widget _buildMyExercisesTile() {
     const color = Color(0xFF00897B);
     return GestureDetector(
+      key: const Key('patient_exercises_tile'),
       onTap: () => _go(const PatientHepScreen()),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -579,6 +583,7 @@ class _PatientDashboardScreenState extends State<PatientDashboardScreen> {
   Widget _buildProfileTile(AppStrings s) {
     final photo = _profile?['profile_photo_url'] as String? ?? '';
     return GestureDetector(
+      key: const Key('patient_profile_tile'),
       onTap: () => _go(_PatientProfileScreen(profile: _profile)),
       onLongPress: () => _showLogout(s),
       child: Container(
@@ -639,7 +644,7 @@ class _GridTile extends StatelessWidget {
   final int badge;
   final VoidCallback onTap;
   const _GridTile(
-      {required this.item, required this.label, required this.badge, required this.onTap});
+      {super.key, required this.item, required this.label, required this.badge, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
