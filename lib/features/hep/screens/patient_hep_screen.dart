@@ -88,10 +88,12 @@ class _PatientHepScreenState extends State<PatientHepScreen> {
                       onRefresh: _load,
                       child: ListView.separated(
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-                        itemCount: _data!.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 16),
-                        itemBuilder: (_, i) =>
-                            _ProgramSection(data: _data![i]),
+                        itemCount: _data!.length + 1,
+                        separatorBuilder: (_, i) =>
+                            i == 0 ? const SizedBox(height: 12) : const SizedBox(height: 16),
+                        itemBuilder: (_, i) => i == 0
+                            ? const _MedicalDisclaimer()
+                            : _ProgramSection(data: _data![i - 1]),
                       ),
                     ),
     );
@@ -348,4 +350,38 @@ class _ItemWithExercise {
   final HepItem item;
   final Exercise exercise;
   const _ItemWithExercise({required this.item, required this.exercise});
+}
+
+class _MedicalDisclaimer extends StatelessWidget {
+  const _MedicalDisclaimer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF8E1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFFFCC02), width: 1),
+      ),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFF57F17)),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'This content does not replace professional medical advice. '
+              'Always follow the guidance of your treating physiotherapist.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Color(0xFF6D4C41),
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -705,10 +705,32 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
                 ),
               ]),
               const SizedBox(height: 6),
-              const Text(
-                '⚠ AI assists with documentation only. '
-                'Always review and edit before saving.',
-                style: TextStyle(color: Color(0xFFE65100), fontSize: 11),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF8E1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFFFCC02)),
+                ),
+                child: const Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.warning_amber_rounded,
+                        size: 15, color: Color(0xFFF57F17)),
+                    SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        'This content does not replace professional medical advice. '
+                        'AI assists with documentation only — always review and '
+                        'edit before saving.',
+                        style: TextStyle(
+                            color: Color(0xFF6D4C41),
+                            fontSize: 11,
+                            height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 20),
 

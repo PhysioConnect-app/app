@@ -60,10 +60,19 @@ class _AssessmentLibraryScreenState extends State<AssessmentLibraryScreen> {
   }
 
   Widget _buildContent(AssessmentLibrary library) {
-    if (_test != null) return _buildTestDetail(_test!);
-    if (_subcategory != null) return _buildTestList(_subcategory!);
-    if (_category != null) return _buildSubcategoryList(_category!);
-    return _buildCategoryList(library.categories);
+    final body = _test != null
+        ? _buildTestDetail(_test!)
+        : _subcategory != null
+            ? _buildTestList(_subcategory!)
+            : _category != null
+                ? _buildSubcategoryList(_category!)
+                : _buildCategoryList(library.categories);
+    return Column(
+      children: [
+        const _MedicalDisclaimer(),
+        Expanded(child: body),
+      ],
+    );
   }
 
   // ── Breadcrumb ────────────────────────────────────────────────────────────
@@ -438,6 +447,33 @@ class _DrillCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _MedicalDisclaimer extends StatelessWidget {
+  const _MedicalDisclaimer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      color: const Color(0xFFFFF8E1),
+      child: const Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFFF57F17)),
+          SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'This content does not replace professional medical advice. '
+              'Always apply clinical judgement when using this reference.',
+              style: TextStyle(fontSize: 12, color: Color(0xFF6D4C41), height: 1.4),
+            ),
+          ),
+        ],
       ),
     );
   }
