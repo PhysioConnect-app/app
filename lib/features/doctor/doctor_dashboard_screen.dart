@@ -786,6 +786,7 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
         // ── Bottom nav (mobile only) ─────────────────────────────────────
         bottomNavigationBar: isMobile
             ? NavigationBar(
+                key: const Key('doctor_bottom_nav'),
                 selectedIndex: _bottomNavIndex,
                 backgroundColor: Colors.white,
                 indicatorColor: AppColors.primary.withValues(alpha: 0.12),
@@ -909,6 +910,7 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                 children: [
                   // Profile button — prominent avatar with label
                   GestureDetector(
+                    key: const Key('doctor_profile_avatar'),
                     onTap: () => _navigateTo(6),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -993,6 +995,7 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                           // AI Doctor Assistant button
                           if (_sub.aiEnabled)
                             GestureDetector(
+                              key: const Key('doctor_ai_btn'),
                               onTap: () => _showAiAssistantSheet(),
                               child: Container(
                                 width: 34, height: 34,
@@ -1008,6 +1011,7 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                               ),
                             ),
                           _buildHeaderNavButton(
+                            key: const Key('doctor_notif_btn'),
                             icon: Icons.notifications_rounded,
                             label: s.notifications,
                             badge: _doctorUnreadCount > 0 ? _doctorUnreadCount : null,
@@ -1030,6 +1034,7 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                                 style: const TextStyle(fontSize: 10)),
                           ),
                           IconButton(
+                            key: const Key('doctor_home_signout_btn'),
                             onPressed: () => _showLogout(),
                             icon: const Icon(Icons.logout_rounded,
                                 color: Colors.white54, size: 18),
@@ -1089,7 +1094,8 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
                       shrinkWrap: true,
                       children: primaryIndices.map((idx) => _buildHomeTile(
                           sections[idx], _allNavIcons[idx], _allTileColors[idx], idx,
-                          tileW: tileW, tileH: tileH)).toList(),
+                          tileW: tileW, tileH: tileH,
+                          key: Key('doctor_home_tile_$idx'))).toList(),
                     );
                   }),
                 ),
@@ -1287,8 +1293,10 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
     int? badge,
     required VoidCallback onTap,
     bool compact = false,
+    Key? key,
   }) {
     return InkWell(
+      key: key,
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Padding(
@@ -1340,7 +1348,7 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
 
   Widget _buildHomeTile(
       String title, IconData icon, Color color, int index,
-      {double tileW = 80, double tileH = 80}) {
+      {double tileW = 80, double tileH = 80, Key? key}) {
     final locked    = _isLocked(index);
     final badge     = index == 7 ? _doctorUnreadCount : 0;
     final iconColor = locked ? Colors.grey.shade400 : color;
@@ -1360,6 +1368,7 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
             : title;
 
     return Semantics(
+      key: key,
       label: semanticLabel,
       button: true,
       enabled: !locked,
@@ -5227,6 +5236,7 @@ void _showPickPatientForDoc(AppStrings s) {
                               ),
                               const SizedBox(width: 8),
                               ElevatedButton.icon(
+                                key: const Key('doctor_patients_new_btn'),
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: AppColors.primary,
                                   foregroundColor: Colors.white,
@@ -6280,6 +6290,7 @@ void _showPickPatientForDoc(AppStrings s) {
                 Align(
                   alignment: Alignment.center,
                   child: OutlinedButton.icon(
+                    key: const Key('doctor_profile_delete_btn'),
                     onPressed: _deletingAccount
                         ? null
                         : () => _showDeleteAccountDialog(),
@@ -6850,6 +6861,7 @@ void _showPickPatientForDoc(AppStrings s) {
                   width: double.infinity,
                   height: 48,
                   child: ElevatedButton.icon(
+                    key: const Key('doctor_profile_save_btn'),
                     icon: const Icon(Icons.save_rounded),
                     label: Text(s.saveProfile,
                         style: const TextStyle(
