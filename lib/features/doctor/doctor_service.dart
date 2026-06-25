@@ -72,10 +72,9 @@ class DoctorService {
 
   Future<bool> addExistingPatient(String patientId) async {
     try {
-      final data = await _supabase.from('users').select('doctor_ids').eq('id', patientId).single();
-      final ids = List<String>.from((data['doctor_ids'] as List?) ?? []);
-      if (!ids.contains(_uid)) ids.add(_uid);
-      await _supabase.from('users').update({'doctor_ids': ids}).eq('id', patientId);
+      // Atomic double-row update: adds this doctor to patient.doctor_ids and
+      // adds the patient to doctor.assigned_patient_ids via SECURITY DEFINER RPC.
+      await _supabase.rpc('doctor_add_patient', params: {'p_patient_id': patientId});
       return true;
     } catch (_) {
       return false;
@@ -84,10 +83,10 @@ class DoctorService {
 
   Future<bool> removePatient(String patientId) async {
     try {
-      final data = await _supabase.from('users').select('doctor_ids').eq('id', patientId).single();
-      final ids = List<String>.from((data['doctor_ids'] as List?) ?? []);
-      ids.remove(_uid);
-      await _supabase.from('users').update({'doctor_ids': ids}).eq('id', patientId);
+      // Atomic double-row update: removes this doctor from patient.doctor_ids
+      // and removes the patient from doctor.assigned_patient_ids via SECURITY
+      // DEFINER RPC.
+      await _supabase.rpc('doctor_remove_patient', params: {'p_patient_id': patientId});
       return true;
     } catch (_) {
       return false;

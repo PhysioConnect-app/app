@@ -66,18 +66,16 @@ class PatientService {
 
   Future<bool> addDoctorToMyList(String doctorId) async {
     try {
-      // Add doctor to patient's list
-      final patData = await _supabase.from('users').select('doctor_ids, name').eq('id', _uid).single();
-      final patIds = List<String>.from((patData['doctor_ids'] as List?) ?? []);
-      if (!patIds.contains(doctorId)) patIds.add(doctorId);
-      await _supabase.from('users').update({'doctor_ids': patIds}).eq('id', _uid);
-      // Add patient to doctor's assigned list
-      final docData = await _supabase.from('users').select('assigned_patient_ids, name').eq('id', doctorId).single();
-      final docIds = List<String>.from((docData['assigned_patient_ids'] as List?) ?? []);
-      if (!docIds.contains(_uid)) docIds.add(_uid);
-      await _supabase.from('users').update({'assigned_patient_ids': docIds}).eq('id', doctorId);
+      // Fetch names needed for notifications (read-only, before the atomic link)
+      final myData  = await _supabase.from('users').select('name').eq('id', _uid).single();
+      final docData = await _supabase.from('users').select('name').eq('id', doctorId).single();
+
+      // Atomic double-row update: adds doctor to patient.doctor_ids and
+      // patient to doctor.assigned_patient_ids via SECURITY DEFINER RPC.
+      await _supabase.rpc('link_patient_to_doctor', params: {'p_doctor_id': doctorId});
+
       // Notify the doctor
-      final patName = (patData['name'] as String?) ?? 'A patient';
+      final patName = (myData['name'] as String?) ?? 'A patient';
       await _supabase.from('notifications').insert({
         'recipient_id': doctorId,
         'recipient_type': 'doctor',
@@ -107,22 +105,10 @@ class PatientService {
 
   Future<bool> removeDoctorFromMyList(String doctorId) async {
     try {
-      // Remove doctor from patient's list
-      final patData = await _supabase.from('users').select('doctor_ids, doctor_id').eq('id', _uid).single();
-      final patIds = List<String>.from((patData['doctor_ids'] as List?) ?? []);
-      patIds.remove(doctorId);
-      final update = <String, dynamic>{'doctor_ids': patIds};
-      if (patData['doctor_id'] == doctorId) {
-        update['doctor_id'] = null;
-      }
-      await _supabase.from('users').update(update).eq('id', _uid);
-      // Remove patient from doctor's assigned list
-      final docData = await _supabase.from('users').select('assigned_patient_ids').eq('id', doctorId).maybeSingle();
-      if (docData != null) {
-        final docIds = List<String>.from((docData['assigned_patient_ids'] as List?) ?? []);
-        docIds.remove(_uid);
-        await _supabase.from('users').update({'assigned_patient_ids': docIds}).eq('id', doctorId);
-      }
+      // Atomic double-row update: removes doctor from patient.doctor_ids,
+      // clears patient.doctor_id if it was the primary, and removes patient
+      // from doctor.assigned_patient_ids — all via SECURITY DEFINER RPC.
+      await _supabase.rpc('unlink_patient_from_doctor', params: {'p_doctor_id': doctorId});
       return true;
     } catch (_) {
       return false;
