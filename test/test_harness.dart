@@ -55,6 +55,11 @@ Future<void> ensureSupabaseInitialized() async {
           });
     }),
   );
+  // Supabase Realtime auto-connects a WebSocket on initialize and retries on
+  // failure. The retry timers keep tester.runAsync's async zone alive, causing
+  // matchesGoldenFile (which uses runAsync for file I/O) to hang indefinitely.
+  // Disconnecting here stops all retry timers before any test can be affected.
+  Supabase.instance.client.realtime.disconnect();
 }
 
 /// Recovers a fake (non-expired, non-JWT-token) session locally so screens

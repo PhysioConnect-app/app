@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_colors.dart';
@@ -267,18 +266,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   // Doctors list
   String _searchQuery = '';
-  // Doctor name lookup: id → name (kept in sync via stream subscription)
+  // Doctor name lookup: id → name, and rail counts.
+  // All populated via one-time REST fetches (not Realtime WebSocket streams).
+  // Realtime streams keep the async zone alive during matchesGoldenFile's
+  // internal runAsync, causing the golden test to hang indefinitely.
+  // The doctors/patients/requests *tabs* each have their own StreamBuilders
+  // for live data — these state fields only drive the rail badges and the
+  // doctor-name chips on patient cards.
   Map<String, String> _doctorNames = {};
-  StreamSubscription<List<Map<String, dynamic>>>? _doctorSub;
 
-  // Live counts for the nav rail — populated in initState, never block render
   int _doctorCount      = 0;
   int _patientCount     = 0;
-  int _drPendingCount   = 0; // doctors with pending Dr-prefix or name-change request
-  int _acctRequestCount = 0; // pending new-account requests
+  int _drPendingCount   = 0;
+  int _acctRequestCount = 0;
   int get _pendingCount => _drPendingCount + _acctRequestCount;
-  StreamSubscription<List<Map<String, dynamic>>>? _patientCountSub;
-  StreamSubscription<List<Map<String, dynamic>>>? _requestCountSub;
 
   // Patients list
   String _patientSearchQuery = '';
@@ -294,13 +295,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   void initState() {
     super.initState();
 
-    // Doctors stream: feeds name lookup + rail count + pending-doctor-request badge.
-    _doctorSub = _supabase
-        .from('users')
-        .stream(primaryKey: ['id'])
-        .eq('role', 'doctor')
-        .listen((rows) {
+    // All three data points use one-time REST fetches instead of Realtime
+    // WebSocket streams. Realtime streams keep the Dart async zone alive
+    // during matchesGoldenFile's internal runAsync, causing golden tests to
+    // hang for 10 minutes. The per-tab StreamBuilders handle live updates.
+    _supabase.from('users').select().eq('role', 'doctor').then((data) {
       if (!mounted) return;
+      final rows = List<Map<String, dynamic>>.from(data as List);
       setState(() {
         _doctorNames = {
           for (final r in rows)
@@ -312,36 +313,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           (r['name_change_request'] as String?) == 'pending',
         ).length;
       });
-    });
+    }).catchError((_) {});
 
-    // Patient count for rail badge.
-    // Note: streams full rows — acceptable for now since _patientsTab does the same;
-    // a dedicated SELECT id COUNT query would be leaner on large datasets.
-    _patientCountSub = _supabase
-        .from('users')
-        .stream(primaryKey: ['id'])
-        .eq('role', 'patient')
-        .listen((rows) {
-      if (!mounted) return;
-      setState(() => _patientCount = rows.length);
-    });
+    _supabase.from('users').select('id').eq('role', 'patient').then((data) {
+      if (mounted) setState(() => _patientCount = (data as List).length);
+    }).catchError((_) {});
 
-    // Pending account-request count for the amber rail badge.
-    _requestCountSub = _supabase
-        .from('account_requests')
-        .stream(primaryKey: ['id'])
-        .eq('status', 'pending')
-        .listen((rows) {
-      if (!mounted) return;
-      setState(() => _acctRequestCount = rows.length);
-    });
+    _supabase.from('account_requests').select('id').eq('status', 'pending').then((data) {
+      if (mounted) setState(() => _acctRequestCount = (data as List).length);
+    }).catchError((_) {});
   }
 
   @override
   void dispose() {
-    _doctorSub?.cancel();
-    _patientCountSub?.cancel();
-    _requestCountSub?.cancel();
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _passCtrl.dispose();
@@ -1678,18 +1662,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     color: Colors.white, size: 20),
               ),
               const SizedBox(width: 12),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Admin Portal',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.2)),
-                  Text('PhysioConnect',
-                      style: TextStyle(color: Color(0xFF8FA8B6), fontSize: 11)),
-                ],
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Admin Portal',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.2)),
+                    Text('PhysioConnect',
+                        style: TextStyle(color: Color(0xFF8FA8B6), fontSize: 11)),
+                  ],
+                ),
               ),
             ]),
           ),
@@ -2066,17 +2052,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _kpiCard(String value, String label, IconData icon, Color color) {
+    // Border with non-uniform colors cannot be combined with borderRadius in
+    // Flutter debug mode. Use a uniform card border + an inner left accent strip.
     return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border(
-          left:   BorderSide(color: color, width: 4),
-          top:    const BorderSide(color: AppColors.cardBorder),
-          right:  const BorderSide(color: AppColors.cardBorder),
-          bottom: const BorderSide(color: AppColors.cardBorder),
-        ),
+        border: Border.all(color: AppColors.cardBorder),
         boxShadow: [
           BoxShadow(
               color: color.withValues(alpha: 0.07),
@@ -2084,32 +2066,45 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               offset: const Offset(0, 3)),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(10),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(15),
+        child: IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Container(width: 4, color: color),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 14, 14, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 36, height: 36,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(icon, size: 18, color: color),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(value,
+                        style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            color: color,
+                            height: 1)),
+                    const SizedBox(height: 2),
+                    Text(label,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              ),
             ),
-            child: Icon(icon, size: 18, color: color),
-          ),
-          const SizedBox(height: 10),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  color: color,
-                  height: 1)),
-          const SizedBox(height: 2),
-          Text(label,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500)),
-        ],
+          ]),
+        ),
       ),
     );
   }
