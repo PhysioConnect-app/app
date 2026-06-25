@@ -405,6 +405,7 @@ class _LoginCard extends StatelessWidget {
 
           // ── Email field ──────────────────────────────────────────────────────
           _InputField(
+            key: const Key('login_email_field'),
             controller: emailController,
             focusNode:  emailFocus,
             hintText:   s.emailOrUsername,
@@ -419,6 +420,7 @@ class _LoginCard extends StatelessWidget {
 
           // ── Password field ───────────────────────────────────────────────────
           _InputField(
+            key: const Key('login_password_field'),
             controller: passwordController,
             focusNode:  passwordFocus,
             hintText:   s.password,
@@ -426,6 +428,7 @@ class _LoginCard extends StatelessWidget {
             obscureText: obscure,
             onSubmitted: (_) => onLogin(),
             suffix: IconButton(
+              key: const Key('login_password_toggle'),
               onPressed: onObscureToggle,
               tooltip: obscure ? s.showPassword : s.hidePassword,
               icon: Icon(
@@ -444,6 +447,7 @@ class _LoginCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               TextButton(
+                key: const Key('login_request_account_btn'),
                 onPressed: onRequestAccount,
                 style: TextButton.styleFrom(
                   foregroundColor: const Color(0xFF78909C),
@@ -456,6 +460,7 @@ class _LoginCard extends StatelessWidget {
                 ),
               ),
               TextButton(
+                key: const Key('login_forgot_password_btn'),
                 onPressed: onForgotPassword,
                 style: TextButton.styleFrom(
                   foregroundColor: const Color(0xFF00897B),
@@ -500,6 +505,7 @@ class _LoginCard extends StatelessWidget {
                       ],
                     ),
                     child: ElevatedButton(
+                      key: const Key('login_sign_in_btn'),
                       onPressed: onLogin,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
@@ -528,6 +534,7 @@ class _LoginCard extends StatelessWidget {
               width: double.infinity,
               height: 48,
               child: OutlinedButton(
+                key: const Key('login_guest_btn'),
                 onPressed: onContinueAsGuest,
                 style: OutlinedButton.styleFrom(
                   foregroundColor: const Color(0xFF00897B),
@@ -566,6 +573,7 @@ class _LoginCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 InkWell(
+                  key: const Key('login_physiogate_tile'),
                   onTap: onOpenPhysioGate,
                   borderRadius: BorderRadius.circular(14),
                   child: Container(
@@ -606,6 +614,7 @@ class _LoginCard extends StatelessWidget {
 
           // ── Language toggle ──────────────────────────────────────────────────
           TextButton.icon(
+            key: const Key('login_language_toggle'),
             onPressed: langProvider.toggle,
             icon: const Icon(Icons.language_rounded,
                 size: 15, color: Color(0xFF78909C)),
@@ -647,6 +656,7 @@ class _InputField extends StatefulWidget {
   final Widget? suffix;
 
   const _InputField({
+    super.key,
     required this.controller,
     required this.focusNode,
     required this.hintText,
