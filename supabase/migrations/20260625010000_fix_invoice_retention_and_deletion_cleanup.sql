@@ -73,6 +73,31 @@ CREATE TRIGGER trg_invoice_anonymise_patient
   EXECUTE FUNCTION public.anonymise_invoice_on_patient_delete();
 
 
+-- ── GAP 1b: hep_programs.doctor_id — retain patient's exercises when doctor deletes ──
+--
+-- Currently ON DELETE CASCADE (set in 20260621000000) which means a doctor
+-- deleting their account wipes every patient's HEP program they prescribed.
+-- Decision: change to ON DELETE SET NULL so patients keep their exercise
+-- history; the prescribing doctor reference is simply cleared.
+--
+-- The column is NOT NULL in the original DDL, so we must drop that constraint
+-- before the FK can be changed.
+
+-- Note: the IDE may flag "DROP NOT NULL" as a syntax error because it lints
+-- against T-SQL (SQL Server).  This is valid PostgreSQL / Supabase syntax.
+ALTER TABLE public.hep_programs
+  ALTER COLUMN doctor_id DROP NOT NULL;
+
+ALTER TABLE public.hep_programs
+  DROP CONSTRAINT IF EXISTS hep_programs_doctor_id_fkey;
+
+ALTER TABLE public.hep_programs
+  ADD CONSTRAINT hep_programs_doctor_id_fkey
+  FOREIGN KEY (doctor_id)
+  REFERENCES public.users(id)
+  ON DELETE SET NULL;
+
+
 -- ── GAP 2: ai_summary_cache — add FK cascades ────────────────────────────────
 --
 -- The table was created without FK constraints (20260622000001).

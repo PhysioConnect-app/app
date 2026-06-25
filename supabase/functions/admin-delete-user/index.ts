@@ -52,7 +52,10 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Delete auth user (ignore "not found" if already deleted)
+    // Delete auth user (ignore "not found" if already deleted).
+    // This cascades to public.users, which cascades to appointments,
+    // clinical_notes, invoices (patient_id after C-1 migration → SET NULL),
+    // appointment_requests, notifications, hep_programs, ai_summary_cache, etc.
     const { error: authDeleteErr } = await adminClient.auth.admin.deleteUser(userId)
     if (authDeleteErr && !/not.*found/i.test(authDeleteErr.message)) {
       return new Response(JSON.stringify({ error: `Auth delete failed: ${authDeleteErr.message}` }), {
@@ -61,13 +64,44 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Delete DB row
+    // Delete DB row (belt-and-suspenders: auth cascade already handles this,
+    // but an explicit delete guards against edge cases where the auth cascade
+    // hasn't propagated yet).
     const { error: dbDeleteErr } = await adminClient.from('users').delete().eq('id', userId)
     if (dbDeleteErr) {
       return new Response(JSON.stringify({ error: `Profile delete failed: ${dbDeleteErr.message}` }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
+    }
+
+    // ── chat_rooms cleanup ────────────────────────────────────────────────────
+    // chat_rooms.participants is a text[] column with no FK — the deletion
+    // cascade above cannot reach it.  Remove userId from every room it appears
+    // in.  Empty rooms (both users deleted) are deleted entirely so their
+    // messages are cleaned up via the room→messages ON DELETE CASCADE.
+    // Errors here are non-fatal: the user account is already gone.
+    try {
+      const { data: rooms } = await adminClient
+        .from('chat_rooms')
+        .select('id, participants')
+        .contains('participants', [userId])   // text[] @> ARRAY[userId]
+
+      for (const room of rooms ?? []) {
+        const remaining = (room.participants as string[]).filter((p: string) => p !== userId)
+        if (remaining.length === 0) {
+          // Last participant removed — delete the room (cascades to messages)
+          await adminClient.from('chat_rooms').delete().eq('id', room.id)
+        } else {
+          await adminClient
+            .from('chat_rooms')
+            .update({ participants: remaining })
+            .eq('id', room.id)
+        }
+      }
+    } catch (chatErr) {
+      // Log but do not fail the overall deletion
+      console.error('chat_rooms cleanup error (non-fatal):', chatErr)
     }
 
     return new Response(JSON.stringify({ success: true }), {
