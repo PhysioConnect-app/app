@@ -83,6 +83,50 @@ order. Each paste-and-run is one query:
 Paste and run the entire contents of `supabase_schema.sql` from the project
 root. This creates all tables with the correct uuid types.
 
+**Block 1b — Store tables** (out-of-band tables; not in any migration file)
+
+`store_categories` and `store_products` were created directly in production
+and are not tracked in the migration sequence. Paste this block next, before
+running any migration files:
+
+```sql
+-- Verified against production 2026-06-25 via supabase db query --linked.
+-- image_urls is included here so migration 20260617040000's
+-- ADD COLUMN IF NOT EXISTS is a safe no-op when it runs later.
+
+CREATE TABLE IF NOT EXISTS public.store_categories (
+  id         uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       text        NOT NULL,
+  parent_id  uuid        REFERENCES public.store_categories(id) ON DELETE CASCADE,
+  sort_order integer     NOT NULL DEFAULT 0,
+  status     text        NOT NULL DEFAULT 'draft',
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz
+);
+
+ALTER TABLE public.store_categories ENABLE ROW LEVEL SECURITY;
+
+CREATE TABLE IF NOT EXISTS public.store_products (
+  id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  category_id     uuid        NOT NULL REFERENCES public.store_categories(id) ON DELETE CASCADE,
+  title           text        NOT NULL,
+  description     text        NOT NULL DEFAULT '',
+  price           numeric     NOT NULL DEFAULT 0,
+  currency        text        NOT NULL DEFAULT 'USD',
+  phone_number    text        NOT NULL DEFAULT '',
+  whatsapp_number text        NOT NULL DEFAULT '',
+  image_url       text        NOT NULL DEFAULT '',
+  image_urls      text[]      NOT NULL DEFAULT '{}',
+  sort_order      integer     NOT NULL DEFAULT 0,
+  status          text        NOT NULL DEFAULT 'draft',
+  published_at    timestamptz,
+  created_at      timestamptz DEFAULT now(),
+  updated_at      timestamptz
+);
+
+ALTER TABLE public.store_products ENABLE ROW LEVEL SECURITY;
+```
+
 **Blocks 2–14 — Incremental migrations** (skip `20240101000000` — superseded
 by `supabase_schema.sql`):
 
