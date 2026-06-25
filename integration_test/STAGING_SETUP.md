@@ -125,6 +125,21 @@ CREATE TABLE IF NOT EXISTS public.store_products (
 );
 
 ALTER TABLE public.store_products ENABLE ROW LEVEL SECURITY;
+
+-- account_requests: used by the login screen "Request a doctor account"
+-- flow. Created out-of-band in production; not in any migration file.
+-- W-7 enables RLS and adds policies for this table.
+CREATE TABLE IF NOT EXISTS public.account_requests (
+  id              uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+  therapist_name  text        NOT NULL,
+  email           text        NOT NULL,
+  phone_number    text        NOT NULL DEFAULT '',
+  has_doctorate   boolean     NOT NULL DEFAULT false,
+  status          text        NOT NULL DEFAULT 'pending',
+  notes           text,
+  created_at      timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.account_requests ENABLE ROW LEVEL SECURITY;
 ```
 
 **Blocks 2–14 — Incremental migrations** (skip `20240101000000` — superseded
