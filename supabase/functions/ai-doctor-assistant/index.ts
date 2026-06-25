@@ -42,10 +42,34 @@ interface Prompt {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const GROQ_URL       = 'https://api.groq.com/openai/v1/chat/completions'
-const PRIMARY_MODEL  = 'llama-3.3-70b-versatile'
-const FALLBACK_MODEL = 'llama-3.1-8b-instant'
-const DEFAULT_LIMIT  = 100
+const GROQ_URL         = 'https://api.groq.com/openai/v1/chat/completions'
+const PRIMARY_MODEL    = 'llama-3.3-70b-versatile'
+const FALLBACK_MODEL   = 'llama-3.1-8b-instant'
+const DEFAULT_LIMIT    = 100
+const PER_MINUTE_LIMIT = 5   // max requests per user per 60 s (per worker instance)
+const MINUTE_WINDOW_MS = 60_000
+
+// ── Per-minute burst limiter ──────────────────────────────────────────────────
+//
+// Module-level Map survives across requests within a single Edge Function worker
+// instance but is NOT shared across multiple concurrent workers (Supabase runs
+// several). This is a best-effort in-process guard that prevents rapid-fire bursts
+// from any single worker; the monthly cap (ai_usage table) is the authoritative
+// distributed limit. For a fully distributed per-minute limit a Redis/KV store
+// would be required.
+
+const _perMinuteWindow = new Map<string, number[]>()
+
+function checkPerMinuteLimit(userId: string): boolean {
+  const now       = Date.now()
+  const recent    = (_perMinuteWindow.get(userId) ?? []).filter(
+    (t) => now - t < MINUTE_WINDOW_MS,
+  )
+  if (recent.length >= PER_MINUTE_LIMIT) return false
+  recent.push(now)
+  _perMinuteWindow.set(userId, recent)
+  return true
+}
 
 const VALID_TASKS: TaskType[] = [
   'SOAP_GENERATION',
@@ -610,6 +634,13 @@ Deno.serve(async (req) => {
           monthlyLimit: usage.monthlyLimit,
           remaining:    0,
         },
+      }, 429)
+    }
+
+    // ── 3b. Per-minute burst check ────────────────────────────────────────
+    if (!checkPerMinuteLimit(user.id)) {
+      return jsonResp({
+        error: `Too many requests. You may send up to ${PER_MINUTE_LIMIT} AI requests per minute. Please wait a moment and try again.`,
       }, 429)
     }
 
