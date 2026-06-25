@@ -406,13 +406,16 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
         child: Column(
           children: [
             _field(s.patientName, _nameController,
-                icon: Icons.person_outline_rounded),
+                icon: Icons.person_outline_rounded,
+                key: const Key('create_patient_name')),
             const SizedBox(height: 14),
             _field(s.patientEmail, _emailController,
                 icon: Icons.email_outlined,
-                type: TextInputType.emailAddress),
+                type: TextInputType.emailAddress,
+                key: const Key('create_patient_email')),
             const SizedBox(height: 14),
             TextField(
+              key: const Key('create_patient_password'),
               controller: _passwordController,
               obscureText: _obscure,
               decoration: InputDecoration(
@@ -434,12 +437,14 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
             const SizedBox(height: 14),
             _field(s.patientPhone, _phoneController,
                 icon: Icons.phone_outlined,
-                type: TextInputType.phone),
+                type: TextInputType.phone,
+                key: const Key('create_patient_phone')),
             const SizedBox(height: 14),
             GestureDetector(
               onTap: _pickDob,
               child: AbsorbPointer(
                 child: TextField(
+                  key: const Key('create_patient_dob'),
                   controller: _dobController,
                   decoration: InputDecoration(
                     labelText: s.patientDob,
@@ -456,7 +461,8 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
             const SizedBox(height: 14),
             _field(s.diagnosis, _diagnosisController,
                 icon: Icons.medical_information_outlined,
-                maxLines: 2),
+                maxLines: 2,
+                key: const Key('create_patient_diagnosis')),
             const SizedBox(height: 28),
             SizedBox(
               width: double.infinity,
@@ -464,6 +470,7 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : ElevatedButton.icon(
+                      key: const Key('create_patient_submit_btn'),
                       icon: const Icon(Icons.person_add_rounded),
                       label: Text(s.createAccount,
                           style: const TextStyle(
@@ -483,8 +490,10 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
     IconData? icon,
     TextInputType type = TextInputType.text,
     int maxLines = 1,
+    Key? key,
   }) {
     return TextField(
+      key: key,
       controller: controller,
       keyboardType: type,
       maxLines: maxLines,
