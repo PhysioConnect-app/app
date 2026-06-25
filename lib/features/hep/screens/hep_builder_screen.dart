@@ -102,6 +102,7 @@ class _HepProgramListScreenState extends State<HepProgramListScreen> {
         iconTheme: const IconThemeData(color: AppColors.textPrimary),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        key: const Key('hep_list_fab'),
         onPressed: () => _openBuilder(),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
@@ -465,6 +466,7 @@ class _HepBuilderViewState extends State<_HepBuilderView>
         actions: [
           if (!isDesktop)
             TextButton.icon(
+              key: const Key('hep_builder_save_appbar_btn'),
               onPressed: _saving ? null : _save,
               icon: _saving
                   ? const SizedBox(
@@ -705,6 +707,7 @@ class _HepBuilderViewState extends State<_HepBuilderView>
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         TextFormField(
+          key: const Key('hep_builder_title'),
           controller: _titleCtrl,
           decoration: const InputDecoration(
             labelText: 'Program Title *',
@@ -715,6 +718,7 @@ class _HepBuilderViewState extends State<_HepBuilderView>
         ),
         const SizedBox(height: 10),
         TextFormField(
+          key: const Key('hep_builder_description'),
           controller: _notesCtrl,
           maxLines: 2,
           decoration: const InputDecoration(
@@ -727,6 +731,7 @@ class _HepBuilderViewState extends State<_HepBuilderView>
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
+              key: const Key('hep_builder_save_btn'),
               onPressed: _saving ? null : _save,
               icon: _saving
                   ? const SizedBox(
@@ -782,6 +787,7 @@ class _HepBuilderViewState extends State<_HepBuilderView>
       child: SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
+          key: const Key('hep_builder_save_btn'),
           onPressed: _saving ? null : _save,
           icon: _saving
               ? const SizedBox(
