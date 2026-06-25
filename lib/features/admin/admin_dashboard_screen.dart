@@ -1533,8 +1533,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         SnackBar(content: Text(msg), backgroundColor: color));
   }
 
-  Widget _adminField(TextEditingController ctrl, String label, IconData icon) =>
+  Widget _adminField(TextEditingController ctrl, String label, IconData icon, {Key? key}) =>
       TextField(
+        key: key,
         controller: ctrl,
         decoration: InputDecoration(
           labelText: label,
@@ -2256,7 +2257,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 child: Column(children: [
                   _doctorsSummaryCard(all.length),
                   const SizedBox(height: 14),
-                  _searchField(),
+                  _searchField(key: const Key('admin_doctor_search')),
                   const SizedBox(height: 10),
                   if (filtered.isNotEmpty)
                     Align(
@@ -2666,17 +2667,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               children: [
                 AdminSectionLabel('Personal Info'),
                 const SizedBox(height: 14),
-                _field(_nameCtrl, 'Doctor Full Name', Icons.badge_rounded),
+                _field(_nameCtrl, 'Doctor Full Name', Icons.badge_rounded,
+                    key: const Key('admin_register_name')),
                 const SizedBox(height: 12),
                 _field(_specCtrl, 'Specialization',
-                    Icons.medical_services_rounded),
+                    Icons.medical_services_rounded,
+                    key: const Key('admin_register_specialization')),
                 const SizedBox(height: 22),
                 AdminSectionLabel('Login Credentials'),
                 const SizedBox(height: 14),
                 _field(_emailCtrl, 'Professional Email', Icons.email_rounded,
-                    type: TextInputType.emailAddress),
+                    type: TextInputType.emailAddress,
+                    key: const Key('admin_register_email')),
                 const SizedBox(height: 12),
                 TextField(
+                  key: const Key('admin_register_password'),
                   controller: _passCtrl,
                   obscureText: _obscure,
                   decoration: InputDecoration(
@@ -2707,6 +2712,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   child: _processing
                       ? const Center(child: CircularProgressIndicator())
                       : ElevatedButton.icon(
+                          key: const Key('admin_register_btn'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: DesignTokens.adminAccent,
                             foregroundColor: Colors.white,
@@ -3647,6 +3653,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               AdminSectionLabel('Send a Note to Doctors'),
               const SizedBox(height: 14),
               TextField(
+                key: const Key('admin_notes_title'),
                 controller: _noteTitleCtrl,
                 decoration: InputDecoration(
                   labelText: 'Title',
@@ -3662,6 +3669,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ),
               const SizedBox(height: 12),
               TextField(
+                key: const Key('admin_notes_body'),
                 controller: _noteBodyCtrl,
                 maxLines: 4,
                 decoration: InputDecoration(
@@ -3740,6 +3748,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 child: _noteSending
                     ? const Center(child: CircularProgressIndicator())
                     : ElevatedButton.icon(
+                        key: const Key('admin_notes_send_btn'),
                         onPressed: _noteSelectedDoctorIds.isEmpty
                             ? null
                             : _sendAdminNote,
@@ -3810,8 +3819,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // Shared helpers
   // ════════════════════════════════════════════════════════════════════════════
 
-  Widget _searchField() {
+  Widget _searchField({Key? key}) {
     return TextField(
+      key: key,
       onChanged: (v) =>
           setState(() => _searchQuery = v.toLowerCase()),
       decoration: InputDecoration(
@@ -3882,8 +3892,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     String label,
     IconData icon, {
     TextInputType type = TextInputType.text,
+    Key? key,
   }) {
     return TextField(
+      key: key,
       controller: ctrl,
       keyboardType: type,
       decoration: InputDecoration(
