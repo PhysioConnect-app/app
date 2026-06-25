@@ -18,7 +18,7 @@ android {
     defaultConfig {
         applicationId = "com.physioconnect.app"
         minSdk = flutter.minSdkVersion
-        targetSdk = 35
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
