@@ -299,6 +299,7 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TextField(
+                  key: const Key('find_doctors_search'),
                   controller: _searchCtrl,
                   onChanged: (v) =>
                       setState(() => _searchQuery = v.toLowerCase()),

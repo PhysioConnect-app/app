@@ -970,6 +970,7 @@ class _FinancialAiChatScreenState extends State<FinancialAiChatScreen> {
       child: Row(children: [
         Expanded(
           child: TextField(
+            key: const Key('ai_chat_input'),
             controller:  _msgCtrl,
             focusNode:   _focusNode,
             maxLines:    4,
@@ -996,6 +997,7 @@ class _FinancialAiChatScreenState extends State<FinancialAiChatScreen> {
         ),
         const SizedBox(width: 8),
         GestureDetector(
+          key: const Key('ai_chat_send_btn'),
           onTap: _isSending ? null : () => _send(_msgCtrl.text),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),

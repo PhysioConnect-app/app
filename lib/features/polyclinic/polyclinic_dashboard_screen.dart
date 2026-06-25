@@ -313,6 +313,7 @@ class _PolyclinicDashboardScreenState
     return Scaffold(
       backgroundColor: AppColors.background,
       floatingActionButton: FloatingActionButton.extended(
+        key: const Key('polyclinic_add_doctor_fab'),
         backgroundColor: _kTeal,
         foregroundColor: Colors.white,
         onPressed: () => _showAddDoctorSheet(linkedIds),
@@ -535,6 +536,7 @@ class _PolyclinicDashboardScreenState
                 child: saving
                     ? const Center(child: CircularProgressIndicator())
                     : ElevatedButton.icon(
+                        key: const Key('polyclinic_profile_save_btn'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: _kTeal,
                           foregroundColor: Colors.white,
