@@ -955,6 +955,7 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
             )
           else
             TextButton.icon(
+              key: const Key('soap_ai_btn'),
               onPressed: () => _showAiInputSheet(s),
               icon: const Icon(Icons.auto_awesome_rounded,
                   color: Colors.white, size: 18),
@@ -965,6 +966,7 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
                       fontWeight: FontWeight.bold)),
             ),
           TextButton.icon(
+            key: const Key('soap_template_selector'),
             onPressed: () => _showTemplates(s),
             icon: const Icon(Icons.library_books_rounded,
                 color: Colors.white, size: 18),
@@ -1031,6 +1033,7 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
                 child: _saving
                     ? const Center(child: CircularProgressIndicator())
                     : ElevatedButton.icon(
+                        key: const Key('soap_save_btn'),
                         icon: Icon(widget.noteId != null
                             ? Icons.save_rounded
                             : Icons.publish_rounded),
@@ -1101,7 +1104,8 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
 
   List<Widget> _subjectiveFields(Color color) => [
         _subField('Chief Complaint', 'الشكوى الرئيسية',
-            _chiefComplaintCtrl, color, lines: 2),
+            _chiefComplaintCtrl, color, lines: 2,
+            fieldKey: const Key('soap_chief_complaint')),
         _subField('Onset & Duration', 'بداية ومدة الأعراض',
             _onsetDurationCtrl, color),
         _painSliderField(color),
@@ -1174,7 +1178,8 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
 
   List<Widget> _assessmentFields(Color color) => [
         _subField('Clinical Impression', 'الانطباع السريري',
-            _clinicalImpressionCtrl, color, lines: 2),
+            _clinicalImpressionCtrl, color, lines: 2,
+            fieldKey: const Key('soap_clinical_impression')),
         _severityStageField(color),
         _subField('Progress Toward Goals', 'التقدم نحو الأهداف',
             _progressCtrl, color),
@@ -1202,7 +1207,8 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
         _subField('Treatment Focus', 'محاور العلاج',
             _treatmentFocusCtrl, color),
         _subField('Interventions', 'التدخلات العلاجية',
-            _interventionsCtrl, color, lines: 3),
+            _interventionsCtrl, color, lines: 3,
+            fieldKey: const Key('soap_interventions')),
         _subField('Frequency & Duration', 'عدد الجلسات والمدة',
             _freqDurationCtrl, color),
         _subField('Home Exercise Program (HEP)', 'برنامج التمارين المنزلية',
@@ -1388,7 +1394,7 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
 
   Widget _subField(
       String en, String ar, TextEditingController ctrl, Color color,
-      {int lines = 2}) {
+      {int lines = 2, Key? fieldKey}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Column(
@@ -1414,6 +1420,7 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
           ),
           const SizedBox(height: 5),
           TextField(
+            key: fieldKey,
             controller: ctrl,
             maxLines: lines,
             decoration: InputDecoration(
@@ -1491,6 +1498,7 @@ class _SoapNoteScreenState extends State<SoapNoteScreen>
                     trackHeight: 4,
                   ),
                   child: Slider(
+                    key: const Key('soap_pain_level'),
                     value: _painLevel.toDouble(),
                     min: 0,
                     max: 10,
