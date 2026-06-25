@@ -253,8 +253,7 @@ CREATE POLICY "users_patient_reads_linked_doctors"
   USING (
     role = 'doctor'
     AND id = ANY(
-      -- safe: uses SECURITY DEFINER helper, no recursion
-      (SELECT COALESCE(doctor_ids, '{}') FROM public.users u2 WHERE u2.id = auth.uid())
+      (SELECT COALESCE(doctor_ids, '{}') FROM public.users u2 WHERE u2.id = auth.uid())::uuid[]
     )
   );
 

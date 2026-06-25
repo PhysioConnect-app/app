@@ -34,6 +34,7 @@ CREATE OR REPLACE FUNCTION public.hep_programs_set_updated_at()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY INVOKER SET search_path = public AS $$
 BEGIN NEW.updated_at = now(); RETURN NEW; END; $$;
 
+DROP TRIGGER IF EXISTS hep_programs_updated_at ON public.hep_programs;
 CREATE TRIGGER hep_programs_updated_at
   BEFORE UPDATE ON public.hep_programs
   FOR EACH ROW EXECUTE FUNCTION public.hep_programs_set_updated_at();
