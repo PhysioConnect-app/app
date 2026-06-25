@@ -380,13 +380,12 @@ CREATE POLICY "clinical_notes_admin_select"
 
 -- ── 7. TABLE: chat_rooms ──────────────────────────────────────────────────────
 --
--- participants is text[] in the live schema (initial_schema migration).
--- auth.uid() must be cast to text for the ANY() operator.
+-- participants is uuid[] (verified on both staging and production 2026-06-26).
 
 CREATE POLICY "chat_rooms_participant_all"
   ON public.chat_rooms FOR ALL
-  USING  (auth.uid()::text = ANY(participants))
-  WITH CHECK (auth.uid()::text = ANY(participants));
+  USING  (auth.uid() = ANY(participants))
+  WITH CHECK (auth.uid() = ANY(participants));
 
 
 -- ── 8. TABLE: chat_room_unread ───────────────────────────────────────────────
@@ -406,7 +405,7 @@ CREATE POLICY "messages_participant_select"
   USING (
     room_id IN (
       SELECT id FROM public.chat_rooms
-      WHERE auth.uid()::text = ANY(participants)
+      WHERE auth.uid() = ANY(participants)
     )
   );
 
@@ -416,7 +415,7 @@ CREATE POLICY "messages_participant_insert"
     sender_id = auth.uid()
     AND room_id IN (
       SELECT id FROM public.chat_rooms
-      WHERE auth.uid()::text = ANY(participants)
+      WHERE auth.uid() = ANY(participants)
     )
   );
 
@@ -559,14 +558,9 @@ CREATE POLICY "store_products_public_select"
   ON public.store_products FOR SELECT
   USING (status = 'published');
 
--- Store managers manage their own products
+-- Store managers and admins manage all products
+-- (store_products has no doctor_id column — access is role-based only)
 CREATE POLICY "store_products_manager_all"
   ON public.store_products FOR ALL
-  USING  (
-    doctor_id = auth.uid()
-    OR public.current_user_role() IN ('admin', 'store_manager')
-  )
-  WITH CHECK (
-    doctor_id = auth.uid()
-    OR public.current_user_role() IN ('admin', 'store_manager')
-  );
+  USING  (public.current_user_role() IN ('admin', 'store_manager'))
+  WITH CHECK (public.current_user_role() IN ('admin', 'store_manager'));

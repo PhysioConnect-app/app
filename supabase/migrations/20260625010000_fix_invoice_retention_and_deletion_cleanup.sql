@@ -109,11 +109,15 @@ DELETE FROM public.ai_summary_cache
      OR doctor_id  NOT IN (SELECT id FROM public.users);
 
 ALTER TABLE public.ai_summary_cache
+  DROP CONSTRAINT IF EXISTS ai_summary_cache_patient_id_fkey;
+ALTER TABLE public.ai_summary_cache
   ADD CONSTRAINT ai_summary_cache_patient_id_fkey
   FOREIGN KEY (patient_id)
   REFERENCES public.users(id)
   ON DELETE CASCADE;
 
+ALTER TABLE public.ai_summary_cache
+  DROP CONSTRAINT IF EXISTS ai_summary_cache_doctor_id_fkey;
 ALTER TABLE public.ai_summary_cache
   ADD CONSTRAINT ai_summary_cache_doctor_id_fkey
   FOREIGN KEY (doctor_id)
