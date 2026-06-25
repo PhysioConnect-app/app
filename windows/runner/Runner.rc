@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "my_clinic_app" "\0"
+            VALUE "CompanyName", "PhysioConnect" "\0"
+            VALUE "FileDescription", "PhysioConnect" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "my_clinic_app" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "my_clinic_app.exe" "\0"
-            VALUE "ProductName", "my_clinic_app" "\0"
+            VALUE "InternalName", "PhysioConnect" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 PhysioConnect. All rights reserved." "\0"
+            VALUE "OriginalFilename", "PhysioConnect.exe" "\0"
+            VALUE "ProductName", "PhysioConnect" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
