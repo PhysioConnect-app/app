@@ -1,20 +1,22 @@
 # deploy_web.ps1 — builds PhysioConnect for the web and pushes to GitHub Pages.
 #
 # Prerequisites:
-#   1. Create the GitHub repo "physioconnect-app" (public, no README) at
-#      https://github.com/new  — do this once before the first run.
-#   2. Install Git for Windows (already present if you are using this project).
+#   1. Create the GitHub organisation "physioconnect" (free plan) at
+#      https://github.com/organizations/new — one-time, ~3 minutes.
+#   2. Inside that org, create the repo "app" (public, no README) at
+#      https://github.com/organizations/physioconnect/repositories/new
+#   3. In the repo Settings -> Pages -> Branch: gh-pages / root  (after first push)
 #
 # Usage (from project root):
 #   .\scripts\deploy_web.ps1
 #
-# The PWA will be live at:
-#   https://jihadzhour-dot.github.io/physioconnect-app/
+# PWA live at:
+#   https://physioconnect.github.io/app/
 
 $ErrorActionPreference = "Stop"
 
-$REPO_URL  = "https://github.com/jihadzhour-dot/physioconnect-app.git"
-$BASE_HREF = "/physioconnect-app/"
+$REPO_URL  = "https://github.com/physioconnect/app.git"
+$BASE_HREF = "/app/"
 $BUILD_DIR = "build\web"
 
 Write-Host ""
@@ -46,9 +48,9 @@ Write-Host ""
 Write-Host "=== Done! ===" -ForegroundColor Green
 Write-Host ""
 Write-Host "Your PWA will be live in ~60 seconds at:" -ForegroundColor Cyan
-Write-Host "  https://jihadzhour-dot.github.io/physioconnect-app/" -ForegroundColor White
+Write-Host "  https://physioconnect.github.io/app/" -ForegroundColor White
 Write-Host ""
-Write-Host "Reminder — one-time manual steps (see deploy instructions):" -ForegroundColor Yellow
-Write-Host "  * GitHub Pages: Settings -> Pages -> Branch: gh-pages / root"
-Write-Host "  * Supabase: Authentication -> URL Config -> add the Pages URL"
+Write-Host "Reminder — one-time manual steps:" -ForegroundColor Yellow
+Write-Host "  * GitHub Pages: org/app repo -> Settings -> Pages -> Branch: gh-pages / root"
+Write-Host "  * Supabase: Authentication -> URL Config -> add https://physioconnect.github.io/app/"
 Write-Host ""
