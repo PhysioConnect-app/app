@@ -1,12 +1,13 @@
 {
-    "name": "my_clinic_app",
-    "short_name": "my_clinic_app",
+    "name": "PhysioConnect",
+    "short_name": "PhysioConnect",
     "start_url": ".",
+    "scope": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
     "orientation": "portrait-primary",
+    "background_color": "#005B4F",
+    "theme_color": "#00897B",
+    "description": "Physical therapy clinic management for doctors and patients.",
     "prefer_related_applications": false,
     "icons": [
         {
