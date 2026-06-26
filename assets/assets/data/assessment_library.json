@@ -1,0 +1,1025 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "category": "Musculoskeletal",
+      "subcategories": [
+        {
+          "name": "Shoulder",
+          "tests": [
+            {
+              "name": "Neer Test",
+              "purpose": "Detects subacromial impingement",
+              "method": "Examiner stabilizes scapula while passively elevating the arm into flexion with internal rotation. Pain indicates possible impingement."
+            },
+            {
+              "name": "Hawkins-Kennedy Test",
+              "purpose": "Detects rotator cuff impingement",
+              "method": "Shoulder flexed to 90° and elbow flexed to 90°. Examiner internally rotates the shoulder. Pain suggests impingement."
+            },
+            {
+              "name": "Empty Can (Jobe) Test",
+              "purpose": "Assesses supraspinatus muscle/tendon pathology",
+              "method": "Patient abducts arm ~30–45° forward with thumb pointing down. Examiner applies downward resistance."
+            },
+            {
+              "name": "Full Can Test",
+              "purpose": "Assesses supraspinatus function with less impingement",
+              "method": "Patient elevates arm in scapular plane with thumb up against resistance."
+            },
+            {
+              "name": "Drop Arm Test",
+              "purpose": "Detects large rotator cuff tears",
+              "method": "Patient lowers arm slowly from 90° abduction. Inability to control movement suggests tear."
+            },
+            {
+              "name": "Speed's Test",
+              "purpose": "Assesses long head of biceps tendon",
+              "method": "Patient flexes shoulder against resistance with elbow extended and forearm supinated."
+            },
+            {
+              "name": "Yergason's Test",
+              "purpose": "Tests biceps tendon stability",
+              "method": "Patient supinates forearm against resistance while examiner palpates bicipital groove."
+            },
+            {
+              "name": "Apprehension Test",
+              "purpose": "Detects anterior shoulder instability",
+              "method": "Shoulder placed in abduction and external rotation. Apprehension or fear indicates instability."
+            },
+            {
+              "name": "Relocation Test",
+              "purpose": "Confirms anterior instability",
+              "method": "Posterior pressure applied to humeral head while in apprehension position. Reduction of symptoms supports instability."
+            },
+            {
+              "name": "O'Brien Active Compression Test",
+              "purpose": "Detects SLAP lesion or AC pathology",
+              "method": "Arm flexed 90°, adducted, internally rotated; downward resistance applied."
+            },
+            {
+              "name": "Cross Body Adduction Test",
+              "purpose": "Assesses AC joint pathology",
+              "method": "Patient actively moves arm across chest. Pain at AC joint indicates pathology."
+            }
+          ]
+        },
+        {
+          "name": "Elbow",
+          "tests": [
+            {
+              "name": "Cozen's Test",
+              "purpose": "Detects lateral epicondylitis (tennis elbow)",
+              "method": "Patient extends wrist against resistance with elbow extended. Pain at lateral epicondyle is positive."
+            },
+            {
+              "name": "Mill's Test",
+              "purpose": "Detects lateral epicondylitis",
+              "method": "Examiner passively pronates forearm, flexes wrist, and extends elbow. Pain indicates irritation."
+            },
+            {
+              "name": "Golfer's Elbow Test",
+              "purpose": "Detects medial epicondylitis",
+              "method": "Wrist flexion and pronation performed against resistance. Medial elbow pain suggests pathology."
+            },
+            {
+              "name": "Valgus Stress Test",
+              "purpose": "Tests medial collateral ligament integrity",
+              "method": "Valgus force applied while elbow slightly flexed. Excessive opening indicates injury."
+            },
+            {
+              "name": "Varus Stress Test",
+              "purpose": "Tests lateral collateral ligament integrity",
+              "method": "Varus force applied to elbow. Increased laxity suggests injury."
+            }
+          ]
+        },
+        {
+          "name": "Wrist/Hand",
+          "tests": [
+            {
+              "name": "Phalen's Test",
+              "purpose": "Detects carpal tunnel syndrome",
+              "method": "Patient presses dorsal surfaces of hands together with wrists flexed for 30–60 seconds."
+            },
+            {
+              "name": "Reverse Phalen's Test",
+              "purpose": "Detects median nerve compression",
+              "method": "Patient holds wrist extension position. Symptoms suggest carpal tunnel involvement."
+            },
+            {
+              "name": "Tinel's Sign",
+              "purpose": "Tests nerve irritation",
+              "method": "Examiner taps over median nerve at carpal tunnel. Tingling indicates irritation."
+            },
+            {
+              "name": "Finkelstein Test",
+              "purpose": "Detects De Quervain tenosynovitis",
+              "method": "Thumb placed inside fist, wrist deviated toward ulna. Pain indicates positive test."
+            },
+            {
+              "name": "Grind Test",
+              "purpose": "Assesses thumb CMC arthritis",
+              "method": "Axial compression and rotation applied to thumb metacarpal. Pain/crepitus suggests arthritis."
+            }
+          ]
+        },
+        {
+          "name": "Cervical Spine",
+          "tests": [
+            {
+              "name": "Spurling's Test",
+              "purpose": "Detects cervical radiculopathy",
+              "method": "Neck extended, rotated, and compressed. Reproduction of arm symptoms indicates nerve root involvement."
+            },
+            {
+              "name": "Cervical Distraction Test",
+              "purpose": "Tests symptom relief from nerve compression",
+              "method": "Gentle traction applied to cervical spine. Decreased symptoms suggest nerve root compression."
+            },
+            {
+              "name": "Upper Limb Tension Test (ULTT)",
+              "purpose": "Assesses neural tissue sensitivity",
+              "method": "Upper limb positioned progressively to tension neural structures. Symptoms indicate neural involvement."
+            }
+          ]
+        },
+        {
+          "name": "Thoracic Spine",
+          "tests": [
+            {
+              "name": "Rib Spring Test",
+              "purpose": "Assesses rib/costovertebral dysfunction",
+              "method": "Posterior pressure applied over ribs while patient prone. Pain or hypomobility indicates dysfunction."
+            }
+          ]
+        },
+        {
+          "name": "Lumbar Spine",
+          "tests": [
+            {
+              "name": "Straight Leg Raise (SLR)",
+              "purpose": "Detects lumbar nerve root irritation",
+              "method": "Patient supine; examiner raises straight leg. Radiating pain between 30–70° suggests neural involvement."
+            },
+            {
+              "name": "Crossed SLR",
+              "purpose": "Detects disc herniation",
+              "method": "Raising unaffected leg reproduces symptoms on opposite side."
+            },
+            {
+              "name": "Slump Test",
+              "purpose": "Assesses neural tension",
+              "method": "Patient sits slumped, flexes neck, extends knee, and dorsiflexes ankle. Symptoms indicate neural sensitivity."
+            },
+            {
+              "name": "Quadrant Test",
+              "purpose": "Assesses facet joint involvement",
+              "method": "Patient performs lumbar extension combined with rotation and side bending."
+            }
+          ]
+        },
+        {
+          "name": "SI Joint",
+          "tests": [
+            {
+              "name": "FABER Test",
+              "purpose": "Differentiates hip and SI joint pathology",
+              "method": "Hip placed in flexion, abduction, external rotation; downward pressure applied."
+            },
+            {
+              "name": "Compression Test",
+              "purpose": "SI joint provocation",
+              "method": "Patient side lying; downward compression applied through pelvis. Pain indicates SI involvement."
+            },
+            {
+              "name": "Thigh Thrust Test",
+              "purpose": "SI joint provocation",
+              "method": "Hip flexed to 90°; posterior force applied through femur."
+            }
+          ]
+        },
+        {
+          "name": "Hip",
+          "tests": [
+            {
+              "name": "FADIR Test",
+              "purpose": "Detects femoroacetabular impingement",
+              "method": "Hip flexion, adduction, and internal rotation performed. Pain indicates impingement."
+            },
+            {
+              "name": "Thomas Test",
+              "purpose": "Assesses hip flexor tightness",
+              "method": "Patient holds one hip to chest while opposite thigh position is observed."
+            },
+            {
+              "name": "Ober's Test",
+              "purpose": "Assesses IT band/TFL tightness",
+              "method": "Side-lying hip extension and abduction followed by controlled adduction."
+            },
+            {
+              "name": "Trendelenburg Test",
+              "purpose": "Assesses hip abductor weakness",
+              "method": "Patient stands on one leg. Pelvic drop indicates gluteus medius weakness."
+            }
+          ]
+        },
+        {
+          "name": "Knee",
+          "tests": [
+            {
+              "name": "Lachman Test",
+              "purpose": "Primary ACL integrity test",
+              "method": "Knee flexed 20–30°. Examiner pulls tibia anteriorly. Increased translation indicates ACL injury."
+            },
+            {
+              "name": "Anterior Drawer Test",
+              "purpose": "Assesses ACL stability",
+              "method": "Knee flexed 90°. Tibia pulled anteriorly. Excess movement suggests ACL injury."
+            },
+            {
+              "name": "Posterior Drawer Test",
+              "purpose": "Assesses PCL stability",
+              "method": "Tibia pushed posteriorly at 90° flexion. Excess movement indicates PCL injury."
+            },
+            {
+              "name": "McMurray Test",
+              "purpose": "Detects meniscal injury",
+              "method": "Knee rotated while flexing/extending. Pain or clicking indicates meniscal pathology."
+            },
+            {
+              "name": "Thessaly Test",
+              "purpose": "Detects meniscal pathology",
+              "method": "Patient stands on one leg with knee flexed and rotates body. Pain/catching suggests meniscus injury."
+            },
+            {
+              "name": "Valgus Stress Test",
+              "purpose": "Tests MCL integrity",
+              "method": "Valgus force applied at 0° and 30° knee flexion."
+            },
+            {
+              "name": "Varus Stress Test",
+              "purpose": "Tests LCL integrity",
+              "method": "Varus force applied at knee."
+            },
+            {
+              "name": "Patellar Grind Test",
+              "purpose": "Assesses patellofemoral pain",
+              "method": "Downward pressure applied to patella during quadriceps contraction."
+            }
+          ]
+        },
+        {
+          "name": "Ankle",
+          "tests": [
+            {
+              "name": "Anterior Drawer Test",
+              "purpose": "Tests ATFL stability",
+              "method": "Talus translated forward while stabilizing tibia. Excess motion indicates ligament injury."
+            },
+            {
+              "name": "Talar Tilt Test",
+              "purpose": "Tests CFL ligament integrity",
+              "method": "Inversion stress applied to ankle. Excess tilt indicates injury."
+            },
+            {
+              "name": "Thompson Test",
+              "purpose": "Detects Achilles tendon rupture",
+              "method": "Calf squeezed while patient prone. Absence of plantar flexion indicates rupture."
+            },
+            {
+              "name": "Kleiger External Rotation Test",
+              "purpose": "Detects syndesmotic injury",
+              "method": "External rotation force applied to foot. Pain indicates high ankle sprain."
+            }
+          ]
+        },
+        {
+          "name": "Foot",
+          "tests": [
+            {
+              "name": "Windlass Test",
+              "purpose": "Detects plantar fasciitis",
+              "method": "Great toe dorsiflexed while plantar fascia tension increases. Heel pain indicates positive test."
+            },
+            {
+              "name": "Navicular Drop Test",
+              "purpose": "Assesses foot posture/pronation",
+              "method": "Navicular height measured seated and standing. Difference indicates excessive pronation."
+            },
+            {
+              "name": "Too Many Toes Sign",
+              "purpose": "Assesses posterior tibial tendon dysfunction",
+              "method": "Observe foot from behind during standing. Visible toes indicate deformity."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "Neurological",
+      "subcategories": [
+        {
+          "name": "Motor Assessment",
+          "tests": [
+            {
+              "name": "Manual Muscle Testing (MMT)",
+              "purpose": "Evaluates muscle strength using a standardized grading system (0–5)",
+              "method": "Patient performs specific movement while examiner applies resistance. Strength is graded from no contraction (0) to normal strength (5)."
+            },
+            {
+              "name": "Medical Research Council (MRC) Scale",
+              "purpose": "Standard strength grading system for neurological patients",
+              "method": "Each muscle group is tested against gravity and resistance and scored 0–5."
+            },
+            {
+              "name": "Motor Control Assessment",
+              "purpose": "Evaluates selective movement ability",
+              "method": "Patient performs isolated movements while examiner observes abnormal synergies or compensations."
+            }
+          ]
+        },
+        {
+          "name": "Muscle Tone",
+          "tests": [
+            {
+              "name": "Modified Ashworth Scale (MAS)",
+              "purpose": "Measures resistance to passive movement associated with spasticity",
+              "method": "Examiner moves limb passively through ROM and grades resistance from 0–4."
+            },
+            {
+              "name": "Modified Tardieu Scale",
+              "purpose": "Differentiates spasticity from contracture",
+              "method": "Limb moved at different velocities while assessing muscle reaction angle."
+            },
+            {
+              "name": "Pendulum Test (Wartenberg)",
+              "purpose": "Evaluates lower limb tone and spasticity",
+              "method": "Patient seated with leg relaxed; examiner observes oscillations after knee extension."
+            }
+          ]
+        },
+        {
+          "name": "Reflexes",
+          "tests": [
+            {
+              "name": "Biceps Reflex (C5–C6)",
+              "purpose": "Tests upper limb deep tendon reflex",
+              "method": "Tap biceps tendon while elbow is relaxed; observe elbow flexion response."
+            },
+            {
+              "name": "Triceps Reflex (C7–C8)",
+              "purpose": "Tests triceps reflex pathway",
+              "method": "Tap triceps tendon above elbow; observe extension response."
+            },
+            {
+              "name": "Patellar Reflex (L3–L4)",
+              "purpose": "Evaluates femoral nerve and spinal segments",
+              "method": "Tap patellar tendon; observe knee extension."
+            },
+            {
+              "name": "Achilles Reflex (S1–S2)",
+              "purpose": "Evaluates tibial nerve and sacral segments",
+              "method": "Tap Achilles tendon; observe plantar flexion."
+            },
+            {
+              "name": "Babinski Sign",
+              "purpose": "Detects upper motor neuron lesion",
+              "method": "Stroke lateral sole of foot; observe great toe response."
+            },
+            {
+              "name": "Hoffmann Sign",
+              "purpose": "Screens corticospinal tract involvement",
+              "method": "Flick distal phalanx of middle finger and observe thumb/index response."
+            }
+          ]
+        },
+        {
+          "name": "Sensory Assessment",
+          "tests": [
+            {
+              "name": "Light Touch Test",
+              "purpose": "Evaluates superficial tactile sensation",
+              "method": "Apply light touch using cotton or tissue and compare sides."
+            },
+            {
+              "name": "Pin Prick Test",
+              "purpose": "Evaluates pain sensation pathways",
+              "method": "Apply sharp stimulus and compare symmetrical areas."
+            },
+            {
+              "name": "Temperature Sensation",
+              "purpose": "Tests thermal sensory pathways",
+              "method": "Apply warm/cold stimulus and compare responses."
+            },
+            {
+              "name": "Vibration Sense",
+              "purpose": "Assesses dorsal column function",
+              "method": "Place vibrating tuning fork on bony prominences."
+            },
+            {
+              "name": "Proprioception Test",
+              "purpose": "Evaluates joint position sense",
+              "method": "Move finger/toe upward or downward and ask patient to identify direction."
+            }
+          ]
+        },
+        {
+          "name": "Dermatomes & Nerve Roots",
+          "tests": [
+            {
+              "name": "Dermatome Testing",
+              "purpose": "Maps sensory loss according to nerve roots",
+              "method": "Test sensation in specific skin regions corresponding to spinal levels."
+            },
+            {
+              "name": "Myotome Testing",
+              "purpose": "Evaluates motor function of nerve roots",
+              "method": "Test key movements associated with cervical/lumbar roots."
+            }
+          ]
+        },
+        {
+          "name": "Coordination",
+          "tests": [
+            {
+              "name": "Finger-to-Nose Test",
+              "purpose": "Evaluates cerebellar coordination",
+              "method": "Patient touches nose then examiner's finger repeatedly. Observe accuracy and tremor."
+            },
+            {
+              "name": "Heel-to-Shin Test",
+              "purpose": "Evaluates lower limb coordination",
+              "method": "Patient slides heel along opposite shin while lying down."
+            },
+            {
+              "name": "Rapid Alternating Movement Test",
+              "purpose": "Detects dysdiadochokinesia",
+              "method": "Patient rapidly alternates hand movements."
+            },
+            {
+              "name": "Finger-to-Finger Test",
+              "purpose": "Evaluates precision and coordination",
+              "method": "Patient touches examiner's finger and own nose alternately."
+            }
+          ]
+        },
+        {
+          "name": "Balance",
+          "tests": [
+            {
+              "name": "Romberg Test",
+              "purpose": "Assesses proprioceptive balance",
+              "method": "Patient stands feet together with eyes open then closed. Increased sway indicates impairment."
+            },
+            {
+              "name": "Sharpened Romberg Test",
+              "purpose": "More challenging balance assessment",
+              "method": "Patient stands heel-to-toe with eyes closed."
+            },
+            {
+              "name": "Single Leg Stance Test",
+              "purpose": "Evaluates static balance",
+              "method": "Patient stands on one leg while time is recorded."
+            },
+            {
+              "name": "Functional Reach Test",
+              "purpose": "Measures dynamic balance",
+              "method": "Patient reaches forward without stepping; distance is measured."
+            }
+          ]
+        },
+        {
+          "name": "Gait Assessment",
+          "tests": [
+            {
+              "name": "Observational Gait Analysis",
+              "purpose": "Evaluates walking pattern abnormalities",
+              "method": "Observe gait phases, symmetry, speed, and compensations."
+            },
+            {
+              "name": "10-Meter Walk Test",
+              "purpose": "Measures walking speed",
+              "method": "Patient walks 10 meters at comfortable/maximal speed; time recorded."
+            },
+            {
+              "name": "6-Minute Walk Test",
+              "purpose": "Measures walking endurance",
+              "method": "Patient walks maximum distance in 6 minutes."
+            },
+            {
+              "name": "Dynamic Gait Index (DGI)",
+              "purpose": "Evaluates gait adaptability and fall risk",
+              "method": "Patient performs walking tasks including head turns and speed changes."
+            }
+          ]
+        },
+        {
+          "name": "Functional Neurological Scales",
+          "tests": [
+            {
+              "name": "Berg Balance Scale (BBS)",
+              "purpose": "Measures balance and fall risk",
+              "method": "Patient performs 14 balance tasks scored 0–4."
+            },
+            {
+              "name": "Functional Independence Measure (FIM)",
+              "purpose": "Measures level of assistance required",
+              "method": "Rates independence in mobility, self-care, cognition, and communication."
+            },
+            {
+              "name": "Timed Up and Go (TUG)",
+              "purpose": "Measures functional mobility and fall risk",
+              "method": "Patient rises from chair, walks 3 meters, turns, returns, and sits. Time recorded."
+            }
+          ]
+        },
+        {
+          "name": "Stroke Assessment",
+          "tests": [
+            {
+              "name": "Fugl-Meyer Assessment (FMA)",
+              "purpose": "Evaluates motor recovery after stroke",
+              "method": "Tests movement, reflexes, coordination, sensation, and balance."
+            },
+            {
+              "name": "NIH Stroke Scale (NIHSS)",
+              "purpose": "Measures stroke severity",
+              "method": "Assesses consciousness, vision, motor function, sensation, language, and neglect."
+            },
+            {
+              "name": "Modified Rankin Scale (mRS)",
+              "purpose": "Measures disability after stroke",
+              "method": "Rates functional independence from 0 (no symptoms) to 6 (death)."
+            }
+          ]
+        },
+        {
+          "name": "Spinal Cord Injury",
+          "tests": [
+            {
+              "name": "ASIA Impairment Scale (AIS)",
+              "purpose": "Classifies severity of spinal cord injury",
+              "method": "Tests key sensory points, motor muscles, and neurological level."
+            },
+            {
+              "name": "ISNCSCI Examination",
+              "purpose": "Standard spinal cord neurological exam",
+              "method": "Systematic sensory and motor testing to determine injury level."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "Pediatrics",
+      "subcategories": [
+        {
+          "name": "Developmental Screening",
+          "tests": [
+            {
+              "name": "Denver Developmental Screening Test II (DDST-II)",
+              "purpose": "Screens developmental delays in children 0–6 years",
+              "method": "Child performs age-appropriate tasks in personal-social, fine motor, language, and gross motor domains."
+            },
+            {
+              "name": "Alberta Infant Motor Scale (AIMS)",
+              "purpose": "Assesses gross motor development in infants",
+              "method": "Infant observed in prone, supine, sitting, standing positions; motor skills scored based on age norms."
+            },
+            {
+              "name": "Bayley Scales of Infant Development",
+              "purpose": "Comprehensive developmental assessment",
+              "method": "Evaluates cognitive, motor, and language skills through structured tasks."
+            }
+          ]
+        },
+        {
+          "name": "Gross Motor Function",
+          "tests": [
+            {
+              "name": "Gross Motor Function Measure (GMFM-88/66)",
+              "purpose": "Measures motor function in children with cerebral palsy",
+              "method": "Child performs lying, rolling, sitting, crawling, standing, walking tasks."
+            },
+            {
+              "name": "Gross Motor Function Classification System (GMFCS)",
+              "purpose": "Classifies severity of motor disability in CP",
+              "method": "Observational classification from Level I (walks independently) to Level V (severely limited)."
+            }
+          ]
+        },
+        {
+          "name": "Muscle Tone",
+          "tests": [
+            {
+              "name": "Modified Ashworth Scale (Pediatric use)",
+              "purpose": "Measures spasticity",
+              "method": "Passive movement of limbs; resistance graded 0–4."
+            },
+            {
+              "name": "Tardieu Scale",
+              "purpose": "Differentiates spasticity vs contracture",
+              "method": "Passive movement at different speeds; angle of muscle reaction recorded."
+            },
+            {
+              "name": "Pediatric Tone Assessment",
+              "purpose": "Evaluates hypotonia or hypertonia",
+              "method": "Observation of resistance, posture, and handling response."
+            }
+          ]
+        },
+        {
+          "name": "Primitive Reflexes",
+          "tests": [
+            {
+              "name": "Moro Reflex",
+              "purpose": "Neonatal startle response",
+              "method": "Sudden head drop or noise; observe arm abduction and extension."
+            },
+            {
+              "name": "Asymmetrical Tonic Neck Reflex (ATNR)",
+              "purpose": "Primitive postural reflex",
+              "method": "Turn infant's head; observe extension on face side, flexion on skull side."
+            },
+            {
+              "name": "Symmetrical Tonic Neck Reflex (STNR)",
+              "purpose": "Developmental reflex",
+              "method": "Neck flexion/extension causes limb flexion/extension changes."
+            },
+            {
+              "name": "Tonic Labyrinthine Reflex (TLR)",
+              "purpose": "Influences tone with gravity",
+              "method": "Supine increases extensor tone, prone increases flexor tone."
+            },
+            {
+              "name": "Palmar Grasp Reflex",
+              "purpose": "Early grasp response",
+              "method": "Object placed in palm triggers finger flexion."
+            }
+          ]
+        },
+        {
+          "name": "Postural Reactions",
+          "tests": [
+            {
+              "name": "Righting Reactions",
+              "purpose": "Maintains head/body alignment",
+              "method": "Child tilted; body adjusts to maintain midline."
+            },
+            {
+              "name": "Protective Extension Reactions",
+              "purpose": "Fall protection response",
+              "method": "Child pushed off balance; arms extend to protect fall."
+            },
+            {
+              "name": "Equilibrium Reactions",
+              "purpose": "Balance correction mechanisms",
+              "method": "Controlled perturbation while child maintains posture."
+            }
+          ]
+        },
+        {
+          "name": "Motor Function Tests",
+          "tests": [
+            {
+              "name": "Peabody Developmental Motor Scales (PDMS-2)",
+              "purpose": "Measures fine and gross motor skills",
+              "method": "Child performs grasping, object manipulation, locomotion tasks."
+            },
+            {
+              "name": "Pediatric Balance Scale",
+              "purpose": "Assesses balance in children",
+              "method": "14 tasks similar to Berg Balance Scale adapted for pediatrics."
+            },
+            {
+              "name": "Timed Up and Go (Pediatric version)",
+              "purpose": "Functional mobility test",
+              "method": "Child stands, walks, turns, returns to chair; time recorded."
+            }
+          ]
+        },
+        {
+          "name": "Cerebral Palsy Classification",
+          "tests": [
+            {
+              "name": "MACS (Manual Ability Classification System)",
+              "purpose": "Classifies hand use ability",
+              "method": "Rates manual ability in daily activities from Level I–V."
+            },
+            {
+              "name": "CFCS (Communication Function Classification System)",
+              "purpose": "Communication ability classification",
+              "method": "Rates effectiveness of communication from Level I–V."
+            },
+            {
+              "name": "EDACS (Eating and Drinking Ability Classification System)",
+              "purpose": "Feeding/swallowing ability",
+              "method": "Classifies safety and efficiency of eating/drinking."
+            }
+          ]
+        },
+        {
+          "name": "Neuromotor Function",
+          "tests": [
+            {
+              "name": "Selective Control Assessment of the Lower Extremity (SCALE)",
+              "purpose": "Measures selective motor control",
+              "method": "Child performs isolated joint movements of hip, knee, ankle."
+            },
+            {
+              "name": "Hammersmith Infant Neurological Examination (HINE)",
+              "purpose": "Neurological assessment in infants",
+              "method": "Evaluates cranial nerves, posture, tone, reflexes, and motor development."
+            }
+          ]
+        },
+        {
+          "name": "Gait & Mobility",
+          "tests": [
+            {
+              "name": "Observational Gait Scale",
+              "purpose": "Evaluates gait deviations in CP",
+              "method": "Clinician observes walking pattern including foot contact and knee position."
+            },
+            {
+              "name": "6-Minute Walk Test (Pediatric use)",
+              "purpose": "Measures endurance",
+              "method": "Child walks as far as possible in 6 minutes."
+            }
+          ]
+        },
+        {
+          "name": "Neurological Reflex Integration",
+          "tests": [
+            {
+              "name": "Primitive Reflex Integration Assessment",
+              "purpose": "Checks persistence of primitive reflexes",
+              "method": "Tests whether reflexes like ATNR or Moro are retained beyond normal age."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "Functional",
+      "subcategories": [
+        {
+          "name": "Mobility",
+          "tests": [
+            {
+              "name": "Timed Up and Go (TUG)",
+              "purpose": "Assesses functional mobility, balance, and fall risk",
+              "method": "Patient starts seated, stands up, walks 3 meters, turns, walks back, and sits. Time is recorded."
+            },
+            {
+              "name": "10-Meter Walk Test (10MWT)",
+              "purpose": "Measures comfortable and fast walking speed",
+              "method": "Patient walks 10 meters; time is measured over the middle section to calculate gait speed."
+            },
+            {
+              "name": "6-Minute Walk Test (6MWT)",
+              "purpose": "Evaluates walking endurance and functional exercise capacity",
+              "method": "Patient walks continuously for 6 minutes on a measured course. Distance is recorded."
+            },
+            {
+              "name": "2-Minute Walk Test (2MWT)",
+              "purpose": "Short endurance assessment for limited mobility patients",
+              "method": "Patient walks as far as possible for 2 minutes. Distance recorded."
+            },
+            {
+              "name": "Functional Ambulation Category (FAC)",
+              "purpose": "Classifies level of walking independence",
+              "method": "Clinician observes patient walking and assigns level based on assistance required."
+            },
+            {
+              "name": "Rivermead Mobility Index (RMI)",
+              "purpose": "Measures mobility level after neurological injury",
+              "method": "Patient performs graded mobility tasks from turning in bed to running."
+            }
+          ]
+        },
+        {
+          "name": "Transfers",
+          "tests": [
+            {
+              "name": "Five Times Sit-to-Stand Test (5xSTS)",
+              "purpose": "Assesses lower limb strength and functional transfer ability",
+              "method": "Patient stands up and sits down 5 times as quickly as possible without using arms. Time recorded."
+            },
+            {
+              "name": "30-Second Chair Stand Test",
+              "purpose": "Measures functional lower limb strength and endurance",
+              "method": "Patient completes maximum sit-to-stand repetitions in 30 seconds."
+            },
+            {
+              "name": "Transfer Assessment",
+              "purpose": "Evaluates independence during transfers",
+              "method": "Observe bed mobility, sit-to-stand, chair transfer, and safety."
+            }
+          ]
+        },
+        {
+          "name": "Balance",
+          "tests": [
+            {
+              "name": "Berg Balance Scale (BBS)",
+              "purpose": "Measures static and dynamic balance and fall risk",
+              "method": "Patient performs 14 balance tasks scored from 0–4 (maximum 56 points)."
+            },
+            {
+              "name": "Functional Reach Test",
+              "purpose": "Assesses dynamic balance limits",
+              "method": "Patient reaches forward as far as possible without stepping. Distance measured."
+            },
+            {
+              "name": "Tinetti Performance Oriented Mobility Assessment (POMA)",
+              "purpose": "Evaluates balance and gait-related fall risk",
+              "method": "Patient performs sitting, standing, walking, and turning tasks scored by examiner."
+            },
+            {
+              "name": "Mini-BESTest",
+              "purpose": "Assesses dynamic balance systems",
+              "method": "Patient performs anticipatory, reactive, sensory, and gait balance tasks."
+            },
+            {
+              "name": "Four Square Step Test (FSST)",
+              "purpose": "Evaluates dynamic balance and stepping ability",
+              "method": "Patient steps over four squares in different directions while time is recorded."
+            },
+            {
+              "name": "Single Leg Stance Test",
+              "purpose": "Measures static balance",
+              "method": "Patient stands on one leg while maintaining balance; duration recorded."
+            }
+          ]
+        },
+        {
+          "name": "Gait Assessment",
+          "tests": [
+            {
+              "name": "Observational Gait Analysis",
+              "purpose": "Identifies gait deviations and compensations",
+              "method": "Clinician observes gait phases, alignment, symmetry, and assistive device use."
+            },
+            {
+              "name": "Dynamic Gait Index (DGI)",
+              "purpose": "Assesses ability to modify gait safely",
+              "method": "Patient walks while changing speed, turning head, stepping over obstacles, and changing direction."
+            },
+            {
+              "name": "Functional Gait Assessment (FGA)",
+              "purpose": "Advanced gait and balance assessment",
+              "method": "Patient performs 10 walking tasks including narrow base walking and stair negotiation."
+            }
+          ]
+        },
+        {
+          "name": "Activities of Daily Living (ADLs)",
+          "tests": [
+            {
+              "name": "Barthel Index",
+              "purpose": "Measures independence in basic daily activities",
+              "method": "Rates feeding, bathing, grooming, dressing, bowel/bladder control, transfers, and mobility."
+            },
+            {
+              "name": "Katz ADL Index",
+              "purpose": "Assesses basic self-care independence",
+              "method": "Evaluates bathing, dressing, toileting, transferring, continence, and feeding."
+            },
+            {
+              "name": "Functional Independence Measure (FIM)",
+              "purpose": "Measures burden of care and independence",
+              "method": "Rates 18 items covering motor and cognitive function."
+            },
+            {
+              "name": "Modified Barthel Index",
+              "purpose": "More detailed ADL independence assessment",
+              "method": "Similar to Barthel with expanded scoring system."
+            }
+          ]
+        },
+        {
+          "name": "Instrumental Activities of Daily Living (IADLs)",
+          "tests": [
+            {
+              "name": "Lawton IADL Scale",
+              "purpose": "Measures complex daily activities",
+              "method": "Assesses shopping, cooking, transportation, medication, finances, and housekeeping."
+            },
+            {
+              "name": "Frenchay Activities Index",
+              "purpose": "Measures participation in domestic and social activities",
+              "method": "Patient reports frequency of daily and social activities."
+            }
+          ]
+        },
+        {
+          "name": "Fall Risk Assessment",
+          "tests": [
+            {
+              "name": "Morse Fall Scale",
+              "purpose": "Identifies risk of falling in clinical settings",
+              "method": "Scores history of falls, mobility, IV therapy, gait, mental status, and assistance needs."
+            },
+            {
+              "name": "Hendrich II Fall Risk Model",
+              "purpose": "Predicts fall risk in hospitalized patients",
+              "method": "Assesses confusion, depression, elimination, dizziness, medications, and mobility."
+            },
+            {
+              "name": "STRATIFY Scale",
+              "purpose": "Screens hospitalized fall risk",
+              "method": "Evaluates previous falls, cognition, vision, mobility, and toileting."
+            }
+          ]
+        },
+        {
+          "name": "Endurance & Exercise Capacity",
+          "tests": [
+            {
+              "name": "6-Minute Walk Test",
+              "purpose": "Measures functional aerobic capacity",
+              "method": "Patient walks maximum distance for 6 minutes."
+            },
+            {
+              "name": "Incremental Shuttle Walk Test",
+              "purpose": "Measures cardiorespiratory fitness",
+              "method": "Patient walks between markers at increasing speeds following audio cues."
+            },
+            {
+              "name": "Borg Rating of Perceived Exertion (RPE)",
+              "purpose": "Measures exercise intensity perception",
+              "method": "Patient rates effort level from 6–20 or 0–10 scale during activity."
+            }
+          ]
+        },
+        {
+          "name": "Participation & Quality of Life",
+          "tests": [
+            {
+              "name": "WHO Disability Assessment Schedule (WHODAS 2.0)",
+              "purpose": "Measures disability and participation restriction",
+              "method": "Patient questionnaire covering cognition, mobility, self-care, relationships, life activities, and participation."
+            },
+            {
+              "name": "SF-36 Health Survey",
+              "purpose": "Measures health-related quality of life",
+              "method": "Patient questionnaire covering physical, emotional, and social domains."
+            },
+            {
+              "name": "EQ-5D",
+              "purpose": "Measures general health status",
+              "method": "Patient rates mobility, self-care, activities, pain, and psychological status."
+            }
+          ]
+        },
+        {
+          "name": "Work & Sports Function",
+          "tests": [
+            {
+              "name": "Patient-Specific Functional Scale (PSFS)",
+              "purpose": "Measures improvement in patient-selected activities",
+              "method": "Patient identifies difficult activities and rates difficulty from 0–10."
+            },
+            {
+              "name": "Return to Sport Assessment",
+              "purpose": "Evaluates readiness to resume sports",
+              "method": "Includes strength, balance, agility, functional tests, and sport-specific tasks."
+            }
+          ]
+        },
+        {
+          "name": "Upper Limb Function",
+          "tests": [
+            {
+              "name": "DASH (Disabilities of Arm, Shoulder and Hand)",
+              "purpose": "Measures upper limb disability",
+              "method": "Patient questionnaire about symptoms and ability to perform activities."
+            },
+            {
+              "name": "QuickDASH",
+              "purpose": "Short version of DASH",
+              "method": "11-item questionnaire assessing upper limb function."
+            }
+          ]
+        },
+        {
+          "name": "Lower Limb Function",
+          "tests": [
+            {
+              "name": "Lower Extremity Functional Scale (LEFS)",
+              "purpose": "Measures lower limb function limitations",
+              "method": "Patient rates difficulty with daily and physical activities."
+            },
+            {
+              "name": "WOMAC Index",
+              "purpose": "Assesses hip and knee osteoarthritis symptoms",
+              "method": "Evaluates pain, stiffness, and physical function."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="68 38 378 395">
+
+  <!-- White background -->
+  <rect width="512" height="512" fill="white"/>
+
+  <!-- ═══════════════════════════════════════
+       OVAL SWOOSH RING
+  ═══════════════════════════════════════ -->
+
+  <!-- Green top arc — sweeps from lower-left, over the top, to upper-right -->
+  <path d="M 102,234
+           C 84,162 108,92 164,64
+           C 216,38 318,40 368,74
+           C 410,104 420,156 408,204"
+        fill="none" stroke="#5DBD22" stroke-width="23"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Green swoosh tail — flicks out to upper-right -->
+  <path d="M 408,204 C 418,178 424,148 412,122"
+        fill="none" stroke="#5DBD22" stroke-width="18"
+        stroke-linecap="round"/>
+
+  <!-- Blue bottom arc — from upper-right, curves under, back to lower-left -->
+  <path d="M 408,204
+           C 404,256 372,288 332,300
+           C 288,314 210,314 166,300
+           C 126,284 102,258 102,234"
+        fill="none" stroke="#1565C0" stroke-width="20"
+        stroke-linecap="round"/>
+
+  <!-- ═══════════════════════════════════════
+       TREATMENT TABLE BAR
+  ═══════════════════════════════════════ -->
+  <rect x="88" y="310" width="336" height="14" rx="7" fill="#1565C0"/>
+
+  <!-- ═══════════════════════════════════════
+       THERAPIST  (left — standing upright)
+  ═══════════════════════════════════════ -->
+  <!-- Head -->
+  <circle cx="200" cy="112" r="27" fill="#1565C0"/>
+  <!-- Neck -->
+  <rect x="192" y="137" width="16" height="14" rx="6" fill="#1565C0"/>
+  <!-- Torso -->
+  <path d="M 174,149
+           C 171,185 170,224 172,268
+           L 234,268
+           C 236,224 235,185 232,149 Z"
+        fill="#1565C0"/>
+  <!-- Left arm — relaxed at side -->
+  <path d="M 174,172 C 158,188 150,210 148,232"
+        stroke="#1565C0" stroke-width="20" stroke-linecap="round" fill="none"/>
+  <!-- Right arm — reaching across to patient's shoulder -->
+  <path d="M 232,160 C 254,170 268,180 275,192"
+        stroke="#1565C0" stroke-width="18" stroke-linecap="round" fill="none"/>
+
+  <!-- ═══════════════════════════════════════
+       PATIENT  (right — seated / leaning forward)
+  ═══════════════════════════════════════ -->
+  <!-- Head -->
+  <circle cx="302" cy="118" r="24" fill="#1565C0"/>
+  <!-- Neck -->
+  <rect x="294" y="140" width="16" height="13" rx="6" fill="#1565C0"/>
+  <!-- Torso -->
+  <path d="M 278,151
+           C 276,180 276,214 278,268
+           L 324,268
+           C 326,214 326,180 324,151 Z"
+        fill="#1565C0"/>
+  <!-- Shoulder blob (connects to therapist's hand) -->
+  <ellipse cx="278" cy="167" rx="19" ry="15" fill="#1565C0"
+           transform="rotate(-22 278 167)"/>
+
+  <!-- ═══════════════════════════════════════
+       TREATMENT CONTACT GLOW
+  ═══════════════════════════════════════ -->
+  <circle cx="276" cy="192" r="16" fill="#F57F17"/>
+  <circle cx="276" cy="192" r="8"  fill="#FFD600"/>
+
+  <!-- ═══════════════════════════════════════
+       LOGO TEXT
+  ═══════════════════════════════════════ -->
+  <text x="256" y="408"
+        text-anchor="middle"
+        font-family="'Arial Black', 'Arial Bold', Arial, Helvetica, sans-serif"
+        font-size="60"
+        font-weight="900"
+        font-style="italic">
+    <tspan fill="#1565C0">Physio</tspan><tspan fill="#5DBD22">Connect</tspan>
+  </text>
+
+</svg>
