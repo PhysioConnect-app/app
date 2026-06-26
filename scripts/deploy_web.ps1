@@ -1,21 +1,19 @@
 # deploy_web.ps1 — builds PhysioConnect for the web and pushes to GitHub Pages.
 #
 # Prerequisites:
-#   1. Create the GitHub organisation "physioconnect" (free plan) at
-#      https://github.com/organizations/new — one-time, ~3 minutes.
-#   2. Inside that org, create the repo "app" (public, no README) at
-#      https://github.com/organizations/physioconnect/repositories/new
-#   3. In the repo Settings -> Pages -> Branch: gh-pages / root  (after first push)
+#   1. GitHub account must be named "PhysioConnect-app" ✓ (already done)
+#   2. Repo "app" must exist under that account ✓ (already done)
+#   3. After first push: repo Settings -> Pages -> Branch: gh-pages / root
 #
 # Usage (from project root):
 #   .\scripts\deploy_web.ps1
 #
 # PWA live at:
-#   https://physioconnect.github.io/app/
+#   https://physioconnect-app.github.io/app/
 
 $ErrorActionPreference = "Stop"
 
-$REPO_URL  = "https://github.com/physioconnect/app.git"
+$REPO_URL  = "https://github.com/PhysioConnect-app/app.git"
 $BASE_HREF = "/app/"
 $BUILD_DIR = "build\web"
 
@@ -48,9 +46,9 @@ Write-Host ""
 Write-Host "=== Done! ===" -ForegroundColor Green
 Write-Host ""
 Write-Host "Your PWA will be live in ~60 seconds at:" -ForegroundColor Cyan
-Write-Host "  https://physioconnect.github.io/app/" -ForegroundColor White
+Write-Host "  https://physioconnect-app.github.io/app/" -ForegroundColor White
 Write-Host ""
 Write-Host "Reminder — one-time manual steps:" -ForegroundColor Yellow
 Write-Host "  * GitHub Pages: org/app repo -> Settings -> Pages -> Branch: gh-pages / root"
-Write-Host "  * Supabase: Authentication -> URL Config -> add https://physioconnect.github.io/app/"
+Write-Host "  * Supabase: Authentication -> URL Config -> add https://physioconnect-app.github.io/app/"
 Write-Host ""
