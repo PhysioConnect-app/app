@@ -3,7 +3,7 @@ description: A physical therapy clinic management and telehealth app.
 publish_to: 'none'
 version: 1.0.0+6
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
   flutter:
