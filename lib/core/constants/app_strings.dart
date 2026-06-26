@@ -266,7 +266,7 @@ class AppStrings {
   String get assessmentLibrary => _t('Assessment Library', 'Assessment Library');
 
   // Privacy policy — replace URL with your real hosted page before Store submission
-  static const String privacyPolicyUrl = 'https://jihadzhour-dot.github.io/physioconnect-privacy/';
+  static const String privacyPolicyUrl = 'https://physioconnect.github.io/physioconnect-privacy/';
   String get privacyPolicy => _t('Privacy Policy', 'سياسة الخصوصية');
 
   // Find Therapist
