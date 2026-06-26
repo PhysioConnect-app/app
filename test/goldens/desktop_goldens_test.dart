@@ -200,12 +200,8 @@ void main() {
     await signInFakeUser();
     await pumpAtSize(tester, const DoctorDashboardScreen(), size: desktopSize);
     _drainExceptions(tester);
-    // My Profile sits in the last row of the tile grid. The no-patients guide
-    // (~170px) pushes it below the lazy GridView viewport, so it must be
-    // scrolled into view before tapping (same pattern as Patient > My Profile).
-    await tester.scrollUntilVisible(find.text('My Profile'), 300,
-        scrollable: find.byType(Scrollable).first);
-    await tester.tap(find.text('My Profile'));
+    // My Profile moved from the home tile grid to the header avatar button.
+    await tester.tap(find.byKey(const Key('doctor_profile_avatar')));
     await _settle(tester);
     _drainExceptions(tester);
     await _golden(tester, 'doctor_my_profile');
@@ -216,7 +212,8 @@ void main() {
     await signInFakeUser();
     await pumpAtSize(tester, const DoctorDashboardScreen(), size: desktopSize);
     _drainExceptions(tester);
-    await tester.tap(find.text('Notifications'));
+    // Notifications moved from the home tile grid to the header button.
+    await tester.tap(find.byKey(const Key('doctor_notif_btn')));
     await _settle(tester);
     _drainExceptions(tester);
     await _golden(tester, 'doctor_notifications');
