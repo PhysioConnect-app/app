@@ -1,0 +1,27 @@
+# Copy this file to .test_env (gitignored) and fill in real values.
+# Use a DEDICATED test/staging Supabase project — never point at production.
+
+# Supabase test project
+SUPABASE_TEST_URL=https://YOUR_TEST_PROJECT.supabase.co
+SUPABASE_TEST_ANON_KEY=YOUR_TEST_ANON_KEY
+SUPABASE_TEST_SERVICE_ROLE_KEY=YOUR_TEST_SERVICE_ROLE_KEY
+
+# Pre-seeded test accounts (created once in the test project, never deleted)
+ADMIN_EMAIL=admin@test.physioconnect.dev
+ADMIN_PASSWORD=change_me_min_8
+
+DOCTOR_EMAIL=doctor@test.physioconnect.dev
+DOCTOR_PASSWORD=change_me_min_8
+
+PATIENT_EMAIL=patient@test.physioconnect.dev
+PATIENT_PASSWORD=change_me_min_8
+
+STORE_MANAGER_EMAIL=store@test.physioconnect.dev
+STORE_MANAGER_PASSWORD=change_me_min_8
+
+POLYCLINIC_EMAIL=polyclinic@test.physioconnect.dev
+POLYCLINIC_PASSWORD=change_me_min_8
+
+# IDs of the above accounts in the test project (fill after seeding)
+DOCTOR_UID=
+PATIENT_UID=
