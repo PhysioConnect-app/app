@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart' as http_testing;
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -22,6 +23,10 @@ const desktopSize = Size(1400, 900);
 Future<void> ensureSupabaseInitialized() async {
   TestWidgetsFlutterBinding.ensureInitialized();
   SharedPreferences.setMockInitialValues({});
+  // DateFormat used by DoctorDashboardScreen, PatientDashboardScreen, and
+  // BillingScreen requires locale data. Initialize once here so every test
+  // that calls ensureSupabaseInitialized inherits it automatically.
+  await initializeDateFormatting('en_US');
 
   // supabase_flutter's deep-link handling listens on the app_links plugin's
   // event channel, which has no platform implementation in the test
