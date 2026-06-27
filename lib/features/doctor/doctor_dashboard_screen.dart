@@ -18,6 +18,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/utils/file_saver.dart';
 import '../../core/utils/excel_compat.dart';
+import '../../core/utils/template_generator.dart';
 import 'location_picker_screen.dart';
 import '../../core/config/form_factor_features.dart';
 import '../../core/widgets/patient_search_field.dart';
@@ -1172,6 +1173,18 @@ Future<void> _showLogout([AppStrings? overrideStrings]) async {
           ),
           icon: const Icon(Icons.upload_file_rounded, size: 14),
           label: const Text('Import', style: TextStyle(fontSize: 12)),
+        ),
+        IconButton(
+          icon: const Icon(Icons.help_outline),
+          color: const Color(0xFF0E8C8C),
+          iconSize: 18,
+          tooltip: 'How to format your Excel file',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: () => showImportGuideDialog(
+            context,
+            onDownloadTemplate: _downloadImportTemplate,
+          ),
         ),
         const SizedBox(width: 4),
         TextButton(
@@ -7493,6 +7506,13 @@ void _showPickPatientForDoc(AppStrings s) {
 
     final safe = patientName.replaceAll(RegExp(r'[^\w]'), '_');
     await downloadExcel(Uint8List.fromList(bytes), '${safe}_appointments.xlsx');
+  }
+
+  // ── Download import template ────────────────────────────────────────────
+
+  Future<void> _downloadImportTemplate() async {
+    final bytes = generateImportTemplateBytes();
+    await downloadExcel(bytes, 'physioconnect_import_template.xlsx');
   }
 
   // ── Import patients from Excel ─────────────────────────────────────────

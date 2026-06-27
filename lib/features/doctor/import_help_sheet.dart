@@ -1,6 +1,176 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_colors.dart';
 
+// ── Guide AlertDialog ─────────────────────────────────────────────────────────
+
+void showImportGuideDialog(
+  BuildContext context, {
+  VoidCallback? onDownloadTemplate,
+}) {
+  showDialog(
+    context: context,
+    builder: (_) => _ImportGuideDialog(onDownloadTemplate: onDownloadTemplate),
+  );
+}
+
+class _ImportGuideDialog extends StatelessWidget {
+  final VoidCallback? onDownloadTemplate;
+  const _ImportGuideDialog({this.onDownloadTemplate});
+
+  static const _teal = Color(0xFF0E8C8C);
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Excel Import Format',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      content: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ── Columns ─────────────────────────────────────────────────────
+            _sectionLabel('Required columns (header row must be first)'),
+            const SizedBox(height: 6),
+            _colRow('A', 'Date', required: true),
+            _colRow('B', 'Patient Name', required: true),
+            _colRow('C', 'amount', required: true),
+            _colRow('D', 'status', required: false),
+            _colRow('E', 'service', required: false),
+            _colRow('F', 'note', required: false),
+
+            const SizedBox(height: 14),
+
+            // ── Date formats ────────────────────────────────────────────────
+            _sectionLabel('Date column — accepted formats'),
+            const SizedBox(height: 6),
+            _mono('21/05/2026       DD/MM/YYYY'),
+            _mono('2026-05-21       ISO 8601'),
+            _mono('21 May 2026      day month year'),
+            _mono('Thu, 21 May 2026 weekday prefix OK'),
+            _mono('May 21, 2026     month day, year'),
+            _mono('21/05/26         2-digit year'),
+            const SizedBox(height: 4),
+            _note('Numeric dates use DD/MM order (21/05 = 21 May), matching local convention.'),
+
+            const SizedBox(height: 14),
+
+            // ── Amount ──────────────────────────────────────────────────────
+            _sectionLabel('amount'),
+            const SizedBox(height: 4),
+            _note('Numbers only — no currency symbol. Example: 150 or 75.50'),
+
+            const SizedBox(height: 14),
+
+            // ── Status ──────────────────────────────────────────────────────
+            _sectionLabel('status — accepted values'),
+            const SizedBox(height: 6),
+            _mono('paid'),
+            _mono('pending'),
+            _mono('partially_paid'),
+            _mono('cancelled'),
+            const SizedBox(height: 4),
+            _note('Casing does not matter. Blank or unrecognised values default to pending.'),
+
+            const SizedBox(height: 14),
+            Container(height: 1, color: Colors.grey.shade200),
+            const SizedBox(height: 10),
+
+            // ── Tip ─────────────────────────────────────────────────────────
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.lightbulb_outline,
+                    size: 14, color: Color(0xFFE65100)),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Tip: rows with an amount but no parseable date still import'
+                    ' as invoices but won\'t appear on the schedule.',
+                    style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                        height: 1.4),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: onDownloadTemplate,
+          child: const Text('Download template'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Close'),
+        ),
+      ],
+    );
+  }
+
+  Widget _sectionLabel(String text) => Text(
+        text,
+        style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: _teal),
+      );
+
+  Widget _colRow(String col, String name, {required bool required}) => Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(children: [
+          Container(
+            width: 20,
+            height: 20,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _teal.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(col,
+                style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: _teal)),
+          ),
+          const SizedBox(width: 8),
+          Text(name,
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w500)),
+          const SizedBox(width: 6),
+          Text(
+            required ? 'required' : 'optional',
+            style: TextStyle(
+                fontSize: 10,
+                color: required ? _teal : Colors.grey.shade500,
+                fontWeight: FontWeight.w500),
+          ),
+        ]),
+      );
+
+  Widget _mono(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 2, left: 4),
+        child: Text(text,
+            style: const TextStyle(
+                fontSize: 12,
+                fontFamily: 'monospace',
+                letterSpacing: 0.3,
+                color: Color(0xFF333333))),
+      );
+
+  Widget _note(String text) => Padding(
+        padding: const EdgeInsets.only(left: 4),
+        child: Text(text,
+            style: TextStyle(
+                fontSize: 11,
+                color: Colors.grey.shade600,
+                height: 1.4)),
+      );
+}
+
 // ── Public entry point ────────────────────────────────────────────────────────
 
 void showImportHelpSheet(
