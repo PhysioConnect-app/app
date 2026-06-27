@@ -44,13 +44,14 @@ extension _InvStatusX on _InvStatus {
     _InvStatus.awaitingReview => const Color(0xFF1565C0),
   };
 
-  static _InvStatus fromString(String? raw) => switch (raw) {
-    'paid'             => _InvStatus.paid,
-    'partially_paid'   => _InvStatus.partiallyPaid,
-    'cancelled'        => _InvStatus.cancelled,
-    'awaiting_review'  => _InvStatus.awaitingReview,
-    _                  => _InvStatus.pending,
-  };
+  static _InvStatus fromString(String? raw) =>
+      switch (raw?.toLowerCase().trim()) {
+        'paid'            => _InvStatus.paid,
+        'partially_paid'  => _InvStatus.partiallyPaid,
+        'cancelled'       => _InvStatus.cancelled,
+        'awaiting_review' => _InvStatus.awaitingReview,
+        _                 => _InvStatus.pending,
+      };
 }
 
 // ── Screen ─────────────────────────────────────────────────────────────────
@@ -215,7 +216,7 @@ class _BillingScreenState extends State<BillingScreen> {
       }
 
       if (_statusFilter != null) {
-        final status = d['status'] as String? ?? 'pending';
+        final status = (d['status'] as String? ?? 'pending').toLowerCase().trim();
         if (status != _statusFilter) return false;
       }
 
