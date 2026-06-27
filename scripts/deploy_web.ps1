@@ -23,7 +23,7 @@ Write-Host ""
 
 # 1. Build
 Write-Host "[1/3] Building release web (base-href $BASE_HREF)..." -ForegroundColor Yellow
-flutter build web --release --base-href $BASE_HREF
+flutter build web --release --base-href $BASE_HREF --no-wasm-dry-run
 Write-Host "      Build complete." -ForegroundColor Green
 
 # 2. Init a throwaway git repo in the build output
