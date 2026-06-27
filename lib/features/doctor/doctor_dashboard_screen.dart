@@ -3855,41 +3855,18 @@ void _showPickPatientForDoc(AppStrings s) {
                             final ageVal     = int.tryParse(ageCtrl.text.trim());
                             final messenger  = ScaffoldMessenger.of(context);
                             try {
-                              final myUid = Supabase.instance.client.auth.currentUser!.id;
-
-                              final newRow = await Supabase.instance.client
-                                  .from('users').insert({
-                                'name':        patientName,
-                                'role':        'patient',
-                                'doctor_ids':  [myUid],
-                                'created_at':  DateTime.now().toIso8601String(),
-                              }).select('id').single();
-                              final patientId = newRow['id'] as String;
-
-                              // Optional fields
-                              final extras = <String, dynamic>{};
-                              if (phone.isNotEmpty) extras['phone'] = phone;
+                              // Direct INSERT to users is blocked by RLS; use the
+                              // SECURITY DEFINER RPC which also links assigned_patient_ids.
+                              final rpcParams = <String, dynamic>{'p_name': patientName};
+                              if (phone.isNotEmpty)      rpcParams['p_phone']     = phone;
+                              if (diagnosis.isNotEmpty)  rpcParams['p_diagnosis'] = diagnosis;
                               if (ageVal != null) {
-                                extras['date_of_birth'] =
+                                rpcParams['p_dob'] =
                                     '${DateTime.now().year - ageVal}-01-01';
                               }
-                              if (diagnosis.isNotEmpty) extras['primary_diagnosis'] = diagnosis;
-                              if (extras.isNotEmpty) {
-                                await Supabase.instance.client
-                                    .from('users').update(extras).eq('id', patientId);
-                              }
-
-                              // Sync doctor's assigned_patient_ids
-                              final myData = await Supabase.instance.client
-                                  .from('users').select('assigned_patient_ids')
-                                  .eq('id', myUid).maybeSingle();
-                              final myIds = List<String>.from(
-                                  (myData?['assigned_patient_ids'] as List?) ?? []);
-                              if (!myIds.contains(patientId)) {
-                                myIds.add(patientId);
-                                await Supabase.instance.client.from('users')
-                                    .update({'assigned_patient_ids': myIds}).eq('id', myUid);
-                              }
+                              final patientId = await Supabase.instance.client
+                                  .rpc('create_stub_patient', params: rpcParams)
+                                  as String;
 
                               final doctorName = await _service.getMyName();
                               await _service.notifyPatientAdded(patientId, doctorName);
@@ -7998,30 +7975,26 @@ void _showPickPatientForDoc(AppStrings s) {
 
         if (!resolvedIds.containsKey(nameKey)) {
           if (patientId.isEmpty) {
+            // RLS SELECT (users_doctor_reads_own_patients) only returns patients
+            // already linked to this doctor, so no doctor_ids update is needed.
             final existingList = await Supabase.instance.client
-                .from('users').select('id, doctor_ids')
+                .from('users').select('id')
                 .eq('role', 'patient').eq('name', row.name).limit(1);
 
             if (existingList.isNotEmpty) {
               patientId = existingList.first['id'] as String;
-              final patIds = List<String>.from(
-                  (existingList.first['doctor_ids'] as List?) ?? []);
-              if (!patIds.contains(myUid)) {
-                patIds.add(myUid);
-                await Supabase.instance.client
-                    .from('users').update({'doctor_ids': patIds}).eq('id', patientId);
-              }
             } else {
-              final newRow = await Supabase.instance.client.from('users').insert({
-                'name':        row.name,
-                'role':        'patient',
-                'doctor_ids':  [myUid],
-                'created_at':  DateTime.now().toIso8601String(),
-              }).select().single();
-              patientId = newRow['id'] as String;
+              // Direct INSERT is blocked by RLS; RPC also links both sides atomically.
+              patientId = await Supabase.instance.client
+                  .rpc('create_stub_patient', params: {
+                    'p_name':     row.name,
+                    'p_imported': true,
+                  }) as String;
               patCount++;
             }
 
+            // Keep assigned_patient_ids in sync on the doctor's own row
+            // (users_update_own allows doctors to update their own row).
             final myData = await Supabase.instance.client
                 .from('users').select('assigned_patient_ids').eq('id', myUid).single();
             final myIds = List<String>.from(
