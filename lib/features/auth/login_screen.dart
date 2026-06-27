@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../../widgets/physio_logo.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../core/config/form_factor_features.dart';
+import '../../core/utils/pwa_install.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_strings.dart';
 import '../../core/providers/language_provider.dart';
@@ -27,54 +27,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _authService        = AuthService();
   bool _isLoading = false;
   bool _obscure   = true;
-
-  Future<void> _showForgotPasswordDialog() async {
-    final s = AppStrings(context.read<LanguageProvider>().isArabic);
-    final emailCtrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(s.forgotPasswordTitle),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(s.forgotPasswordHint,
-                style: const TextStyle(fontSize: 14, color: Color(0xFF607D8B))),
-            const SizedBox(height: 16),
-            TextField(
-              controller: emailCtrl,
-              keyboardType: TextInputType.emailAddress,
-              autofocus: true,
-              decoration: InputDecoration(
-                hintText: s.email,
-                prefixIcon: const Icon(Icons.email_outlined),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(s.cancel),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(s.send),
-          ),
-        ],
-      ),
-    );
-    if (ok != true || !mounted) return;
-    final sent = await _authService.resetPassword(emailCtrl.text.trim());
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(sent ? s.forgotPasswordSent : s.forgotPasswordError),
-        backgroundColor: sent ? const Color(0xFF00897B) : const Color(0xFFC62828),
-      ),
-    );
-  }
 
   @override
   void dispose() {
@@ -295,7 +247,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     obscure:            _obscure,
                     onObscureToggle:    () => setState(() => _obscure = !_obscure),
                     onLogin:            _handleLogin,
-                    onForgotPassword:   _showForgotPasswordDialog,
                     langProvider:       langProvider,
                     s: s,
                     showGuestLogin:     FormFactorFeatures.of(context).showGuestLogin,
@@ -324,7 +275,6 @@ class _LoginCard extends StatelessWidget {
   final bool obscure;
   final VoidCallback onObscureToggle;
   final VoidCallback onLogin;
-  final VoidCallback onForgotPassword;
   final LanguageProvider langProvider;
   final AppStrings s;
   final bool showGuestLogin;
@@ -341,7 +291,6 @@ class _LoginCard extends StatelessWidget {
     required this.obscure,
     required this.onObscureToggle,
     required this.onLogin,
-    required this.onForgotPassword,
     required this.langProvider,
     required this.s,
     required this.showGuestLogin,
@@ -375,8 +324,13 @@ class _LoginCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ── Logo ────────────────────────────────────────────────────────────
-          const PhysioLogo(fontSize: 40, showTagline: true),
+          // ── Logo — responsive font size for small screens ────────────────────
+          LayoutBuilder(
+            builder: (_, constraints) {
+              final size = (constraints.maxWidth * 0.135).clamp(24.0, 38.0);
+              return PhysioLogo(fontSize: size, showTagline: true);
+            },
+          ),
           const SizedBox(height: 28),
 
           // ── "Welcome Back!" ──────────────────────────────────────────────────
@@ -442,37 +396,23 @@ class _LoginCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // ── Forgot Password + Request Account ────────────────────────────────
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                key: const Key('login_request_account_btn'),
-                onPressed: onRequestAccount,
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF78909C),
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 36),
-                ),
-                child: const Text(
-                  'Request an account',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                ),
+          // ── Request Account ───────────────────────────────────────────────
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const Key('login_request_account_btn'),
+              onPressed: onRequestAccount,
+              icon: const Icon(Icons.person_add_rounded, size: 15),
+              label: const Text(
+                'Request a Doctor / PT Account',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
               ),
-              TextButton(
-                key: const Key('login_forgot_password_btn'),
-                onPressed: onForgotPassword,
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF00897B),
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(0, 36),
-                ),
-                child: Text(
-                  s.forgotPassword,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                ),
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF00897B),
+                padding: EdgeInsets.zero,
+                minimumSize: const Size(0, 36),
               ),
-            ],
+            ),
           ),
           const SizedBox(height: 20),
 
@@ -577,20 +517,20 @@ class _LoginCard extends StatelessWidget {
                   onTap: onOpenPhysioGate,
                   borderRadius: BorderRadius.circular(14),
                   child: Container(
-                    width: 72,
-                    height: 72,
+                    width: 96,
+                    height: 96,
                     decoration: BoxDecoration(
                       border: Border.all(color: const Color(0xFFCE93D8), width: 1.5),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(18),
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(13),
+                      borderRadius: BorderRadius.circular(17),
                       child: Image.asset(
                         'assets/images/physiogate_logo.jpg',
                         fit: BoxFit.cover,
                         errorBuilder: (_, __, ___) => const Icon(
                           Icons.store_rounded,
-                          size: 32,
+                          size: 42,
                           color: Color(0xFF4527A0),
                         ),
                       ),
@@ -625,17 +565,8 @@ class _LoginCard extends StatelessWidget {
             style: TextButton.styleFrom(foregroundColor: const Color(0xFF78909C)),
           ),
 
-          // ── Privacy policy (required by App Store, Play Store, MS Store) ─────
-          TextButton(
-            onPressed: () => launchUrl(
-              Uri.parse(AppStrings.privacyPolicyUrl),
-              mode: LaunchMode.externalApplication,
-            ),
-            child: Text(
-              s.privacyPolicy,
-              style: const TextStyle(color: Color(0xFF78909C), fontSize: 11),
-            ),
-          ),
+          // ── PWA install banner (Android / iOS) ───────────────────────────────
+          const _PwaInstallBanner(),
         ],
       ),
     );
@@ -967,4 +898,128 @@ class _PTBackgroundPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+// ── PWA install banner ─────────────────────────────────────────────────────────
+
+class _PwaInstallBanner extends StatefulWidget {
+  const _PwaInstallBanner();
+
+  @override
+  State<_PwaInstallBanner> createState() => _PwaInstallBannerState();
+}
+
+class _PwaInstallBannerState extends State<_PwaInstallBanner> {
+  bool _dismissed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    if (_dismissed || isStandalone) return const SizedBox.shrink();
+    if (isInstallPromptAvailable) return _androidBanner();
+    if (isIos) return _iosBanner();
+    return const SizedBox.shrink();
+  }
+
+  Widget _androidBanner() => Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE0F2F1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFF80CBC4)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.download_rounded,
+                  color: Color(0xFF00897B), size: 20),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Install PhysioConnect on this device',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF00695C),
+                      fontWeight: FontWeight.w500),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 30,
+                child: ElevatedButton(
+                  onPressed: () {
+                    triggerInstallPrompt();
+                    setState(() => _dismissed = true);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00897B),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    minimumSize: Size.zero,
+                    textStyle: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w700),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                  child: const Text('Download'),
+                ),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                onPressed: () => setState(() => _dismissed = true),
+                icon: const Icon(Icons.close,
+                    size: 16, color: Color(0xFF90A4AE)),
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints(minWidth: 24, minHeight: 24),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _iosBanner() => Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE8F5E9),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFA5D6A7)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Icon(Icons.ios_share,
+                  color: Color(0xFF2E7D32), size: 20),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text.rich(
+                  TextSpan(
+                    style:
+                        TextStyle(fontSize: 12, color: Color(0xFF1B5E20)),
+                    children: [
+                      TextSpan(text: 'Add to Home Screen: tap '),
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.middle,
+                        child: Icon(Icons.ios_share,
+                            size: 13, color: Color(0xFF2E7D32)),
+                      ),
+                      TextSpan(text: ' then "Add to Home Screen"'),
+                    ],
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: () => setState(() => _dismissed = true),
+                icon: const Icon(Icons.close,
+                    size: 16, color: Color(0xFF90A4AE)),
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints(minWidth: 24, minHeight: 24),
+              ),
+            ],
+          ),
+        ),
+      );
 }

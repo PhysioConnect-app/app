@@ -36,6 +36,29 @@
 
   <title>PhysioConnect</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- PWA: capture Android install prompt before Flutter loads -->
+  <script>
+    window.flutterInstallPromptAvailable = false;
+    window.addEventListener('beforeinstallprompt', function(e) {
+      e.preventDefault();
+      window._deferredInstallPrompt = e;
+      window.flutterInstallPromptAvailable = true;
+    });
+    window.addEventListener('appinstalled', function() {
+      window._deferredInstallPrompt = null;
+      window.flutterInstallPromptAvailable = false;
+    });
+    window.triggerInstallPrompt = function() {
+      if (window._deferredInstallPrompt) {
+        window._deferredInstallPrompt.prompt();
+        window._deferredInstallPrompt.userChoice.then(function() {
+          window._deferredInstallPrompt = null;
+          window.flutterInstallPromptAvailable = false;
+        });
+      }
+    };
+  </script>
 </head>
 <body>
   <!--
