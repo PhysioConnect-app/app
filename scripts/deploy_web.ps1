@@ -27,8 +27,11 @@ flutter build web --release --base-href $BASE_HREF --no-wasm-dry-run
 Write-Host "      Build complete." -ForegroundColor Green
 
 # 2. Init a throwaway git repo in the build output
+# Git writes informational warnings (re-init, "remote already exists") to stderr.
+# Temporarily set Continue so PowerShell 5.1 doesn't treat them as errors.
 Write-Host "[2/3] Preparing git repo in $BUILD_DIR..." -ForegroundColor Yellow
 Push-Location $BUILD_DIR
+$ErrorActionPreference = "Continue"
 try {
     git init -b gh-pages
     git add -A
@@ -38,7 +41,9 @@ try {
     Write-Host "[3/3] Pushing to $REPO_URL (branch: gh-pages)..." -ForegroundColor Yellow
     git remote add origin $REPO_URL
     git push --force origin gh-pages
+    if ($LASTEXITCODE -ne 0) { throw "git push failed with exit code $LASTEXITCODE" }
 } finally {
+    $ErrorActionPreference = "Stop"
     Pop-Location
 }
 
