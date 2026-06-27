@@ -49,5 +49,10 @@ Uint8List generateImportTemplateBytes() {
     TextCellValue('First visit'),
   ]);
 
-  return Uint8List.fromList(excel.encode()!);
+  final encoded = excel.encode();
+  if (encoded == null) {
+    throw Exception(
+        'Template encoding failed — the workbook could not be serialized.');
+  }
+  return Uint8List.fromList(encoded);
 }

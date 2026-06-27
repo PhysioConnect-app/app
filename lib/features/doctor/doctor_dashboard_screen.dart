@@ -7487,8 +7487,17 @@ void _showPickPatientForDoc(AppStrings s) {
   // ── Download import template ────────────────────────────────────────────
 
   Future<void> _downloadImportTemplate() async {
-    final bytes = generateImportTemplateBytes();
-    await downloadExcel(bytes, 'physioconnect_import_template.xlsx');
+    try {
+      final bytes = generateImportTemplateBytes();
+      await downloadExcel(bytes, 'physioconnect_import_template.xlsx');
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not generate template: $e'),
+          backgroundColor: AppColors.error,
+        ));
+      }
+    }
   }
 
   // ── Import patients from Excel ─────────────────────────────────────────
@@ -7583,7 +7592,16 @@ void _showPickPatientForDoc(AppStrings s) {
     );
     if (result == null || result.files.isEmpty) return;
     final bytes = result.files.first.bytes;
-    if (bytes == null) return;
+    if (bytes == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'Could not read the file — try re-downloading it and importing again.'),
+          backgroundColor: AppColors.error,
+        ));
+      }
+      return;
+    }
 
     if (!mounted) return;
     _showImportProgress();
@@ -7709,11 +7727,16 @@ void _showPickPatientForDoc(AppStrings s) {
         row.patientId = match?['id'] as String?;
       }
       _setProgress(0.98, 'Ready — review and confirm…');
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('Import parse error: $e\n$st');
       if (mounted) {
+        final msg = e is UnreadableWorkbookException
+            ? e.message
+            : 'Import failed: $e';
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed to read file: $e'),
+          content: Text(msg),
           backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 5),
         ));
       }
       return;

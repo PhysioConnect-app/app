@@ -2,33 +2,61 @@ import 'dart:convert' show utf8;
 import 'dart:typed_data';
 import 'package:archive/archive.dart';
 import 'package:excel/excel.dart' as xl;
+import 'package:flutter/foundation.dart' show debugPrint;
+
+/// Thrown when an xlsx file cannot be parsed — either because it is
+/// structurally invalid, uses unsupported features, or hit a null-assertion
+/// inside the excel package (e.g. missing shared-strings relationship).
+class UnreadableWorkbookException implements Exception {
+  final String message;
+  const UnreadableWorkbookException(this.message);
+  @override
+  String toString() => message;
+}
 
 /// Decodes an xlsx/xls [bytes] buffer into an [xl.Excel] object.
 ///
-/// Some Excel files (created by LibreOffice, older Excel, or certain templates)
-/// place built-in numFmt IDs (0–163) in the custom `<numFmts>` section of
-/// `xl/styles.xml`. The `excel` Dart package throws on these files.
-/// This function transparently retries with those entries stripped from the
-/// ZIP before passing to the parser, so such files load correctly.
+/// The excel package throws two distinct classes of error:
+///
+///  1. [Exception] with message containing "numFmtId" — some files place
+///     built-in numFmt IDs (0–163) in the custom `<numFmts>` section.
+///     We retry after stripping those entries from styles.xml.
+///
+///  2. Everything else (null-assertion [Error], JS TypeError on web, …) —
+///     the shared-strings relationship is missing or the archive is corrupt.
+///     We rethrow as [UnreadableWorkbookException] so callers can show a
+///     specific, human-readable message.
 xl.Excel decodeExcelBytes(List<int> bytes) {
   try {
     return xl.Excel.decodeBytes(bytes);
-  } catch (_) {
-    return xl.Excel.decodeBytes(_stripBuiltinNumFmts(Uint8List.fromList(bytes)));
+  } on Exception catch (e) {
+    // Explicit Exception thrown by the excel package — only the numFmt
+    // compatibility path is recoverable with a style-strip retry.
+    if (e.toString().contains('numFmtId')) {
+      try {
+        return xl.Excel.decodeBytes(
+            _stripBuiltinNumFmts(Uint8List.fromList(bytes)));
+      } catch (e2, st2) {
+        debugPrint('excel_compat: stripped-styles retry failed — $e2\n$st2');
+        throw const UnreadableWorkbookException(
+            'Could not read the file — make sure it is a valid .xlsx and not password-protected.');
+      }
+    }
+    // Any other Exception from the package → wrap and surface cleanly.
+    debugPrint('excel_compat: decode Exception — $e');
+    throw const UnreadableWorkbookException(
+        'Could not read the file — make sure it is a valid .xlsx and not password-protected.');
+  } catch (e, st) {
+    // Error / JS TypeError / null-check failures (e.g. parse.dart:613
+    // sharedString!.textSpan when the shared-strings relationship is absent).
+    debugPrint('excel_compat: decode error — $e\n$st');
+    throw const UnreadableWorkbookException(
+        'Could not read the file — make sure it is a valid .xlsx and not password-protected.');
   }
 }
 
 /// Patches `xl/styles.xml` inside the XLSX ZIP so the `excel` package can
 /// parse files that misuse built-in numFmt IDs (0–163) in the custom section.
-///
-/// Two-step fix:
-///  1. Remove every `<numFmt>` element whose `numFmtId` is 0–163 (built-in
-///     range). Without this, the package throws
-///     "custom numFmtId starts at 164 but found X".
-///  2. Remap every remaining `numFmtId="X"` reference (e.g. in `<xf>` cells)
-///     where X is 1–163 to `numFmtId="0"` (General format). Without this,
-///     the package asserts "missing numFmt for X" because the definition
-///     was just removed in step 1.
 Uint8List _stripBuiltinNumFmts(Uint8List bytes) {
   try {
     final archive = ZipDecoder().decodeBytes(bytes);
@@ -62,7 +90,9 @@ Uint8List _stripBuiltinNumFmts(Uint8List bytes) {
         out.addFile(file);
       }
     }
-    return Uint8List.fromList(ZipEncoder().encode(out)!);
+    final encoded = ZipEncoder().encode(out);
+    if (encoded == null) return bytes; // encoder failed — return original
+    return Uint8List.fromList(encoded);
   } catch (_) {
     return bytes; // patching failed — return original bytes
   }
