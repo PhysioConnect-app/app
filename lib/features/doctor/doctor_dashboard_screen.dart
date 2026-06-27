@@ -7498,17 +7498,51 @@ void _showPickPatientForDoc(AppStrings s) {
   // ── Import patients from Excel ─────────────────────────────────────────
 
   /// Try common date string formats; also handles Excel double serials.
-  DateTime? _tryParseDate(String s) {
+  // Extracts a [DateTime] from the cell at [col] in [row].
+  // Handles native [xl.DateTimeCellValue] cells directly (skips string
+  // conversion), then falls back to [_tryParseDate] for text cells.
+  DateTime? _dateFromCell(List<xl.Data?> row, int col) {
+    if (col >= row.length) return null;
+    final v = row[col]?.value;
+    if (v == null) return null;
+    // Native date cell — xl.DateTimeCellValue.toString() produces an ISO-like
+    // string ("2026-05-21 00:00:00.000") that DateTime.tryParse handles.
+    if (v is xl.DateTimeCellValue) return DateTime.tryParse(v.toString());
+    final s = v.toString().trim();
+    return s.isEmpty ? null : _tryParseDate(s);
+  }
+
+  DateTime? _tryParseDate(String raw) {
+    // Normalise: collapse internal whitespace before any parsing attempt.
+    var s = raw.trim().replaceAll(RegExp(r'\s+'), ' ');
     if (s.isEmpty) return null;
 
-    // 1) Let Dart's own parser handle ISO 8601 (e.g. DateTimeCellValue.toString()
-    //    returns "2024-01-15T00:00:00.000" which DateTime.tryParse handles natively)
+    // 1) ISO 8601 — also catches DateTimeCellValue.toString() output such as
+    //    "2024-01-15T00:00:00.000", which DateTime.tryParse handles natively.
     final direct = DateTime.tryParse(s);
     if (direct != null) return direct;
 
-    // 2) Strip time component — split on 'T' or space
+    // 2) Strip a leading weekday prefix so "Thu, 21 May 2026" and "21 May 2026"
+    //    are handled identically. Matches abbreviated (Mon, Tue …) and full
+    //    (Monday, Tuesday …) names, optionally followed by a comma or period.
+    s = s.replaceFirst(
+      RegExp(
+        r'^(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|'
+        r'Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)'
+        r'[,.]?\s*',
+        caseSensitive: false,
+      ),
+      '',
+    );
+
+    // 3) Strip time component — keep only the date portion.
     final datePart = s.split(RegExp(r'[T ]')).first.trim();
 
+    // ── Numeric formats ────────────────────────────────────────────────────
+    // DD/MM is tried before MM/DD (Lebanese / MENA convention).
+    // A purely-numeric date like "01/02/2026" is genuinely ambiguous; we
+    // assume DD/MM (= 1 Feb) not MM/DD (= 2 Jan). Do NOT reorder these two
+    // entries without updating this comment — the assumption must stay explicit.
     for (final fmt in [
       'dd/MM/yyyy', 'd/M/yyyy',
       'yyyy-MM-dd',
@@ -7519,12 +7553,26 @@ void _showPickPatientForDoc(AppStrings s) {
       try { return DateFormat(fmt).parseStrict(datePart); } catch (_) {}
     }
 
-    // 3) Excel serial number stored as a string (e.g. "45296.0")
+    // ── Named-month formats ───────────────────────────────────────────────
+    // Covers regional variants: "21 May 2026", "May 21, 2026", full month
+    // names, and 2-digit years.
+    for (final fmt in [
+      'd MMM yyyy',   'dd MMM yyyy',
+      'd MMMM yyyy',  'dd MMMM yyyy',
+      'MMM d, yyyy',  'MMMM d, yyyy',
+      'd MMM yy',
+    ]) {
+      try { return DateFormat(fmt).parseStrict(datePart); } catch (_) {}
+    }
+
+    // 4) Excel serial number stored as a string (e.g. "45296.0").
+    //    The Lotus 1-2-3 off-by-one (serial 60 = phantom 29 Feb 1900) is
+    //    corrected by subtracting 1 for serials > 59. The > 1000 threshold
+    //    avoids treating small integers from other columns as date serials.
     final serial = double.tryParse(s);
     if (serial != null && serial > 1000) {
       final adjusted = serial > 59 ? serial - 1 : serial;
-      return DateTime(1899, 12, 31)
-          .add(Duration(days: adjusted.toInt()));
+      return DateTime(1899, 12, 31).add(Duration(days: adjusted.toInt()));
     }
     return null;
   }
@@ -7564,18 +7612,38 @@ void _showPickPatientForDoc(AppStrings s) {
 
       _setProgress(0.25, 'Parsing columns…');
 
-      // Default: A=Date  B=Name  C=Amount  D=Service  E=Status  F=Note
+      // Default column layout: A=Date  B=Name  C=Amount  D=Service  E=Status  F=Note
       int dateCol = 0, nameCol = 1, amtCol = 2, svcCol = 3, statusCol = 4, noteCol = 5;
-      bool hasHeader = false;
+      bool hasHeader    = false;
+      bool dateHdrFound = false;
       final headerRow = sheet.rows.first;
       for (int i = 0; i < headerRow.length; i++) {
         final h = headerRow[i]?.value?.toString().toLowerCase().trim() ?? '';
-        if (h.contains('date') || h.contains('appt'))          { dateCol   = i; hasHeader = true; }
+        if (h.contains('date') || h.contains('appt'))          { dateCol   = i; hasHeader = true; dateHdrFound = true; }
         if (h.contains('name') || h.contains('patient'))       { nameCol   = i; hasHeader = true; }
         if (h == 'amount' || h == 'amt' || h.contains('amou')) { amtCol    = i; hasHeader = true; }
         if (h.contains('service') || h.contains('svc'))        { svcCol    = i; hasHeader = true; }
         if (h.contains('status'))                               { statusCol = i; hasHeader = true; }
         if (h.contains('note'))                                 { noteCol   = i; hasHeader = true; }
+      }
+
+      // Resilience: if the date-column header was absent or malformed (e.g. A1
+      // holds =DATEVALUE(A2:A58), which the excel package returns as an error or
+      // null rather than the text "Date"), probe the first few data rows.
+      // If column 0 contains parseable dates, keep dateCol = 0 (the default) and
+      // ensure hasHeader = true so the malformed header row is correctly skipped.
+      if (!dateHdrFound) {
+        final colZeroParseable = sheet.rows.skip(1).take(3).any((r) {
+          if (r.isEmpty) return false;
+          final v = r[0]?.value;
+          if (v is xl.DateTimeCellValue) return true;
+          final s = (v?.toString() ?? '').trim();
+          return s.isNotEmpty && _tryParseDate(s) != null;
+        });
+        if (colZeroParseable) {
+          dateCol   = 0;    // explicit (matches the default)
+          hasHeader = true; // ensures the header row is skipped
+        }
       }
 
       String cellStr(List<xl.Data?> row, int col) =>
@@ -7595,13 +7663,12 @@ void _showPickPatientForDoc(AppStrings s) {
         if (row.isEmpty) continue;
         final name = cellStr(row, nameCol);
         if (name.isEmpty) continue;
-        final dateStr   = cellStr(row, dateCol);
+        final date      = _dateFromCell(row, dateCol);
         final amtStr    = cellStr(row, amtCol).replaceAll(',', '').replaceAll(' ', '');
         final svc       = cellStr(row, svcCol);
         final statusRaw = cellStr(row, statusCol);
         final note      = cellStr(row, noteCol);
 
-        final date   = dateStr.isNotEmpty ? _tryParseDate(dateStr) : null;
         final amount = double.tryParse(amtStr);
 
         rows.add(_UnifiedRow(
