@@ -288,7 +288,7 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
     try {
       final rows = await supabase
           .from('users')
-          .select('id, email, has_account')
+          .select('id, email')
           .eq('role', 'patient')
           .contains('doctor_ids', [doctorUid])
           .ilike('name', name)
@@ -296,9 +296,8 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
 
       for (final r in rows as List) {
         final em = (r['email'] as String?) ?? '';
-        final ha = r['has_account'] as bool? ?? true;
-        // Stub: no email (can't log in) OR explicitly flagged as no-account
-        if (em.isEmpty || !ha) toAbsorb.add(r['id'] as String);
+        // Stub: no email means the patient can't log in — absorb them.
+        if (em.isEmpty) toAbsorb.add(r['id'] as String);
       }
     } catch (_) {}
 
@@ -366,7 +365,7 @@ class _CreatePatientScreenState extends State<CreatePatientScreen> {
       final mergedDoctorIds =
           {...existingDoctorIds, ...stubDoctorIds}.toList();
       await supabase.from('users')
-          .update({'doctor_ids': mergedDoctorIds, 'has_account': true}).eq('id', newId);
+          .update({'doctor_ids': mergedDoctorIds}).eq('id', newId);
 
       // 5. For every doctor that had the stub: replace stub ID with new ID
       for (final dId in stubDoctorIds) {

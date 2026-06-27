@@ -3862,7 +3862,6 @@ void _showPickPatientForDoc(AppStrings s) {
                                 'name':        patientName,
                                 'role':        'patient',
                                 'doctor_ids':  [myUid],
-                                'has_account': false,
                                 'created_at':  DateTime.now().toIso8601String(),
                               }).select('id').single();
                               final patientId = newRow['id'] as String;
@@ -8017,7 +8016,6 @@ void _showPickPatientForDoc(AppStrings s) {
                 'name':        row.name,
                 'role':        'patient',
                 'doctor_ids':  [myUid],
-                'has_account': false,
                 'created_at':  DateTime.now().toIso8601String(),
               }).select().single();
               patientId = newRow['id'] as String;
