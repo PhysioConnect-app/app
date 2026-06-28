@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'dart:math';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -129,9 +129,9 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
           perm == LocationPermission.denied) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(Platform.isWindows
+            content: Text(defaultTargetPlatform == TargetPlatform.windows
                 ? 'Location denied. Enable in Windows Settings → Privacy & security → Location.'
-                : 'Location denied. Enable in device settings.'),
+                : 'Location denied. Please enable location in your device settings.'),
           ));
         }
         return;
@@ -425,7 +425,12 @@ class _FindDoctorsScreenState extends State<FindDoctorsScreen> {
     }
     final docs = _filter(_guestDoctors!);
     if (_showMap) return _buildMapView(docs, s);
-    return _buildListView(docs, s);
+    // Pull-to-refresh so guests see doctor profile updates (e.g. home-visit
+    // toggle saved after the screen was already open) without reopening.
+    return RefreshIndicator(
+      onRefresh: _loadGuestDoctors,
+      child: _buildListView(docs, s),
+    );
   }
 
   // ── Map view ──────────────────────────────────────────────────────────────
